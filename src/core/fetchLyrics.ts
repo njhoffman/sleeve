@@ -189,11 +189,13 @@ export async function queryForFile(file: string, given: Partial<TrackQuery> = {}
   const album = given.album ?? read.album;
   const isrc = given.isrc ?? read.isrc;
   const spotifyId = given.spotifyId ?? read.spotifyId;
+  const musicbrainzId = given.musicbrainzId ?? read.musicbrainzId;
   return {
     artist, title, path: file,
     ...(album ? { album } : {}),
     ...(durationMs ? { durationMs } : {}),
     ...(isrc ? { isrc } : {}),
-    ...(spotifyId ? { spotifyId } : {})
+    ...(spotifyId ? { spotifyId } : {}),
+    ...(musicbrainzId ? { musicbrainzId } : {})
   };
 }

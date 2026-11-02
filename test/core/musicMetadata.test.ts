@@ -10,15 +10,15 @@ describe('music-metadata tag reader', () => {
   beforeEach(async () => { dir = await mkdtemp(path.join(os.tmpdir(), 'sleeve-tags-')); });
   afterEach(async () => { await rm(dir, { recursive: true, force: true }); });
 
-  it('reads artist, title, album, the measured duration, ISRC and musicman\'s Spotify fields', async () => {
+  it('reads artist, title, album, the measured duration, ISRC, the MusicBrainz id and musicman\'s Spotify fields', async () => {
     const file = await writeTaggedMp3(path.join(dir, 'song.mp3'), {
-      artist: 'Attune', title: 'Reminder', album: 'Love', isrc: 'QZDA81821251',
+      artist: 'Attune', title: 'Reminder', album: 'Love', isrc: 'QZDA81821251', musicbrainzId: 'b4f0e8bf-3b1c-4c5d-9a5c-2f2d8a3c1e77',
       custom: { sp_track_id: '0CBShUBd6XzTAH9JMXcJx7', sp_duration_ms: '307000' }
     });
     const tags = await musicMetadataReader.read(file);
     expect(tags).to.deep.include({
       artist: 'Attune', title: 'Reminder', album: 'Love', isrc: 'QZDA81821251',
-      spotifyId: '0CBShUBd6XzTAH9JMXcJx7', spotifyDurationMs: 307000, lyrics: []
+      spotifyId: '0CBShUBd6XzTAH9JMXcJx7', spotifyDurationMs: 307000, musicbrainzId: 'b4f0e8bf-3b1c-4c5d-9a5c-2f2d8a3c1e77', lyrics: []
     });
     expect(tags.durationMs).to.be.within(2900, 3200);
   });

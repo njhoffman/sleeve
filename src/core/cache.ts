@@ -1,4 +1,4 @@
-import { DURATION_WINDOW_MS, defaultDatabasePath, openShared, SleeveDatabase, trackKey, trackMatch } from './db.ts';
+import { DURATION_WINDOW_MS, defaultDatabasePath, openShared, rankRows, rememberIds, SleeveDatabase, trackKey, trackMatch, type TrackRow } from './db.ts';
 import type { Candidate, TrackQuery } from './types.ts';
 
 // What online providers answered, so the same track is not fetched again: the candidates a provider returned
@@ -6,7 +6,8 @@ import type { Candidate, TrackQuery } from './types.ts';
 // scoring applies to cached answers too. Failures (timeouts, 503s) are never stored. Local providers are not
 // cached: they are cheap and their files can change.
 //
-// A track is matched as db.ts defines (normalized names, a duration within DURATION_WINDOW_MS). Found answers
+// A track is matched as db.ts defines (its ISRC or Spotify id, else normalized names and a duration within
+// DURATION_WINDOW_MS). Found answers
 // are kept for FOUND_TTL_MS, "none" answers for NOT_FOUND_TTL_MS, after which the provider is asked again.
 
 export { DURATION_WINDOW_MS, defaultDatabasePath };
@@ -32,7 +33,7 @@ export interface ClearOptions {
   notFoundOnly?: boolean;
 }
 
-interface Row {
+interface Row extends TrackRow {
   candidates: string;
   fetched_at: number;
   found: number;
@@ -56,17 +57,19 @@ export class LyricsCache {
     return this.database.db;
   }
 
-  // Rows for the same provider and track whose duration matches the query's, newest first
-  private matching(provider: string, query: TrackQuery): Array<Row & { id: number }> {
-    const { where, params } = trackMatch(trackKey(query));
-    const sql = `SELECT id, candidates, fetched_at, found FROM answers WHERE provider = ? AND ${where} ORDER BY fetched_at DESC`;
-    return this.db.prepare(sql).all(provider, ...params) as unknown as Array<Row & { id: number }>;
+  // Rows for the same provider and track, best match first, newest first among equals
+  private matching(provider: string, query: TrackQuery): Row[] {
+    const key = trackKey(query);
+    const { where, params } = trackMatch(key);
+    const sql = `SELECT id, duration_ms, isrc, spotify_id, candidates, fetched_at, found FROM answers WHERE provider = ? AND ${where} ORDER BY fetched_at DESC`;
+    return rankRows(this.db.prepare(sql).all(provider, ...params) as unknown as Row[], key);
   }
 
   // The provider's stored answer for the track, or null when there is none or it is too old
   get(provider: string, query: TrackQuery): CachedAnswer | null {
     const [row] = this.matching(provider, query);
     if (!row) return null;
+    rememberIds(this.database, 'answers', row, trackKey(query));
     const ttl = row.found ? FOUND_TTL_MS : NOT_FOUND_TTL_MS;
     if (this.now() - row.fetched_at > ttl) return null;
     return { candidates: JSON.parse(row.candidates) as Candidate[], fetchedAt: row.fetched_at };
@@ -74,13 +77,13 @@ export class LyricsCache {
 
   // Stores what the provider answered, replacing what it answered before for the same track
   put(provider: string, query: TrackQuery, candidates: Candidate[]): void {
-    const { artist, title, duration } = trackKey(query);
+    const { artist, title, duration, isrc, spotifyId } = trackKey(query);
     const replaced = this.matching(provider, query).map(row => row.id);
     const remove = this.db.prepare('DELETE FROM answers WHERE id = ?');
-    const insert = this.db.prepare('INSERT INTO answers (provider, artist_key, title_key, duration_ms, found, candidates, fetched_at) VALUES (?, ?, ?, ?, ?, ?, ?)');
+    const insert = this.db.prepare('INSERT INTO answers (provider, artist_key, title_key, duration_ms, isrc, spotify_id, found, candidates, fetched_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)');
     this.database.transaction(() => {
       for (const id of replaced) remove.run(id);
-      insert.run(provider, artist, title, duration, candidates.length ? 1 : 0, JSON.stringify(candidates), this.now());
+      insert.run(provider, artist, title, duration, isrc, spotifyId, candidates.length ? 1 : 0, JSON.stringify(candidates), this.now());
     });
   }
 

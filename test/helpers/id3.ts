@@ -28,6 +28,8 @@ export interface TestTags {
   title?: string;
   album?: string;
   isrc?: string;
+  // The MusicBrainz recording id, as Picard writes it (UFID owned by http://musicbrainz.org)
+  musicbrainzId?: string;
   // TXXX frames by description, e.g. { sp_track_id: '...' }
   custom?: Record<string, string>;
   // USLT text
@@ -42,6 +44,7 @@ export function id3Tag(tags: TestTags): Buffer {
   if (tags.title) frames.push(frame('TIT2', text(tags.title)));
   if (tags.album) frames.push(frame('TALB', text(tags.album)));
   if (tags.isrc) frames.push(frame('TSRC', text(tags.isrc)));
+  if (tags.musicbrainzId) frames.push(frame('UFID', Buffer.concat([Buffer.from('http://musicbrainz.org\0', 'latin1'), Buffer.from(tags.musicbrainzId, 'latin1')])));
   for (const [description, value] of Object.entries(tags.custom ?? {})) {
     frames.push(frame('TXXX', Buffer.concat([Buffer.from([1]), utf16z(description), Buffer.from([0xff, 0xfe]), Buffer.from(value, 'utf16le')])));
   }

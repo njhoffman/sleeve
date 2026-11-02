@@ -77,7 +77,11 @@ A file's duration is measured from its audio, since synced lyrics are timed agai
 
 What online providers answer, found or not, is stored in `$XDG_DATA_HOME/sleeve/sleeve.db` (SQLite) and
 used instead of asking again: answers with lyrics for 180 days, answers without for 7 days. A track is its
-normalized artist and title plus the duration asked with, within 2 seconds. Candidates are stored unscored,
+ISRC or Spotify id when it has one (from the file's tags, or from Spotify), else its normalized artist and
+title plus the duration asked with, within 2 seconds. So a file and Spotify share what is stored for one
+recording even when they name it differently, and two recordings with the same name but different ISRCs
+(a live take, a re-recording) are kept apart. Entries stored by name pick up the IDs of the first track that
+matches them. Candidates are stored unscored,
 so scoring changes apply to stored answers too. Failures (timeouts, "server busy") are not stored, and
 local providers are never cached. `--no-cache` neither reads nor stores; `--refresh` asks again and replaces
 the stored answer; `sleeve cache clear [-p provider] [--not-found]` forgets answers.

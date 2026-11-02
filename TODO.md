@@ -110,11 +110,14 @@ build items that depend on it, listed in the later projects.
       keeps richsync and ID lookups, but still the unofficial API, against its terms, and the token can be
       revoked; (2) the official API with a developer key: allowed, but the free plan has no synced lyrics
       and full lyrics need a paid plan; (3) leave it out. Revisit after NetEase and the daemon.
-- [ ] **Match by IDs from the file's tags.** (p2) [feature] Files carry `sp_track_id`, `sp_isrc`/`TSRC`,
+- [x] **Match by IDs from the file's tags.** (p2) [feature] Files carry `sp_track_id`, `sp_isrc`/`TSRC`,
       `sp_duration_ms` and MusicBrainz IDs (not every file yet). Read them via the MPD path and pass
       them to providers that accept IDs; use the duration for scoring. Exact IDs beat fuzzy text.
-      Partly done in 0.1.0: the tag reader reads ISRC, Spotify id and duration into the query, and the
-      duration is scored. No provider looks up by ID yet: LRCLIB cannot; Musixmatch would (see Look into Musixmatch again).
+      Done in 0.9.0 as track identity: no provider takes IDs (LRCLIB and NetEase search by text), so the
+      ISRC and Spotify id identify the track for stored answers, picks and offsets instead (schema 3), and
+      the MusicBrainz recording id is read into the query. In a 60-file sample on 2026-11-02, 85% of files had
+      ISRC and Spotify id, 75% a MusicBrainz recording id. Looking tracks up by ID waits on a provider that
+      takes one (see Look into Musixmatch again).
 - [x] **Lyrics cache in SQLite.** (p2) [feature] Replace Sunamu's file cache with `node:sqlite` (as backdrop does):
       track key, chosen candidate, alternatives, user offset, user-pinned flag.
       Done in 0.2.0: online answers found and not found in `$XDG_DATA_HOME/sleeve/sleeve.db`,

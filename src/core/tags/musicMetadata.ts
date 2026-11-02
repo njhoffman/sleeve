@@ -39,6 +39,7 @@ export function fromMetadata(metadata: IAudioMetadata): FileTags {
     ...(common.album ? { album: common.album } : {}),
     ...(format.duration ? { durationMs: Math.round(format.duration * 1000) } : {}),
     ...(common.isrc?.[0] ?? nativeValue(metadata, 'TXXX:sp_isrc') ? { isrc: common.isrc?.[0] ?? nativeValue(metadata, 'TXXX:sp_isrc') } : {}),
+    ...(common.musicbrainz_recordingid ? { musicbrainzId: common.musicbrainz_recordingid } : {}),
     ...(nativeValue(metadata, 'TXXX:sp_track_id') ? { spotifyId: nativeValue(metadata, 'TXXX:sp_track_id') } : {}),
     ...(Number.isFinite(spotifyDuration) && spotifyDuration > 0 ? { spotifyDurationMs: spotifyDuration } : {}),
     lyrics: (common.lyrics ?? []).map(storedLyrics).filter((item): item is StoredLyrics => item !== null)

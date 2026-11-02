@@ -6,6 +6,21 @@ All notable changes to sleeve are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-11-02
+
+### Changed
+
+- Stored answers, picks and offsets belong to a recording by its ISRC or Spotify id when the track has one,
+  before its names and length. A pick or offset made while MPD plays a file applies when Spotify plays the
+  same recording under another name, and recordings that share a name but not an ISRC are kept apart.
+  What was stored before picks up the IDs of the first track that matches it by name. The database is
+  upgraded in place (schema 3).
+
+### Added
+
+- The MusicBrainz recording id is read from a file's tags into the query (`sleeve lyrics --json` shows it),
+  for providers that will look tracks up by it.
+
 ## [0.8.0] - 2026-11-02
 
 ### Added

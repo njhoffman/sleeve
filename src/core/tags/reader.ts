@@ -21,6 +21,8 @@ export interface FileTags {
   // The audio's own length, measured from the file
   durationMs?: number;
   isrc?: string;
+  // The MusicBrainz recording id (TXXX:MusicBrainz Release Track Id is the track on a release, not this)
+  musicbrainzId?: string;
   // From musicman's Spotify fields (TXXX:sp_*)
   spotifyId?: string;
   spotifyDurationMs?: number;

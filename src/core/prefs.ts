@@ -1,4 +1,4 @@
-import { defaultDatabasePath, openShared, SleeveDatabase, trackKey, trackMatch } from './db.ts';
+import { defaultDatabasePath, openShared, rankRows, rememberIds, SleeveDatabase, trackKey, trackMatch, type TrackRow } from './db.ts';
 import type { Candidate, TrackQuery } from './types.ts';
 
 // What the user decided for a track: a pick (the candidate to show, whatever the ranking says) and a timing
@@ -10,7 +10,7 @@ import type { Candidate, TrackQuery } from './types.ts';
 // only while that candidate is the one shown, and is kept otherwise. Setting an offset does not pick.
 //
 // Offsets are in milliseconds, positive to show lyrics later. (LRC's own [offset:] tag runs the other way.)
-// Tracks match as db.ts defines; where several stored tracks match, the closest duration wins.
+// Tracks match as db.ts defines: by ISRC or Spotify id first, else by names, the closest duration winning.
 
 export interface CandidateRef {
   provider: string;
@@ -28,9 +28,7 @@ export interface TrackPrefsRecord {
   updatedAt: number;
 }
 
-interface Row {
-  id: number;
-  duration_ms: number | null;
+interface Row extends TrackRow {
   pick_candidate: string | null;
   offset_ms: number | null;
   offset_provider: string | null;
@@ -83,12 +81,13 @@ export class TrackPrefs {
   }
 
   private row(query: TrackQuery): Row | null {
-    const key = trackMatch(trackKey(query));
-    const rows = this.db.prepare(`SELECT id, duration_ms, pick_candidate, offset_ms, offset_provider, offset_id, updated_at FROM track_prefs WHERE ${key.where}`)
-      .all(...key.params) as unknown as Row[];
-    const wanted = query.durationMs ?? 0;
-    rows.sort((a, b) => Math.abs((a.duration_ms ?? 0) - wanted) - Math.abs((b.duration_ms ?? 0) - wanted));
-    return rows[0] ?? null;
+    const key = trackKey(query);
+    const { where, params } = trackMatch(key);
+    const rows = this.db.prepare(`SELECT id, duration_ms, isrc, spotify_id, pick_candidate, offset_ms, offset_provider, offset_id, updated_at FROM track_prefs WHERE ${where}`)
+      .all(...params) as unknown as Row[];
+    const [row] = rankRows(rows, key);
+    if (row) rememberIds(this.database, 'track_prefs', row, key);
+    return row ?? null;
   }
 
   get(query: TrackQuery): TrackPrefsRecord | null {
@@ -109,10 +108,10 @@ export class TrackPrefs {
       const existing = this.row(query);
       if (!existing) {
         if (Object.values(columns).every(value => value === null)) return false;
-        const { artist, title, duration } = trackKey(query);
-        const names = ['artist_key', 'title_key', 'duration_ms', ...Object.keys(columns), 'updated_at'];
+        const { artist, title, duration, isrc, spotifyId } = trackKey(query);
+        const names = ['artist_key', 'title_key', 'duration_ms', 'isrc', 'spotify_id', ...Object.keys(columns), 'updated_at'];
         this.db.prepare(`INSERT INTO track_prefs (${names.join(', ')}) VALUES (${names.map(() => '?').join(', ')})`)
-          .run(artist, title, duration, ...Object.values(columns), this.now());
+          .run(artist, title, duration, isrc, spotifyId, ...Object.values(columns), this.now());
         return true;
       }
       const assignments = Object.keys(columns).map(name => `${name} = ?`).join(', ');

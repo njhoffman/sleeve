@@ -33,6 +33,8 @@ export interface TrackQuery {
   // Exact identifiers, for providers that look tracks up by them
   isrc?: string;
   spotifyId?: string;
+  // The MusicBrainz recording id, for providers that take one (none yet); not part of the track's identity
+  musicbrainzId?: string;
   // A local file, for providers that read sidecar files or the file's own tags
   path?: string;
 }

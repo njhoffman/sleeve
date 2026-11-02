@@ -8,29 +8,98 @@ import type { TrackQuery } from './types.ts';
 // sleeve's one database: online answers (cache.ts) and the user's per-track picks and timing offsets
 // (prefs.ts) share it. This file opens it and owns the schema; each store keeps to its own tables.
 //
-// Schema 1: answers. Schema 2: track_prefs.
+// Schema 1: answers. Schema 2: track_prefs. Schema 3: isrc and spotify_id on both.
 
-export const SCHEMA_VERSION = 2;
+export const SCHEMA_VERSION = 3;
 
 // A track is its normalized artist and title plus the duration asked with; rows match a query whose duration
-// is within DURATION_WINDOW_MS of theirs, or when both have none
+// is within DURATION_WINDOW_MS of theirs, or when both have none. When the query carries IDs, a row with the
+// same ISRC or Spotify id is the same track whatever its names and length (Spotify and the library file name a
+// recording differently), and comes first; a row whose ISRC differs from the query's is a different recording
+// even if the names match. Spotify ids do not rule a row out: one recording has several (album, single).
 export const DURATION_WINDOW_MS = 2000;
 
 export interface TrackKey {
   artist: string;
   title: string;
   duration: number | null;
+  isrc: string | null;
+  spotifyId: string | null;
+}
+
+// The columns a track row carries, for ranking the rows a query matches
+export interface TrackRow {
+  id: number;
+  duration_ms: number | null;
+  isrc: string | null;
+  spotify_id: string | null;
+}
+
+// "US-RC1-76-07839" to "USRC17607839"; null for what is not an ISRC (country, registrant, year, designation)
+export function normalizeIsrc(text: string | undefined): string | null {
+  const isrc = (text ?? '').replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+  return /^[A-Z]{2}[A-Z0-9]{3}\d{7}$/.test(isrc) ? isrc : null;
+}
+
+// A Spotify track id: 22 base-62 characters
+export function normalizeSpotifyId(text: string | undefined): string | null {
+  return text && /^[A-Za-z0-9]{22}$/.test(text) ? text : null;
 }
 
 export function trackKey(query: TrackQuery): TrackKey {
-  return { artist: normalizeArtist(query.artist), title: normalizeTitle(query.title), duration: query.durationMs ?? null };
+  return {
+    artist: normalizeArtist(query.artist),
+    title: normalizeTitle(query.title),
+    duration: query.durationMs ?? null,
+    isrc: normalizeIsrc(query.isrc),
+    spotifyId: normalizeSpotifyId(query.spotifyId)
+  };
 }
 
-// The WHERE clause and its parameters for rows of a table that belong to the track
+// The WHERE clause and its parameters for rows of a table that belong to the track (rank them with rankRows)
 export function trackMatch(key: TrackKey): { where: string; params: Array<string | number> } {
-  return key.duration === null
-    ? { where: 'artist_key = ? AND title_key = ? AND duration_ms IS NULL', params: [key.artist, key.title] }
+  const text = key.duration === null
+    ? { where: 'artist_key = ? AND title_key = ? AND duration_ms IS NULL', params: [key.artist, key.title] as Array<string | number> }
     : { where: 'artist_key = ? AND title_key = ? AND duration_ms BETWEEN ? AND ?', params: [key.artist, key.title, key.duration - DURATION_WINDOW_MS, key.duration + DURATION_WINDOW_MS] };
+  if (key.isrc) {
+    text.where += ' AND (isrc IS NULL OR isrc = ?)';
+    text.params.push(key.isrc);
+  }
+  const clauses = [`(${text.where})`];
+  const params = [...text.params];
+  if (key.isrc) {
+    clauses.unshift('isrc = ?');
+    params.unshift(key.isrc);
+  }
+  if (key.spotifyId) {
+    clauses.splice(key.isrc ? 1 : 0, 0, 'spotify_id = ?');
+    params.splice(key.isrc ? 1 : 0, 0, key.spotifyId);
+  }
+  return { where: clauses.length > 1 ? `(${clauses.join(' OR ')})` : clauses[0], params };
+}
+
+// How a row matched: 0 by ISRC, 1 by Spotify id, 2 by names and length
+export function matchedBy(row: TrackRow, key: TrackKey): number {
+  if (key.isrc && row.isrc === key.isrc) return 0;
+  if (key.spotifyId && row.spotify_id === key.spotifyId) return 1;
+  return 2;
+}
+
+// Rows a query matched, best first: by ID before by text, then the closest duration (a stable sort keeps the
+// caller's order among equals)
+export function rankRows<T extends TrackRow>(rows: T[], key: TrackKey): T[] {
+  const wanted = key.duration ?? 0;
+  return [...rows].sort((a, b) => matchedBy(a, key) - matchedBy(b, key)
+    || Math.abs((a.duration_ms ?? 0) - wanted) - Math.abs((b.duration_ms ?? 0) - wanted));
+}
+
+// Fills in the IDs a row lacks from the query that matched it, so a row stored by names alone (everything
+// before schema 3) is found by ID from then on
+export function rememberIds(database: SleeveDatabase, table: 'answers' | 'track_prefs', row: TrackRow, key: TrackKey): void {
+  const isrc = !row.isrc && key.isrc ? key.isrc : null;
+  const spotifyId = !row.spotify_id && key.spotifyId ? key.spotifyId : null;
+  if (!isrc && !spotifyId) return;
+  database.db.prepare(`UPDATE ${table} SET isrc = COALESCE(isrc, ?), spotify_id = COALESCE(spotify_id, ?) WHERE id = ?`).run(isrc, spotifyId, row.id);
 }
 
 // $XDG_DATA_HOME/sleeve/sleeve.db: data, not cache, since it holds the user's picks and timing offsets
@@ -68,6 +137,16 @@ const MIGRATIONS: Record<number, string> = {
       updated_at INTEGER NOT NULL
     );
     CREATE INDEX track_prefs_track ON track_prefs (artist_key, title_key);
+  `,
+  3: `
+    ALTER TABLE answers ADD COLUMN isrc TEXT;
+    ALTER TABLE answers ADD COLUMN spotify_id TEXT;
+    ALTER TABLE track_prefs ADD COLUMN isrc TEXT;
+    ALTER TABLE track_prefs ADD COLUMN spotify_id TEXT;
+    CREATE INDEX answers_isrc ON answers (provider, isrc);
+    CREATE INDEX answers_spotify ON answers (provider, spotify_id);
+    CREATE INDEX track_prefs_isrc ON track_prefs (isrc);
+    CREATE INDEX track_prefs_spotify ON track_prefs (spotify_id);
   `
 };
 
