@@ -6,9 +6,10 @@ Guidance for coding agents working in this repository.
 
 sleeve: synced lyrics for what MPD or Spotify plays, from several sources, shown in a window or as a desktop
 overlay. A restart of Sunamu (`~/git/Sunamu` holds the old fork, for reference only). Built so far: the
-lyrics core (`src/core/`) and the `sleeve lyrics` command (`src/cli/`). Planned: a headless daemon with a
-WebSocket protocol, a web renderer, a thin Electron shell, and writing lyrics into ID3 tags. The roadmap
-and open design questions are in `TODO.md`; `OUTLINE.md` is the original brief.
+lyrics core (`src/core/`) and the `sleeve lyrics`, `pick`, `offset` and `cache` commands (`src/cli/`).
+Planned: a headless daemon with a WebSocket protocol, a web renderer, a thin Electron shell, and writing
+lyrics into ID3 tags. The roadmap and open design questions are in `TODO.md`; `OUTLINE.md` is the original
+brief.
 
 Related projects (keep them in mind before designing player, tagging or window features):
 
@@ -36,6 +37,9 @@ node src/cli/index.ts lyrics --help
 - Plain ESM, `node:` imports for built-ins, built-in `fetch` for HTTP, commander for the CLI.
 - Providers implement `Provider` (`src/core/providers/provider.ts`): return unscored candidates, `[]` when
   they have nothing, throw on failures. Scoring and ranking live in `src/core/match.ts` only.
+- `sleeve.db` is opened and migrated only by `src/core/db.ts` (`SleeveDatabase`); `LyricsCache` (answers) and
+  `TrackPrefs` (picks, offsets) share it. A schema change is a new entry in `MIGRATIONS` and a bump of
+  `SCHEMA_VERSION`.
 - Local file tags go through the `TagReader` interface (`src/core/tags/reader.ts`); only
   `src/core/tags/musicMetadata.ts` imports music-metadata.
 - Tests stay offline: inject `fetch` (`test/helpers/fetch.ts`) and replay recorded responses from

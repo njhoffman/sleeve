@@ -113,8 +113,16 @@ build items that depend on it, listed in the later projects.
       track key, chosen candidate, alternatives, user offset, user-pinned flag.
       Done in 0.2.0: online answers found and not found in `$XDG_DATA_HOME/sleeve/sleeve.db`,
       `--no-cache`, `--refresh`, `sleeve cache [clear]`. The pick and offset parts moved to the next item.
-- [ ] **Per-track timing offset and manual pick.** (p2) [feature] Let the user nudge sync and choose another
+- [x] **Per-track timing offset and manual pick.** (p2) [feature] Let the user nudge sync and choose another
       candidate, and remember both. Store them in `sleeve.db` (schema 2) next to the cached answers.
+      Done in 0.4.0: `sleeve pick`, `sleeve offset`, `TrackPrefs` (`src/core/prefs.ts`); offsets belong to
+      the candidate they were set for and come back as `offsetMs` for the display to apply.
+- [ ] **"No correct lyrics" pick.** (p3) [feature] A negative pick: the user marks a track as having no right
+      lyrics anywhere (or as instrumental), so the display stays empty instead of showing the ranking's wrong
+      choice. Left out of 0.4.0.
+- [ ] **Relative offset nudges for the daemon.** (p3) [feature] The display will nudge by steps (+/-100 ms);
+      add `TrackPrefs.adjustOffset` (or a protocol message) when the daemon exists. `sleeve offset` sets
+      absolute values only.
 - [x] **Recorded HTTP fixtures for provider tests.** (p1) [test] Providers must be testable offline; record real
       responses once and replay them.
       Done in 0.1.0: `test/fixtures/lrclib/` replayed by `test/helpers/fetch.ts`.

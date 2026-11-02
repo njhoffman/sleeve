@@ -1,6 +1,7 @@
 import { expect } from 'chai';
 import { LyricsCache } from '../../src/core/cache.ts';
 import { fetchLyrics, queryForFile } from '../../src/core/fetchLyrics.ts';
+import { TrackPrefs } from '../../src/core/prefs.ts';
 import type { Provider } from '../../src/core/providers/provider.ts';
 import type { FileTags, TagReader } from '../../src/core/tags/reader.ts';
 import type { Candidate, Lyrics } from '../../src/core/types.ts';
@@ -114,6 +115,79 @@ describe('fetchLyrics', () => {
       expect(result.best?.provider).to.equal('found');
       expect(result.errors).to.deep.equal([{ provider: 'cache', message: 'database is locked' }, { provider: 'cache', message: 'database is locked' }]);
     });
+  });
+});
+
+describe('fetchLyrics with prefs', () => {
+  let prefs: TrackPrefs, asked: string[];
+  beforeEach(() => {
+    prefs = new TrackPrefs(':memory:');
+    asked = [];
+  });
+  afterEach(() => prefs.close());
+
+  const good = answer('good', synced, { id: 'g1' });
+  // Wrong length, so it scores under the threshold
+  const off = answer('off', { ...synced, lines: [{ time: 5000, text: 'other' }] }, { id: 'o1', track: { artist: 'Artist', title: 'Song', durationMs: 260_000 } });
+  const online = (item: Candidate) => provider(item.provider, false, async () => { asked.push(item.provider); return [item]; });
+
+  it('answers with an online pick, even one under the threshold, without asking anyone', async () => {
+    prefs.setPick(query, off);
+    const result = await fetchLyrics(query, { prefs, providers: [online(good), online(off)] });
+    expect(asked).to.deep.equal([]);
+    expect(result.best).to.deep.include({ provider: 'off', id: 'o1' });
+    expect(result.best!.score).to.be.below(0.6);
+    expect(result).to.deep.include({ pinned: true, offsetMs: 0, rejected: [], errors: [] });
+  });
+
+  it('puts the pick first among every candidate with all', async () => {
+    prefs.setPick(query, off);
+    const result = await fetchLyrics(query, { prefs, all: true, providers: [online(good), online(off)] });
+    expect(asked).to.deep.equal(['good', 'off']);
+    expect(result.candidates.map(item => item.provider)).to.deep.equal(['off', 'good']);
+    expect(result.rejected).to.deep.equal([]);
+    expect(result.pinned).to.equal(true);
+  });
+
+  it('ignores a pick whose provider is not asked', async () => {
+    prefs.setPick(query, off);
+    const result = await fetchLyrics(query, { prefs, providers: [online(good)] });
+    expect(result).to.deep.include({ pinned: false });
+    expect(result.best?.provider).to.equal('good');
+  });
+
+  it('reads a local pick again, and ranks as usual when it is gone', async () => {
+    let text = 'first';
+    const sidecar = provider('sidecar', true, async () => text ? [answer('sidecar', { ...synced, lines: [{ time: 0, text }] }, { id: '/m/song.lrc', exact: true })] : []);
+    const providers = [sidecar, online(good)];
+    prefs.setPick(query, answer('sidecar', synced, { id: '/m/song.lrc' }));
+    text = 'edited';
+    const edited = await fetchLyrics(query, { prefs, providers });
+    expect(edited.best?.lyrics.lines[0].text).to.equal('edited');
+    expect(edited.pinned).to.equal(true);
+    expect(asked).to.deep.equal([]);
+
+    text = '';
+    const gone = await fetchLyrics(query, { prefs, providers });
+    expect(gone).to.deep.include({ pinned: false });
+    expect(gone.best?.provider).to.equal('good');
+    expect(gone.errors).to.deep.equal([{ provider: 'prefs', message: 'picked sidecar:/m/song.lrc is no longer there; ranking as usual' }]);
+  });
+
+  it('gives the offset only for the candidate it was set against', async () => {
+    prefs.setOffset(query, 250, good);
+    expect((await fetchLyrics(query, { prefs, providers: [online(good)] })).offsetMs).to.equal(250);
+    const result = await fetchLyrics(query, { prefs, providers: [online(good)] });
+    expect(result.best?.lyrics.lines[0].time).to.equal(1000);
+    prefs.setPick(query, answer('other', synced, { id: 'x' }));
+    expect((await fetchLyrics(query, { prefs, providers: [online(good), online(answer('other', synced, { id: 'x' }))] })).offsetMs).to.equal(0);
+  });
+
+  it('reports prefs that cannot be read and answers anyway', async () => {
+    const failing = { get: () => { throw new Error('database is locked'); } } as unknown as TrackPrefs;
+    const result = await fetchLyrics(query, { prefs: failing, providers: [online(good)] });
+    expect(result.best?.provider).to.equal('good');
+    expect(result.errors).to.deep.equal([{ provider: 'prefs', message: 'database is locked' }]);
   });
 });
 

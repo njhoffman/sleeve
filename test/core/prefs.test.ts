@@ -1,0 +1,72 @@
+import { expect } from 'chai';
+import { formatRef, parseRef, sameCandidate, TrackPrefs } from '../../src/core/prefs.ts';
+import type { Candidate, ScoredCandidate } from '../../src/core/types.ts';
+
+const lyrics = { synced: true, instrumental: false, lines: [{ time: 1000, text: 'In the next world war' }] };
+const candidate: Candidate = { provider: 'lrclib', id: '12', track: { artist: 'Radiohead', title: 'Airbag', durationMs: 284_000 }, lyrics };
+const scored: ScoredCandidate = { ...candidate, cachedAt: 5, score: 0.4, detail: { title: 1, artist: 1, album: null, duration: 0 } };
+const other: Candidate = { ...candidate, provider: 'netease', id: '99' };
+
+describe('TrackPrefs', () => {
+  let time: number, prefs: TrackPrefs;
+  beforeEach(() => {
+    time = 1000;
+    prefs = new TrackPrefs(':memory:', { now: () => time });
+  });
+  afterEach(() => prefs.close());
+
+  const query = { artist: 'Radiohead', title: 'Airbag', durationMs: 284_400 };
+
+  it('keeps a pick as the candidate the provider gave, for the same track', () => {
+    prefs.setPick(query, scored);
+    expect(prefs.get({ artist: 'radiohead', title: 'Airbag (Remastered)', durationMs: 286_000 })).to.deep.equal({ pick: candidate, offset: null, updatedAt: 1000 });
+    expect(prefs.get({ ...query, durationMs: 287_000 })).to.equal(null);
+    expect(prefs.get({ artist: 'Radiohead', title: 'Airbag' })).to.equal(null);
+  });
+
+  it('replaces a pick, and removes the track once nothing is left for it', () => {
+    prefs.setPick(query, candidate);
+    time = 2000;
+    prefs.setPick({ ...query, durationMs: 284_000 }, other);
+    expect(prefs.get(query)).to.deep.equal({ pick: other, offset: null, updatedAt: 2000 });
+    prefs.setOffset(query, -300, other);
+    expect(prefs.clearPick(query)).to.equal(true);
+    expect(prefs.get(query)).to.deep.equal({ pick: null, offset: { ms: -300, provider: 'netease', id: '99' }, updatedAt: 2000 });
+    expect(prefs.clearPick(query)).to.equal(false);
+    expect(prefs.clearOffset(query)).to.equal(true);
+    expect(prefs.get(query)).to.equal(null);
+    expect(prefs.clearOffset(query)).to.equal(false);
+  });
+
+  it('sets an offset against a candidate without picking it', () => {
+    prefs.setOffset(query, 250, candidate);
+    expect(prefs.get(query)).to.deep.include({ pick: null, offset: { ms: 250, provider: 'lrclib', id: '12' } });
+    prefs.setOffset(query, 400, other);
+    expect(prefs.get(query)?.offset).to.deep.equal({ ms: 400, provider: 'netease', id: '99' });
+  });
+
+  it('takes the stored track with the closest duration when several match', () => {
+    prefs.setOffset({ ...query, durationMs: 280_000 }, 1, candidate);
+    prefs.setOffset({ ...query, durationMs: 283_500 }, 2, candidate);
+    expect(prefs.get({ ...query, durationMs: 281_600 })?.offset?.ms).to.equal(1);
+    expect(prefs.get({ ...query, durationMs: 283_000 })?.offset?.ms).to.equal(2);
+  });
+
+  it('refuses candidates without an id and fractional offsets', () => {
+    const { id: _id, ...anonymous } = candidate;
+    expect(() => prefs.setPick(query, anonymous)).to.throw('lrclib gave this candidate no id');
+    expect(() => prefs.setOffset(query, 1.5, candidate)).to.throw('Offset must be whole milliseconds');
+  });
+});
+
+describe('candidate refs', () => {
+  it('print and parse as provider:id, splitting at the first colon', () => {
+    expect(formatRef(candidate)).to.equal('lrclib:12');
+    expect(parseRef('Embedded:/m/a:b.mp3#USLT')).to.deep.equal({ provider: 'embedded', id: '/m/a:b.mp3#USLT' });
+    expect(parseRef('lrclib')).to.equal(null);
+    expect(parseRef(':12')).to.equal(null);
+    expect(parseRef('lrclib:')).to.equal(null);
+    expect(sameCandidate(candidate, { provider: 'lrclib', id: '12' })).to.equal(true);
+    expect(sameCandidate(candidate, { provider: 'lrclib', id: '13' })).to.equal(false);
+  });
+});

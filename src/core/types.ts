@@ -83,4 +83,9 @@ export interface LyricsResult {
   // Candidates under the threshold, kept so a caller can show why nothing matched
   rejected: ScoredCandidate[];
   errors: ProviderError[];
+  // best is the user's pick for the track, not the ranking's
+  pinned: boolean;
+  // The user's timing offset for best, in milliseconds (positive: later); 0 when none. best's lyrics are as the
+  // provider gave them, so a display applies this itself (shiftLyrics) and can change it live.
+  offsetMs: number;
 }

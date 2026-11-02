@@ -45,7 +45,7 @@ describe('sleeve lyrics', () => {
     await lyricsCommand(undefined, { ...options, format: 'plain' }, io, { fetch: fake.fetch });
     expect(out.at(-1)!.split('\n')[0]).to.equal('You were the mother of three girls so sweet');
     await lyricsCommand(undefined, { ...options, all: true }, io, { fetch: fake.fetch });
-    expect(out.at(-1)).to.match(/^lrclib: Death Cab for Cutie .* score 1\.00, cached$/);
+    expect(out.at(-1)).to.match(/^1 lrclib:321980  lrclib: Death Cab for Cutie .* score 1\.00, cached$/);
     await lyricsCommand(undefined, { ...options, json: true }, io, { fetch: fake.fetch });
     const json = JSON.parse(out.at(-1)!);
     expect(json.query).to.deep.equal({ artist: 'Death Cab for Cutie', title: 'Death of an Interior Decorator', durationMs: 177000 });

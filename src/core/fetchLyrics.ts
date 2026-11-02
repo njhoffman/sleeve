@@ -4,6 +4,7 @@ import { rankCandidates, scoreCandidate, THRESHOLD } from './match.ts';
 import { lrclib } from './providers/lrclib.ts';
 import { embedded, sidecar } from './providers/local.ts';
 import { netease } from './providers/netease.ts';
+import { formatRef, sameCandidate, type CandidateRef, type TrackPrefs, type TrackPrefsRecord } from './prefs.ts';
 import type { Provider, ProviderContext } from './providers/provider.ts';
 import { musicMetadataReader } from './tags/musicMetadata.ts';
 import type { FileTags, TagReader } from './tags/reader.ts';
@@ -15,6 +16,12 @@ import type { Candidate, LyricsResult, ProviderError, ScoredCandidate, TrackQuer
 // timeout, and a provider that fails or times out is reported in errors without holding up the rest. With a
 // cache, an online provider's stored answer for the track stands in for asking it, and every answer it gives
 // (found or not) is stored; `refresh` asks again and replaces what is stored.
+//
+// With prefs, the user's pick for the track is the answer, even under the threshold, as long as its provider is
+// among those asked. Without `all` nothing else is asked: an online pick is the copy stored with it, a local
+// one is read from its file again (an edited .lrc counts). With `all` every provider runs as usual and the
+// pick goes first. A pick that is no longer there (its file gone) is reported in errors and the ranking
+// stands. The offset for the candidate shown comes back as offsetMs; the lyrics themselves are not shifted.
 
 export const DEFAULT_PROVIDERS: Provider[] = [sidecar, embedded, lrclib, netease];
 export const DEFAULT_TIMEOUT_MS = 10_000;
@@ -32,6 +39,8 @@ export interface FetchOptions {
   cache?: LyricsCache;
   // Ask online providers even when the cache has their answer, and store the new one
   refresh?: boolean;
+  // The user's picks and offsets
+  prefs?: TrackPrefs;
 }
 
 export const USER_AGENT = `sleeve/${pkg.version} (https://github.com/njhoffman/sleeve)`;
@@ -77,6 +86,26 @@ function store(provider: Provider, query: TrackQuery, candidates: Candidate[], o
   }
 }
 
+function readPrefs(prefs: TrackPrefs | undefined, query: TrackQuery, errors: ProviderError[]): TrackPrefsRecord | null {
+  if (!prefs) return null;
+  try {
+    return prefs.get(query);
+  } catch (error) {
+    errors.push({ provider: 'prefs', message: error instanceof Error ? error.message : String(error) });
+    return null;
+  }
+}
+
+// The candidates with the pinned one first, wherever the ranking put it, and the offset for whichever is shown
+function finish(candidates: ScoredCandidate[], rejected: ScoredCandidate[], pinned: ScoredCandidate | null, record: TrackPrefsRecord | null, errors: ProviderError[]): LyricsResult {
+  const ref = pinned ? { provider: pinned.provider, id: pinned.id ?? '' } : null;
+  const others = (candidate: ScoredCandidate) => !ref || !sameCandidate(candidate, ref);
+  const ranked = pinned ? [pinned, ...candidates.filter(others)] : candidates;
+  const best = ranked[0] ?? null;
+  const offset = record?.offset && best && sameCandidate(best, record.offset) ? record.offset.ms : 0;
+  return { best, candidates: ranked, rejected: rejected.filter(others), errors, pinned: Boolean(pinned), offsetMs: offset };
+}
+
 async function run(providers: Provider[], query: TrackQuery, options: RunOptions) {
   const errors: ProviderError[] = [];
   const results = await Promise.all(providers.map(async provider => {
@@ -112,15 +141,41 @@ export async function fetchLyrics(query: TrackQuery, options: FetchOptions = {})
     ...(options.cache ? { cache: options.cache } : {}),
     ...(options.refresh ? { refresh: true } : {})
   };
+  const errors: ProviderError[] = [];
+  const record = readPrefs(options.prefs, query, errors);
+  const pick = record?.pick ?? null;
+  const pickedProvider = pick ? providers.find(provider => provider.name === pick.provider) : undefined;
+  const ref: CandidateRef | null = pick && pickedProvider ? { provider: pick.provider, id: pick.id ?? '' } : null;
+  const gone = () => errors.push({ provider: 'prefs', message: `picked ${formatRef(pick!)} is no longer there; ranking as usual` });
+
+  if (ref && !options.all) {
+    let pinned: ScoredCandidate | null;
+    if (pickedProvider!.local) {
+      const read = await run([pickedProvider!], query, settings);
+      errors.push(...read.errors);
+      pinned = read.candidates.find(candidate => sameCandidate(candidate, ref)) ?? null;
+    } else {
+      pinned = scoreCandidate(query, pick!);
+    }
+    if (pinned) return finish([], [], pinned, record, errors);
+    gone();
+  }
+
   const local = await run(providers.filter(provider => provider.local), query, settings);
   const haveSynced = local.candidates.some(candidate => candidate.score >= THRESHOLD && candidate.lyrics.synced);
   const online = haveSynced && !options.all
     ? { candidates: [] as ScoredCandidate[], errors: [] as ProviderError[] }
     : await run(providers.filter(provider => !provider.local), query, settings);
   const all = [...local.candidates, ...online.candidates];
+  errors.push(...local.errors, ...online.errors);
+  let pinned: ScoredCandidate | null = null;
+  if (ref && options.all) {
+    pinned = all.find(candidate => sameCandidate(candidate, ref)) ?? (pickedProvider!.local ? null : scoreCandidate(query, pick!));
+    if (!pinned) gone();
+  }
   const candidates = rankCandidates(all.filter(candidate => candidate.score >= THRESHOLD));
   const rejected = rankCandidates(all.filter(candidate => candidate.score < THRESHOLD));
-  return { best: candidates[0] ?? null, candidates, rejected, errors: [...local.errors, ...online.errors] };
+  return finish(candidates, rejected, pinned, record, errors);
 }
 
 // A query for a local file from its tags, with what the caller already knows taking precedence. The

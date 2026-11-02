@@ -6,6 +6,24 @@ All notable changes to sleeve are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-11-02
+
+### Added
+
+- `sleeve pick [file] <candidate>` shows the lyrics you choose for a track from then on, by number from
+  `sleeve lyrics --all` or by `provider:id`, even ones scored under the threshold; `--reset` hands the choice
+  back to the ranking. A pick needs no lookups, keeps working after the provider drops the lyrics, and
+  rereads local `.lrc` files so edits show.
+- `sleeve offset [file] [ms]` shifts a track's lyrics later (positive) or sooner (negative) and remembers it
+  for those lyrics; without a value it shows the offset, `0` or `--reset` removes it.
+- `sleeve lyrics --all` numbers candidates and shows each one's `provider:id`; stderr and `--json` say when
+  lyrics are pinned or offset; `--no-prefs` ignores picks and offsets.
+
+### Changed
+
+- `sleeve.db` moves to schema 2 (a table for picks and offsets) the first time this version opens it;
+  stored answers are kept. Older versions of sleeve refuse the upgraded database.
+
 ## [0.3.0] - 2026-11-02
 
 ### Added

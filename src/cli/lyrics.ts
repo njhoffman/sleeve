@@ -1,9 +1,11 @@
-import { LyricsCache } from '../core/cache.ts';
 import { DEFAULT_PROVIDERS, DEFAULT_TIMEOUT_MS, fetchLyrics, queryForFile, type FetchOptions } from '../core/fetchLyrics.ts';
 import { formatLrc, plainText } from '../core/lrc.ts';
 import { THRESHOLD } from '../core/match.ts';
+import { formatRef } from '../core/prefs.ts';
+import { shiftLyrics } from '../core/timing.ts';
 import type { LyricsResult, ScoredCandidate, TrackQuery } from '../core/types.ts';
 import type { TagReader } from '../core/tags/reader.ts';
+import { openStores } from './stores.ts';
 
 // `sleeve lyrics [file]`: the best lyrics for a track, from a local file's tags or from --artist and --title.
 
@@ -20,6 +22,8 @@ export interface LyricsOptions {
   // commander's --no-cache sets this false
   cache?: boolean;
   refresh?: boolean;
+  // commander's --no-prefs sets this false
+  prefs?: boolean;
 }
 
 export interface Io {
@@ -43,6 +47,16 @@ function clock(ms: number | undefined): string {
   return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
 }
 
+// "+250ms", "-1200ms"
+export function formatOffset(ms: number): string {
+  return `${ms > 0 ? '+' : ''}${ms}ms`;
+}
+
+// What the user decided about the candidate shown: ", pinned, offset +250ms"
+function decisions(result: LyricsResult): string {
+  return `${result.pinned ? ', pinned' : ''}${result.offsetMs ? `, offset ${formatOffset(result.offsetMs)}` : ''}`;
+}
+
 export function describeCandidate(candidate: ScoredCandidate): string {
   const { track, lyrics } = candidate;
   const kind = lyrics.instrumental ? 'instrumental' : `${lyrics.synced ? 'synced' : 'unsynced'}, ${lyrics.lines.length} line${lyrics.lines.length === 1 ? '' : 's'}`;
@@ -52,7 +66,7 @@ export function describeCandidate(candidate: ScoredCandidate): string {
   return `${candidate.provider}: ${track.artist} - ${track.title}${album} ${clock(track.durationMs)}, ${kind}${words}, score ${candidate.score.toFixed(2)}${cached}`;
 }
 
-function pickProviders(names: string | undefined): FetchOptions['providers'] {
+export function pickProviders(names: string | undefined): FetchOptions['providers'] {
   if (!names) return DEFAULT_PROVIDERS;
   const wanted = names.split(',').map(name => name.trim().toLowerCase()).filter(Boolean);
   const unknown = wanted.filter(name => !DEFAULT_PROVIDERS.some(provider => provider.name === name));
@@ -72,20 +86,31 @@ export async function buildQuery(file: string | undefined, options: LyricsOption
   return given as TrackQuery;
 }
 
+// Every candidate, numbered as `sleeve pick` takes them, with its ref
+function printAll(result: LyricsResult, io: Io): void {
+  const listed = [...result.candidates, ...result.rejected];
+  listed.forEach((candidate, index) => {
+    const rejected = index >= result.candidates.length ? 'rejected ' : '';
+    const mine = candidate === result.best ? decisions(result) : '';
+    io.out(`${index + 1} ${formatRef(candidate)}  ${rejected}${describeCandidate(candidate)}${mine}`);
+  });
+  for (const error of result.errors) io.err(`${error.provider} failed: ${error.message}`);
+}
+
 function printResult(result: LyricsResult, options: LyricsOptions, io: Io): void {
   if (options.all) {
-    for (const candidate of result.candidates) io.out(describeCandidate(candidate));
-    for (const candidate of result.rejected) io.out(`rejected ${describeCandidate(candidate)}`);
-    for (const error of result.errors) io.err(`${error.provider} failed: ${error.message}`);
+    printAll(result, io);
     return;
   }
   const best = result.best!;
-  io.err(describeCandidate(best));
+  io.err(`${describeCandidate(best)}${decisions(result)}`);
+  for (const error of result.errors.filter(error => error.provider === 'prefs')) io.err(`prefs: ${error.message}`);
   if (best.lyrics.instrumental) {
     io.out('(instrumental)');
     return;
   }
-  io.out(options.format === 'plain' ? plainText(best.lyrics) : formatLrc(best.lyrics));
+  const lyrics = shiftLyrics(best.lyrics, result.offsetMs);
+  io.out(options.format === 'plain' ? plainText(lyrics) : formatLrc(lyrics));
 }
 
 // Resolves to the exit code: 0 with lyrics, 1 without
@@ -94,16 +119,17 @@ export async function lyricsCommand(file: string | undefined, options: LyricsOpt
   const query = await buildQuery(file, options, fetchOptions.tags);
   const timeoutMs = options.timeout ? parseDuration(options.timeout) : DEFAULT_TIMEOUT_MS;
   const providers = pickProviders(options.providers);
-  // The cache a caller passed, none with --no-cache, else the user's database (closed afterwards)
-  const opened = options.cache !== false && !fetchOptions.cache ? new LyricsCache() : undefined;
-  const cache = options.cache === false ? undefined : fetchOptions.cache ?? opened;
+  const { cache: _cache, prefs: _prefs, ...rest } = fetchOptions;
+  const stores = openStores({ cache: options.cache !== false, prefs: options.prefs !== false }, fetchOptions);
   let result: LyricsResult;
   try {
     result = await fetchLyrics(query, {
-      ...fetchOptions, providers, timeoutMs, all: Boolean(options.all), refresh: Boolean(options.refresh), cache
+      ...rest, providers, timeoutMs, all: Boolean(options.all), refresh: Boolean(options.refresh),
+      ...(stores.cache ? { cache: stores.cache } : {}),
+      ...(stores.prefs ? { prefs: stores.prefs } : {})
     });
   } finally {
-    opened?.close();
+    stores.close();
   }
   if (options.json) {
     io.out(JSON.stringify({ query, ...result }, null, 2));

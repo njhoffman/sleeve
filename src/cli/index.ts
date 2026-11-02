@@ -6,11 +6,23 @@ import pkg from '../../package.json' with { type: 'json' };
 import { cacheClearCommand, cacheStatsCommand, type CacheOptions, type ClearCommandOptions } from './cache.ts';
 import { DEFAULT_PROVIDERS } from '../core/fetchLyrics.ts';
 import { FORMATS, lyricsCommand, type Io, type LyricsOptions } from './lyrics.ts';
+import { offsetCommand, pickCommand, type TrackCommandOptions } from './prefs.ts';
 
 const stdio: Io = {
   out: text => process.stdout.write(`${text}\n`),
   err: text => process.stderr.write(`${text}\n`)
 };
+
+// The options that name a track and the providers to look it up with, shared by pick and offset
+function trackOptions(command: Command): Command {
+  return command
+    .option('-a, --artist <artist>', 'artist (overrides the file\'s tag)')
+    .option('-t, --title <title>', 'title (overrides the file\'s tag)')
+    .option('--album <album>', 'album, to narrow the match')
+    .option('-d, --duration <length>', 'track length in seconds or m:ss')
+    .option('-p, --providers <names>', 'comma-separated providers, as for sleeve lyrics')
+    .option('--timeout <seconds>', 'per-provider timeout in seconds', '10');
+}
 
 export function buildProgram(io: Io, setExit: (code: number) => void): Command {
   const program = new Command('sleeve')
@@ -33,8 +45,25 @@ export function buildProgram(io: Io, setExit: (code: number) => void): Command {
     .option('--json', 'print the query and every candidate as JSON')
     .option('--no-cache', 'neither read nor store online answers')
     .option('--refresh', 'ask online providers again even when their answer is stored, and store the new one')
+    .option('--no-prefs', 'ignore your picks and offsets (sleeve pick, sleeve offset)')
     .action(async (file: string | undefined, options: LyricsOptions) => {
       setExit(await lyricsCommand(file, options, io));
+    });
+
+  trackOptions(program.command('pick'))
+    .description('Show these lyrics for a track from now on, even if they score under the threshold')
+    .argument('[args...]', '[file] <candidate>: provider:id, or the number sleeve lyrics --all gives it')
+    .option('--reset', 'forget the pick, so the ranking decides again')
+    .action(async (args: string[], options: TrackCommandOptions) => {
+      setExit(await pickCommand(args, options, io));
+    });
+
+  trackOptions(program.command('offset'))
+    .description('Shift the lyrics shown for a track in time; without a value, show the offset')
+    .argument('[args...]', '[file] [ms]: milliseconds, positive for later lyrics, negative for sooner; 0 removes it')
+    .option('--reset', 'remove the offset')
+    .action(async (args: string[], options: TrackCommandOptions) => {
+      setExit(await offsetCommand(args, options, io));
     });
 
   const cache = program.command('cache')

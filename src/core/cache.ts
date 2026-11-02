@@ -1,8 +1,4 @@
-import { mkdirSync } from 'node:fs';
-import os from 'node:os';
-import path from 'node:path';
-import { DatabaseSync } from 'node:sqlite';
-import { normalizeArtist, normalizeTitle } from './match.ts';
+import { DURATION_WINDOW_MS, defaultDatabasePath, openShared, SleeveDatabase, trackKey, trackMatch } from './db.ts';
 import type { Candidate, TrackQuery } from './types.ts';
 
 // What online providers answered, so the same track is not fetched again: the candidates a provider returned
@@ -10,15 +6,12 @@ import type { Candidate, TrackQuery } from './types.ts';
 // scoring applies to cached answers too. Failures (timeouts, 503s) are never stored. Local providers are not
 // cached: they are cheap and their files can change.
 //
-// A track is its normalized artist and title plus the duration asked with: an answer is reused for a query
-// whose duration is within DURATION_WINDOW_MS of it, or when both have none. Found answers are kept for
-// FOUND_TTL_MS, "none" answers for NOT_FOUND_TTL_MS, after which the provider is asked again.
+// A track is matched as db.ts defines (normalized names, a duration within DURATION_WINDOW_MS). Found answers
+// are kept for FOUND_TTL_MS, "none" answers for NOT_FOUND_TTL_MS, after which the provider is asked again.
 
-export const DURATION_WINDOW_MS = 2000;
+export { DURATION_WINDOW_MS, defaultDatabasePath };
 export const FOUND_TTL_MS = 180 * 24 * 3600 * 1000;
 export const NOT_FOUND_TTL_MS = 7 * 24 * 3600 * 1000;
-
-const SCHEMA_VERSION = 1;
 
 export interface CachedAnswer {
   candidates: Candidate[];
@@ -39,13 +32,6 @@ export interface ClearOptions {
   notFoundOnly?: boolean;
 }
 
-// $XDG_DATA_HOME/sleeve/sleeve.db: data, not cache, since the same database will hold the user's picks and
-// timing offsets
-export function defaultDatabasePath(env: NodeJS.ProcessEnv = process.env): string {
-  const base = env.XDG_DATA_HOME || path.join(os.homedir(), '.local', 'share');
-  return path.join(base, 'sleeve', 'sleeve.db');
-}
-
 interface Row {
   candidates: string;
   fetched_at: number;
@@ -54,53 +40,27 @@ interface Row {
 
 export class LyricsCache {
   readonly file: string;
-  private db: DatabaseSync;
+  private database: SleeveDatabase;
+  private owned: boolean;
   private now: () => number;
 
-  // file ':memory:' for a cache that lasts as long as the object (tests)
-  constructor(file: string = defaultDatabasePath(), { now = Date.now }: { now?: () => number } = {}) {
-    this.file = file;
+  // A path opens (and close() closes) the database there, ':memory:' for one that lasts as long as the
+  // object; a SleeveDatabase is shared with the other stores and left open
+  constructor(source: string | SleeveDatabase = defaultDatabasePath(), { now = Date.now }: { now?: () => number } = {}) {
+    ({ database: this.database, owned: this.owned } = openShared(source));
+    this.file = this.database.file;
     this.now = now;
-    if (file !== ':memory:') mkdirSync(path.dirname(file), { recursive: true });
-    this.db = new DatabaseSync(file);
-    if (file !== ':memory:') this.db.exec('PRAGMA journal_mode = WAL');
-    this.db.exec('PRAGMA busy_timeout = 5000');
-    this.migrate();
   }
 
-  private migrate(): void {
-    const { user_version: version } = this.db.prepare('PRAGMA user_version').get() as { user_version: number };
-    if (version > SCHEMA_VERSION) throw new Error(`${this.file} is from a newer sleeve (schema ${version}); upgrade sleeve`);
-    if (version < 1) {
-      this.db.exec(`
-        CREATE TABLE answers (
-          id INTEGER PRIMARY KEY,
-          provider TEXT NOT NULL,
-          artist_key TEXT NOT NULL,
-          title_key TEXT NOT NULL,
-          duration_ms INTEGER,
-          found INTEGER NOT NULL,
-          candidates TEXT NOT NULL,
-          fetched_at INTEGER NOT NULL
-        );
-        CREATE INDEX answers_track ON answers (provider, artist_key, title_key);
-        PRAGMA user_version = 1;
-      `);
-    }
-  }
-
-  private keys(query: TrackQuery) {
-    return { artist: normalizeArtist(query.artist), title: normalizeTitle(query.title), duration: query.durationMs ?? null };
+  private get db() {
+    return this.database.db;
   }
 
   // Rows for the same provider and track whose duration matches the query's, newest first
   private matching(provider: string, query: TrackQuery): Array<Row & { id: number }> {
-    const { artist, title, duration } = this.keys(query);
-    const sql = duration === null
-      ? 'SELECT id, candidates, fetched_at, found FROM answers WHERE provider = ? AND artist_key = ? AND title_key = ? AND duration_ms IS NULL ORDER BY fetched_at DESC'
-      : 'SELECT id, candidates, fetched_at, found FROM answers WHERE provider = ? AND artist_key = ? AND title_key = ? AND duration_ms BETWEEN ? AND ? ORDER BY fetched_at DESC';
-    const params = duration === null ? [provider, artist, title] : [provider, artist, title, duration - DURATION_WINDOW_MS, duration + DURATION_WINDOW_MS];
-    return this.db.prepare(sql).all(...params) as unknown as Array<Row & { id: number }>;
+    const { where, params } = trackMatch(trackKey(query));
+    const sql = `SELECT id, candidates, fetched_at, found FROM answers WHERE provider = ? AND ${where} ORDER BY fetched_at DESC`;
+    return this.db.prepare(sql).all(provider, ...params) as unknown as Array<Row & { id: number }>;
   }
 
   // The provider's stored answer for the track, or null when there is none or it is too old
@@ -114,19 +74,14 @@ export class LyricsCache {
 
   // Stores what the provider answered, replacing what it answered before for the same track
   put(provider: string, query: TrackQuery, candidates: Candidate[]): void {
-    const { artist, title, duration } = this.keys(query);
+    const { artist, title, duration } = trackKey(query);
     const replaced = this.matching(provider, query).map(row => row.id);
     const remove = this.db.prepare('DELETE FROM answers WHERE id = ?');
     const insert = this.db.prepare('INSERT INTO answers (provider, artist_key, title_key, duration_ms, found, candidates, fetched_at) VALUES (?, ?, ?, ?, ?, ?, ?)');
-    this.db.exec('BEGIN');
-    try {
+    this.database.transaction(() => {
       for (const id of replaced) remove.run(id);
       insert.run(provider, artist, title, duration, candidates.length ? 1 : 0, JSON.stringify(candidates), this.now());
-      this.db.exec('COMMIT');
-    } catch (error) {
-      this.db.exec('ROLLBACK');
-      throw error;
-    }
+    });
   }
 
   stats(): CacheStats {
@@ -156,6 +111,6 @@ export class LyricsCache {
   }
 
   close(): void {
-    this.db.close();
+    if (this.owned) this.database.close();
   }
 }
