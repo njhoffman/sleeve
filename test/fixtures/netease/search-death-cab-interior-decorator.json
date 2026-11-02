@@ -1,0 +1,128 @@
+{
+  "result": {
+    "songs": [
+      {
+        "id": 17286440,
+        "name": "Death Of An Interior Decorator",
+        "artists": [
+          {
+            "id": 31189,
+            "name": "Death Cab for Cutie"
+          }
+        ],
+        "album": {
+          "id": 1593665,
+          "name": "Transatlanticism"
+        },
+        "duration": 176626
+      },
+      {
+        "id": 574240184,
+        "name": "Death of an Interior Decorator",
+        "artists": [
+          {
+            "id": 31189,
+            "name": "Death Cab for Cutie"
+          }
+        ],
+        "album": {
+          "id": 39760746,
+          "name": "Transatlanticism (10th Anniversary Edition)"
+        },
+        "duration": 176626
+      },
+      {
+        "id": 27885173,
+        "name": "Death of an Interior Decorator (Demo)",
+        "artists": [
+          {
+            "id": 31189,
+            "name": "Death Cab for Cutie"
+          }
+        ],
+        "album": {
+          "id": 2689292,
+          "name": "Transatlanticism Demos"
+        },
+        "duration": 191133
+      },
+      {
+        "id": 574240188,
+        "name": "Death of an Interior Decorator (Demo)",
+        "artists": [
+          {
+            "id": 31189,
+            "name": "Death Cab for Cutie"
+          }
+        ],
+        "album": {
+          "id": 39760746,
+          "name": "Transatlanticism (10th Anniversary Edition)"
+        },
+        "duration": 191133
+      },
+      {
+        "id": 2668155373,
+        "name": "Death of an Interior Decorator",
+        "artists": [
+          {
+            "id": 35998510,
+            "name": "Drought"
+          }
+        ],
+        "album": {
+          "id": 260400916,
+          "name": "Death of an Interior Decorator"
+        },
+        "duration": 167500
+      },
+      {
+        "id": 26466040,
+        "name": "Death Of An Interior Decorator",
+        "artists": [
+          {
+            "id": 31189,
+            "name": "Death Cab for Cutie"
+          }
+        ],
+        "album": {
+          "id": 2504525,
+          "name": "Death Cab For Cutie - The Barsuk Years"
+        },
+        "duration": 176626
+      },
+      {
+        "id": 2063048914,
+        "name": "Death of an Interior Decorator",
+        "artists": [
+          {
+            "id": 57532339,
+            "name": "Frogbus"
+          }
+        ],
+        "album": {
+          "id": 169381573,
+          "name": "Transatlantic Mail: 20 Years of Transatlanticism and Give Up"
+        },
+        "duration": 172800
+      },
+      {
+        "id": 1907130263,
+        "name": "Death of an Interior Decorator",
+        "artists": [
+          {
+            "id": 13422818,
+            "name": "Josh Knowles"
+          }
+        ],
+        "album": {
+          "id": 138057470,
+          "name": "So This Is The New Year (Transatlanticism Reimagined)"
+        },
+        "duration": 171383
+      }
+    ],
+    "songCount": 8
+  },
+  "code": 200
+}

@@ -46,6 +46,7 @@ Providers, in order:
 | `sidecar`  | an `.lrc` next to the file, with the same name      | exact; needs a file                           |
 | `embedded` | the file's own tags: `SYLT`, or `USLT` (LRC or text) | exact; needs a file                           |
 | `lrclib`   | [LRCLIB](https://lrclib.net), free and keyless      | synced LRC; matches on artist, title, duration |
+| `netease`  | NetEase Cloud Music, no account                    | synced LRC; covers many LRCLIB misses          |
 
 Local providers run first. When one of them has synced lyrics, nothing goes online (`--all` asks every
 provider anyway). Online providers run in parallel, each with its own timeout (`--timeout`, 10 seconds), and
@@ -71,7 +72,9 @@ local providers are never cached. `--no-cache` neither reads nor stores; `--refr
 the stored answer; `sleeve cache clear [-p provider] [--not-found]` forgets answers.
 
 LRCLIB answers "server busy" (503) under load, mostly for lookups it has not cached; sleeve retries twice
-and then reports it.
+and then reports it, and NetEase usually has the song. NetEase's search ranks loosely (live versions and
+covers come first), so its results are scored by title, artist and length before any lyrics are fetched,
+and only the best two are fetched; credit lines at the top of its lyrics ("作词 : ...") are dropped.
 
 ## Development
 

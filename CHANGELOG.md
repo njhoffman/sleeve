@@ -6,6 +6,14 @@ All notable changes to sleeve are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-11-02
+
+### Added
+
+- NetEase Cloud Music as a lyrics source after LRCLIB (`-p netease`), covering many of LRCLIB's misses and
+  "server busy" answers. Its search results are scored before lyrics are fetched, so live versions and covers
+  are skipped, and credit lines at the top of its lyrics are dropped.
+
 ## [0.2.0] - 2026-11-02
 
 ### Added

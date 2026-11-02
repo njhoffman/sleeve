@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { Command, CommanderError } from 'commander';
 import pkg from '../../package.json' with { type: 'json' };
 import { cacheClearCommand, cacheStatsCommand, type CacheOptions, type ClearCommandOptions } from './cache.ts';
+import { DEFAULT_PROVIDERS } from '../core/fetchLyrics.ts';
 import { FORMATS, lyricsCommand, type Io, type LyricsOptions } from './lyrics.ts';
 
 const stdio: Io = {
@@ -25,7 +26,7 @@ export function buildProgram(io: Io, setExit: (code: number) => void): Command {
     .option('-t, --title <title>', 'title (overrides the file\'s tag)')
     .option('--album <album>', 'album, to narrow the match')
     .option('-d, --duration <length>', 'track length in seconds or m:ss, to match the right version')
-    .option('-p, --providers <names>', 'comma-separated providers to ask: sidecar, embedded, lrclib')
+    .option('-p, --providers <names>', `comma-separated providers to ask: ${DEFAULT_PROVIDERS.map(provider => provider.name).join(', ')}`)
     .option('--timeout <seconds>', 'per-provider timeout in seconds', '10')
     .option('-f, --format <format>', `output format: ${FORMATS.join(' or ')}`, 'lrc')
     .option('--all', 'list every candidate with its score instead of printing lyrics')

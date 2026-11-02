@@ -78,19 +78,25 @@ build items that depend on it, listed in the later projects.
       each a fallback for the others. Query in parallel with a per-provider timeout, rank candidates
       by score (synced beats unsynced), and isolate failures so one dead provider never blocks the rest.
       Done in 0.1.0 for sidecar, embedded and LRCLIB: `src/core/fetchLyrics.ts`; more providers plug in.
-- [ ] **LRCLIB is overloaded for uncached lookups.** (p1) [bug] In a 10-file sample of the library on 2026-11-02,
+- [ ] **LRCLIB is overloaded for uncached lookups.** (p2) [bug] In a 10-file sample of the library on 2026-11-02,
       2 lookups failed with 503 "ServerOverloaded" after both retries; cached ones answer at once. Misses are
       what other providers and the cache are for: port Musixmatch/NetEase next, cache found and not-found
       results, and in batch tagging back off and retry later instead of failing the file.
+      Mitigated in 0.2.0 (cache) and 0.3.0 (NetEase covers the misses); still open for batch tagging.
 - [ ] **Word timing from LRCLIB's lyricsfile.** (p3) [feature] LRCLIB records now carry `hasWordSync` and a
       `lyricsfile` (YAML: lines with `start_ms`/`end_ms`, words when word-synced). Parse it when
       `hasWordSync` is true for karaoke timing; needs a YAML parser and a recorded word-synced fixture.
 - [ ] **Queries without a duration cannot tell versions apart.** (p3) [feature] `sleeve lyrics -a -t` without `-d`
       scores live and album versions alike (all 1.0 for "Everything In Its Right Place"). Prefer the record
       whose album matches, or the most common duration among candidates, when no duration is given.
-- [ ] **Port the NetEase and Genius providers.** (p1) [feature] Decided 2026-11-02: NetEase next, to cover LRCLIB's
-      misses (synced LRC, no account, a different catalogue but frequent mismatches, so scoring matters);
-      Genius after it (unsynced only). Both stay in the chain behind local sources and LRCLIB.
+- [x] **Port the NetEase provider.** (p1) [feature] Decided 2026-11-02: NetEase next, to cover LRCLIB's misses.
+      Done in 0.3.0: `src/core/providers/netease.ts`; search results scored before fetching the
+      best two lyrics, credit lines dropped. A 10-file library sample found synced lyrics for all 10, NetEase
+      covering the 3 LRCLIB "server busy" answers.
+- [ ] **Port the Genius provider.** (p3) [feature] Unsynced lyrics only, as the last fallback; Sunamu scrapes its
+      pages (`src/main/lyricproviders/genius.ts` there). Check whether its API gives lyrics without scraping.
+- [ ] **NetEase translations.** (p3) [feature] NetEase returns a translation (`tlyric`, Chinese) with the same
+      timestamps; attach it as `LyricLine.translation` if translated lyrics become a display option.
 - [ ] **Look into Musixmatch again.** (p3) [feature] Wanted for word-level richsync and lookups by ISRC and
       Spotify id. Blocked 2026-11-02: `token.get` now gives anonymous clients a placeholder token of zeros,
       so Sunamu's approach no longer works, and getting past that by imitating the desktop app is out.

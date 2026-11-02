@@ -1,0 +1,308 @@
+{
+  "result": {
+    "songs": [
+      {
+        "id": 22559034,
+        "name": "Everything In Its Right Place",
+        "artists": [
+          {
+            "id": 99384,
+            "name": "Radiohead"
+          }
+        ],
+        "album": {
+          "id": 2065424,
+          "name": "Kid A"
+        },
+        "duration": 251426
+      },
+      {
+        "id": 1890455475,
+        "name": "Everything In Its Right Place",
+        "artists": [
+          {
+            "id": 99384,
+            "name": "Radiohead"
+          }
+        ],
+        "album": {
+          "id": 135381349,
+          "name": "KID A MNESIA"
+        },
+        "duration": 251426
+      },
+      {
+        "id": 2625363209,
+        "name": "Everything In Its Right Place",
+        "artists": [
+          {
+            "id": 99384,
+            "name": "Radiohead"
+          }
+        ],
+        "album": {
+          "id": 196754623,
+          "name": "Summer Sonic 2016 Complete"
+        },
+        "duration": 248986
+      },
+      {
+        "id": 2715165776,
+        "name": "Everything In Its Right Place",
+        "artists": [
+          {
+            "id": 99384,
+            "name": "Radiohead"
+          }
+        ],
+        "album": {
+          "id": 275074680,
+          "name": "BBC2 8th June, 2001 - the unseen brodcast"
+        },
+        "duration": 300434
+      },
+      {
+        "id": 18795698,
+        "name": "Everything In Its Right Place (Live In France)",
+        "artists": [
+          {
+            "id": 99384,
+            "name": "Radiohead"
+          }
+        ],
+        "album": {
+          "id": 1720870,
+          "name": "I Might Be Wrong: Live Recordings"
+        },
+        "duration": 462837
+      },
+      {
+        "id": 22558980,
+        "name": "Everything In Its Right Place",
+        "artists": [
+          {
+            "id": 99384,
+            "name": "Radiohead"
+          }
+        ],
+        "album": {
+          "id": 2065421,
+          "name": "The Best Of"
+        },
+        "duration": 251426
+      },
+      {
+        "id": 2158167561,
+        "name": "Everything In Its Right Place",
+        "artists": [
+          {
+            "id": 99384,
+            "name": "Radiohead"
+          }
+        ],
+        "album": {
+          "id": 196754623,
+          "name": "Summer Sonic 2016 Complete"
+        },
+        "duration": 246613
+      },
+      {
+        "id": 3336012153,
+        "name": "Everything In Its Right Place",
+        "artists": [
+          {
+            "id": 99384,
+            "name": "Radiohead"
+          }
+        ],
+        "album": {
+          "id": 357213708,
+          "name": "Live Recordings (Live at Movistar Arena, Madrid 2025)"
+        },
+        "duration": 300303
+      },
+      {
+        "id": 2163629888,
+        "name": "Everything In Its Right Place",
+        "artists": [
+          {
+            "id": 99384,
+            "name": "Radiohead"
+          }
+        ],
+        "album": {
+          "id": 198472784,
+          "name": "Live at Bonnaroo 2006"
+        },
+        "duration": 521241
+      },
+      {
+        "id": 22559009,
+        "name": "Everything In Its Right Place",
+        "artists": [
+          {
+            "id": 99384,
+            "name": "Radiohead"
+          }
+        ],
+        "album": {
+          "id": 2065422,
+          "name": "The Best Of"
+        },
+        "duration": 251426
+      },
+      {
+        "id": 2153075217,
+        "name": "Everything In Its Right Place (Atlanta)",
+        "artists": [
+          {
+            "id": 99384,
+            "name": "Radiohead"
+          }
+        ],
+        "album": {
+          "id": 194817381,
+          "name": "Kid Amnesiac Live"
+        },
+        "duration": 450906
+      },
+      {
+        "id": 2715164678,
+        "name": "Everything In Its Right Place",
+        "artists": [
+          {
+            "id": 99384,
+            "name": "Radiohead"
+          }
+        ],
+        "album": {
+          "id": 275074404,
+          "name": "At the Beacon Theatre NYC 2003"
+        },
+        "duration": 505471
+      },
+      {
+        "id": 2685930946,
+        "name": "Everything In It's Right Place",
+        "artists": [
+          {
+            "id": 99384,
+            "name": "Radiohead"
+          }
+        ],
+        "album": {
+          "id": 266261332,
+          "name": "Live In Berlin"
+        },
+        "duration": 583760
+      },
+      {
+        "id": 1472476229,
+        "name": "Everything in Its Right Place",
+        "artists": [
+          {
+            "id": 99384,
+            "name": "Radiohead"
+          }
+        ],
+        "album": {
+          "id": 94212275,
+          "name": "Trip-Hop Vibes Vol. 2"
+        },
+        "duration": 251426
+      },
+      {
+        "id": 26878625,
+        "name": "Everything In Its Right Place (Live)",
+        "artists": [
+          {
+            "id": 99384,
+            "name": "Radiohead"
+          }
+        ],
+        "album": {
+          "id": 2561850,
+          "name": "Not My Fault"
+        },
+        "duration": 184000
+      },
+      {
+        "id": 2707029318,
+        "name": "Everything In Its Right Place",
+        "artists": [
+          {
+            "id": 99384,
+            "name": "Radiohead"
+          }
+        ],
+        "album": {
+          "id": 272646741,
+          "name": "Glastonbury 03"
+        },
+        "duration": 412917
+      },
+      {
+        "id": 2707670208,
+        "name": "Everything In Its Right Place",
+        "artists": [
+          {
+            "id": 99384,
+            "name": "Radiohead"
+          }
+        ],
+        "album": {
+          "id": 272853470,
+          "name": "23_8_09_Praha_CZ (Live In Praha 2009)"
+        },
+        "duration": 396925
+      },
+      {
+        "id": 2714340358,
+        "name": "Everything In Its Right Place",
+        "artists": [
+          {
+            "id": 99384,
+            "name": "Radiohead"
+          }
+        ],
+        "album": {
+          "id": 274837857,
+          "name": "Radiohead For Haiti 2010"
+        },
+        "duration": 224680
+      },
+      {
+        "id": 3445925116,
+        "name": "Everything In Its Right Place",
+        "artists": [
+          {
+            "id": 99384,
+            "name": "Radiohead"
+          }
+        ],
+        "album": {
+          "id": 402970373,
+          "name": "Live at Victoria Park 10-02-2000"
+        },
+        "duration": 436613
+      },
+      {
+        "id": 2615041042,
+        "name": "Everything In Its Right Place (2000-09-16 Nijmegen)",
+        "artists": [
+          {
+            "id": 99384,
+            "name": "Radiohead"
+          }
+        ],
+        "album": {
+          "id": 244344779,
+          "name": "Take Me Back (Live Recordings 2000-2018)"
+        },
+        "duration": 494493
+      }
+    ],
+    "songCount": 323
+  },
+  "code": 200
+}

@@ -68,7 +68,7 @@ describe('sleeve lyrics', () => {
     await lyricsCommand(file, { providers: 'sidecar' }, io, { fetch: fake.fetch });
     expect(out).to.deep.equal(['[00:02.00]Sidecar']);
     const error = await lyricsCommand(file, { providers: 'sidecar,spotify' }, io).catch(caught => caught);
-    expect(error.message).to.equal('Unknown provider: spotify (known: sidecar, embedded, lrclib)');
+    expect(error.message).to.equal('Unknown provider: spotify (known: sidecar, embedded, lrclib, netease)');
   });
 
   it('exits 1 with the reasons when nothing matches', async () => {
@@ -81,7 +81,7 @@ describe('sleeve lyrics', () => {
 
   it('stores online answers in the user\'s database, and skips it with --no-cache or asks again with --refresh', async () => {
     const fake = lrclib([{ match: /\/api\/get\?/, body: deathCab }]);
-    const options = { artist: 'Death Cab for Cutie', title: 'Death of an Interior Decorator', duration: '177' };
+    const options = { artist: 'Death Cab for Cutie', title: 'Death of an Interior Decorator', duration: '177', providers: 'lrclib' };
     await lyricsCommand(undefined, options, io, { fetch: fake.fetch });
     await lyricsCommand(undefined, options, io, { fetch: fake.fetch });
     expect(fake.calls).to.have.length(1);

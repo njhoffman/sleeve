@@ -7,6 +7,7 @@ export { parseLrc, formatLrc, plainText, looksLikeLrc } from './lrc.ts';
 export { scoreCandidate, rankCandidates, normalizeTitle, normalizeArtist, similarity, durationScore, THRESHOLD } from './match.ts';
 export { lrclib, createLrclib } from './providers/lrclib.ts';
 export { sidecar, embedded, sidecarPath } from './providers/local.ts';
+export { netease } from './providers/netease.ts';
 export type { Provider, ProviderContext } from './providers/provider.ts';
 export type { TagReader, FileTags, StoredLyrics } from './tags/reader.ts';
 export { musicMetadataReader } from './tags/musicMetadata.ts';

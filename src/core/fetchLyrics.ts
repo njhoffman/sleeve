@@ -3,6 +3,7 @@ import type { LyricsCache } from './cache.ts';
 import { rankCandidates, scoreCandidate, THRESHOLD } from './match.ts';
 import { lrclib } from './providers/lrclib.ts';
 import { embedded, sidecar } from './providers/local.ts';
+import { netease } from './providers/netease.ts';
 import type { Provider, ProviderContext } from './providers/provider.ts';
 import { musicMetadataReader } from './tags/musicMetadata.ts';
 import type { FileTags, TagReader } from './tags/reader.ts';
@@ -15,7 +16,7 @@ import type { Candidate, LyricsResult, ProviderError, ScoredCandidate, TrackQuer
 // cache, an online provider's stored answer for the track stands in for asking it, and every answer it gives
 // (found or not) is stored; `refresh` asks again and replaces what is stored.
 
-export const DEFAULT_PROVIDERS: Provider[] = [sidecar, embedded, lrclib];
+export const DEFAULT_PROVIDERS: Provider[] = [sidecar, embedded, lrclib, netease];
 export const DEFAULT_TIMEOUT_MS = 10_000;
 
 export interface FetchOptions {
