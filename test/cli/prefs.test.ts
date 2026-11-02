@@ -8,7 +8,9 @@ import type { Io } from '../../src/cli/lyrics.ts';
 import { fakeFetch, fixture } from '../helpers/fetch.ts';
 import { writeTaggedMp3 } from '../helpers/id3.ts';
 
-describe('sleeve pick and sleeve offset', () => {
+describe('sleeve pick and sleeve offset', function () {
+  // Each test runs a dozen or more commands end to end (about 60 ms each), too close to mocha's 2 s under load
+  this.timeout(10_000);
   let out: string[], err: string[], io: Io, dir: string, savedData: string | undefined, file: string;
   beforeEach(async () => {
     out = []; err = [];

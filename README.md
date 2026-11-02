@@ -4,7 +4,8 @@ Synced lyrics for the song playing in MPD or Spotify, from several sources, show
 desktop overlay above [backdrop](https://github.com/njhoffman/backdrop)'s wallpaper. A restart of
 [Sunamu](https://github.com/NyaomiDEV/Sunamu), whose maintainer has left it.
 
-> **Status:** the lyrics core and the `sleeve lyrics`, `pick` and `offset` commands work. The player daemon, the display and
+> **Status:** the lyrics core, `sleeve now` (lyrics for what MPD or Spotify plays, in the terminal) and the
+> `sleeve lyrics`, `pick` and `offset` commands work. The player daemon, the display and
 > writing lyrics into tags are planned; see [TODO.md](TODO.md).
 
 ## Requirements
@@ -35,6 +36,9 @@ sleeve pick song.mp3 lrclib:321980             # the same by provider:id
 sleeve pick --reset song.mp3                   # let the ranking decide again
 sleeve offset song.mp3 -250                    # show this track's lyrics 250 ms sooner (+250: later)
 sleeve offset song.mp3                         # show the offset; 0 or --reset removes it
+sleeve now                                     # lyrics for what MPD or Spotify plays, line by line
+sleeve now --once                              # the track, where it is, and the current line
+sleeve now --once --json                       # the same with the lyrics, for scripts and status bars
 sleeve cache                                   # how many answers are stored, by provider (also --json)
 sleeve cache clear --not-found                 # forget "no lyrics" answers so those tracks are asked again
 ```
@@ -76,6 +80,24 @@ so scoring changes apply to stored answers too. Failures (timeouts, "server busy
 local providers are never cached. `--no-cache` neither reads nor stores; `--refresh` asks again and replaces
 the stored answer; `sleeve cache clear [-p provider] [--not-found]` forgets answers.
 
+## What plays
+
+`sleeve now` follows MPD and Spotify at once and shows lyrics for the active one: the one playing (Spotify
+when both are, as musicman decides), else the one paused last. Each line prints as it comes due; `+` and `-`
+move the lyrics 100 ms later or sooner and save it for the track (as `sleeve offset` does), `q` quits.
+
+- **MPD** is read through its own protocol: exact elapsed time, and changes (play, pause, seek, next song) the
+  moment they happen. Its address comes from `--mpd`, then `MPD_HOST`/`MPD_PORT`, then musicman, then
+  `localhost:6600`; the file playing is found under `--music-dir` or musicman's library directory, so its
+  `.lrc`, its own tags and its measured length are used.
+- **Spotify** (or any MPRIS player, `--mpris spotify,vlc`) is read over D-Bus: its track, play state and
+  position, read again on every change and seek and every 5 seconds while playing. `--no-mpd` and
+  `--no-mpris` leave one side out.
+- **musicman**, when installed (1.55.0 or later), tells sleeve where MPD and the library are
+  (`~/.local/state/musicman/paths.json`) and which library file a Spotify track is. The file's lyrics and tags
+  are used if its length is within 2 seconds of Spotify's, since a different master would put them out of
+  time. Without musicman, Spotify tracks are looked up online only.
+
 ## Picks and offsets
 
 When the ranking chooses the wrong lyrics, `sleeve pick` chooses for it: the candidate, by its number in
@@ -101,10 +123,13 @@ and only the best two are fetched; credit lines at the top of its lyrics ("ä½œè¯
 ## Development
 
 ```bash
-npm test             # mocha, offline
-npm run test:brief   # the same with the dot reporter
-npm run typecheck    # tsc --noEmit
+just                 # the recipes
+just check           # tests (dot reporter) and typecheck, as before every commit
+just test-file test/players/mpd.test.ts   # only these files
+just now --once      # the CLI from the sources
+npm test             # mocha, offline, spec reporter
 ```
 
-Tests never reach the network: provider tests replay recorded responses from `test/fixtures/`, and tagged
-mp3s are built by `test/helpers/id3.ts`.
+Tests never reach the network, MPD or D-Bus: provider tests replay recorded responses from `test/fixtures/`,
+tagged mp3s are built by `test/helpers/id3.ts`, MPD is a local fake server (`test/helpers/fakeMpd.ts`) and
+MPRIS players a fake bus.

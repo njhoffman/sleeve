@@ -20,12 +20,16 @@ Reviewed: 2026-11-02
       (leveled logger, MPRIS fixes, provider logging) that are not committed or pushed; `~/git/lyricist`
       is a stale clone with only lockfile changes. Commit or stash them before they are lost, so they
       can be read for reference.
-- [ ] **Decide the musicman integration.** (p2) [chore] `~/git/musicman` (v1.51.0, plain JS, pnpm workspace)
+- [x] **Decide the musicman integration.** (p2) [chore] `~/git/musicman` (v1.51.0, plain JS, pnpm workspace)
       already detects the active player across MPD and Spotify (`musicman status --format json`,
       `common/mpd/`), keeps a SQLite library and writes ID3 tags, including custom fields synced
       with Spotify playlists. Overlaps sleeve's player layer and tag writing. Decide whether sleeve
       reads now-playing from musicman (or shares `common/mpd`) and writes lyrics through musicman's tag
       writer, so two programs never rewrite the same files' ID3 tags independently.
+      Decided 2026-11-02 for players (0.5.0): sleeve reads MPD and MPRIS itself, since lyrics need exact,
+      immediate position and musicman's adapters are one-shot reads; musicman shares a contract
+      (its docs/09-contract.md, 1.55.0): `paths.json` (MPD and the database) and the `spotify_track_files` view,
+      so Spotify tracks get their library file. Tag writing is still open (see Batch-write lyrics).
 - [ ] **Check license obligations.** (p3) [docs] Sunamu is MPL-2.0: any file copied or closely ported from it
       (LRC parser, Musixmatch client) stays MPL-2.0 with its notice. Pick sleeve's license with that in mind.
 
@@ -50,9 +54,11 @@ build items that depend on it, listed in the later projects.
 - [ ] **Weak lyrics sources and first-hit selection.** (p2) [chore] Musixmatch's token is unofficial, NetEase
       mismatches, Genius has no timing, LRCLIB is missing, and Sunamu takes the first synced hit.
       Settle the scoring rules and provider order before porting providers.
-- [ ] **MPD protocol versus MPRIS.** (p2) [chore] MPD gives idle events, exact elapsed time and the file path
+- [x] **MPD protocol versus MPRIS.** (p2) [chore] MPD gives idle events, exact elapsed time and the file path
       (needed for sidecar LRC, embedded lyrics, tag IDs and cover art). Confirm MPD direct as the primary
       player and MPRIS for Spotify and the rest.
+      Confirmed in 0.5.0: MPD directly, MPRIS for Spotify (any other player by name); mpd's MPRIS bridge and
+      playerctld are refused so MPD is not seen twice.
 - [ ] **ID3 lyrics frame: USLT or SYLT.** (p2) [chore] USLT with LRC text is read by most players but is
       officially unsynced; SYLT is synced but poorly supported. Proposed default: USLT with LRC text,
       SYLT as an option. Check what mpd, ncmpcpp and the phone player read.
@@ -120,9 +126,10 @@ build items that depend on it, listed in the later projects.
 - [ ] **"No correct lyrics" pick.** (p3) [feature] A negative pick: the user marks a track as having no right
       lyrics anywhere (or as instrumental), so the display stays empty instead of showing the ranking's wrong
       choice. Left out of 0.4.0.
-- [ ] **Relative offset nudges for the daemon.** (p3) [feature] The display will nudge by steps (+/-100 ms);
+- [x] **Relative offset nudges for the daemon.** (p3) [feature] The display will nudge by steps (+/-100 ms);
       add `TrackPrefs.adjustOffset` (or a protocol message) when the daemon exists. `sleeve offset` sets
       absolute values only.
+      Done in 0.5.0: `NowPlaying.nudge(deltaMs)`, bound to + and - in `sleeve now`; the daemon will expose it.
 - [x] **Recorded HTTP fixtures for provider tests.** (p1) [test] Providers must be testable offline; record real
       responses once and replay them.
       Done in 0.1.0: `test/fixtures/lrclib/` replayed by `test/helpers/fetch.ts`.
@@ -139,10 +146,19 @@ build items that depend on it, listed in the later projects.
 
 ## 5. Players
 
-- [ ] **Native MPD client.** (p1) [feature] Use MPD's protocol directly (idle events, precise elapsed time, file
+- [ ] **Headless daemon over the session.** (p1) [feature] `sleeved`: `NowPlaying` (`src/now/session.ts`)
+      behind the WebSocket protocol the renderer and Electron shell will use (state, current line, nudge,
+      pick). Decide the protocol messages and how the daemon is started (systemd user unit like musicman's).
+- [ ] **Prefetch the next track's lyrics.** (p3) [perf] MPD's queue (`playlistinfo`) and Spotify's (no MPRIS
+      queue; Web API only) could warm the cache, so lyrics are ready when a track starts. Lookups that wait
+      on LRCLIB's "server busy" retries take several seconds today.
+- [x] **Native MPD client.** (p1) [feature] Use MPD's protocol directly (idle events, precise elapsed time, file
       path for local lyrics and cover art) instead of going through an MPRIS bridge.
-- [ ] **MPRIS client for Spotify and others.** (p2) [feature] Port Sunamu's `mpris2.ts`, with the fork's fixes;
+      Done in 0.5.0: `src/players/mpd.ts` (`node:net`, `idle player`, reconnects with backoff, MPD_HOST forms).
+- [x] **MPRIS client for Spotify and others.** (p2) [feature] Port Sunamu's `mpris2.ts`, with the fork's fixes;
       interpolate position between polls.
+      Done in 0.5.0: `src/players/mpris.ts` on `@jellybrick/dbus-next` (Seeked, PropertiesChanged, a position
+      read every 5 s while playing), written anew rather than ported.
 
 ## 6. Display
 

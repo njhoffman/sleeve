@@ -6,6 +6,7 @@ import pkg from '../../package.json' with { type: 'json' };
 import { cacheClearCommand, cacheStatsCommand, type CacheOptions, type ClearCommandOptions } from './cache.ts';
 import { DEFAULT_PROVIDERS } from '../core/fetchLyrics.ts';
 import { FORMATS, lyricsCommand, type Io, type LyricsOptions } from './lyrics.ts';
+import { nowCommand, type NowOptions } from './now.ts';
 import { offsetCommand, pickCommand, type TrackCommandOptions } from './prefs.ts';
 
 const stdio: Io = {
@@ -48,6 +49,23 @@ export function buildProgram(io: Io, setExit: (code: number) => void): Command {
     .option('--no-prefs', 'ignore your picks and offsets (sleeve pick, sleeve offset)')
     .action(async (file: string | undefined, options: LyricsOptions) => {
       setExit(await lyricsCommand(file, options, io));
+    });
+
+  program.command('now')
+    .description('Follow what MPD or Spotify plays and print its lyrics line by line; + and - move them 100 ms (saved), q quits')
+    .option('--once', 'print the track, where playback is and the current line, then exit')
+    .option('--json', 'with --once, print it all as JSON')
+    .option('--mpd <address>', 'MPD as host, host:port, password@host:port or a socket path (default: MPD_HOST, then musicman\'s paths.json, then localhost:6600)')
+    .option('--no-mpd', 'leave MPD out')
+    .option('--music-dir <dir>', 'MPD\'s music directory, to find the files it plays (default: musicman\'s)')
+    .option('--mpris <names>', 'comma-separated MPRIS players to follow', 'spotify')
+    .option('--no-mpris', 'leave MPRIS players (Spotify) out')
+    .option('-p, --providers <names>', 'comma-separated providers to ask, as for sleeve lyrics')
+    .option('--timeout <seconds>', 'per-provider timeout in seconds', '10')
+    .option('--no-cache', 'neither read nor store online answers')
+    .option('--no-prefs', 'ignore your picks and offsets')
+    .action(async (options: NowOptions) => {
+      setExit(await nowCommand(options, io));
     });
 
   trackOptions(program.command('pick'))

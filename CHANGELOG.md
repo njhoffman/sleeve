@@ -6,6 +6,24 @@ All notable changes to sleeve are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-11-02
+
+### Added
+
+- `sleeve now` follows MPD and Spotify and prints the lyrics of what plays, line by line as they come due;
+  `+` and `-` move them 100 ms and save it for the track, `q` quits. `--once` prints the track, where it is
+  and the current line (`--json` for scripts and status bars).
+- MPD is read directly (exact position, changes as they happen, reconnecting when MPD restarts), at the
+  address `--mpd`, `MPD_HOST`/`MPD_PORT` or musicman gives; the file it plays supplies its own lyrics and
+  length. Spotify and other MPRIS players (`--mpris`) are read over D-Bus.
+- With musicman 1.55.0 or later, a Spotify track that is in the library uses the library file's lyrics and
+  tags when the lengths agree.
+- A `justfile`: `just check`, `just test-file`, `just now`, `just tag` and more.
+
+### Fixed
+
+- Running one test file (now `just test-file FILE`) no longer runs every test file as well.
+
 ## [0.4.0] - 2026-11-02
 
 ### Added
