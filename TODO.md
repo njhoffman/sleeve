@@ -157,9 +157,14 @@ build items that depend on it, listed in the later projects.
 - [ ] **`sleeve line` for status bars.** (p3) [feature] Print the current line each time it changes, from a
       `subscribe` on the daemon's socket, so polybar/i3blocks need no socat and jq (docs/protocol.md shows
       that pipeline today).
-- [ ] **Prefetch the next track's lyrics.** (p3) [perf] MPD's queue (`playlistinfo`) and Spotify's (no MPRIS
+- [x] **Prefetch the next track's lyrics.** (p3) [perf] MPD's queue (`playlistinfo`) and Spotify's (no MPRIS
       queue; Web API only) could warm the cache, so lyrics are ready when a track starts. Lookups that wait
       on LRCLIB's "server busy" retries take several seconds today.
+      Done in 0.8.0 for MPD: `nextsongid` and `playlistid` give the song queued next (random included), the
+      session looks it up once the current track is settled and adopts the lookup when the track starts.
+- [ ] **Prefetch for Spotify.** (p3) [perf] MPRIS has no queue. Spotify's Web API does (`/me/player/queue`),
+      which needs an OAuth token; musicman manages Spotify and may have one. Any such data would have to be
+      added to musicman's contract (`docs/09-contract.md`) first, not read from its tables.
 - [x] **Native MPD client.** (p1) [feature] Use MPD's protocol directly (idle events, precise elapsed time, file
       path for local lyrics and cover art) instead of going through an MPRIS bridge.
       Done in 0.5.0: `src/players/mpd.ts` (`node:net`, `idle player`, reconnects with backoff, MPD_HOST forms).

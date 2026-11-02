@@ -39,7 +39,8 @@ function sessionOptions(command: Command): Command {
     .option('-p, --providers <names>', 'comma-separated providers to ask, as for sleeve lyrics')
     .option('--timeout <seconds>', 'per-provider timeout in seconds (default: 10)')
     .option('--no-cache', 'neither read nor store online answers')
-    .option('--no-prefs', 'ignore your picks and offsets');
+    .option('--no-prefs', 'ignore your picks and offsets')
+    .option('--no-prefetch', 'do not look up the song MPD has queued next ahead of time');
 }
 
 export function buildProgram(io: Io, setExit: (code: number) => void): Command {

@@ -92,6 +92,9 @@ move the lyrics 100 ms later or sooner and save it for the track (as `sleeve off
   moment they happen. Its address comes from `--mpd`, then `MPD_HOST`/`MPD_PORT`, then musicman, then
   `localhost:6600`; the file playing is found under `--music-dir` or musicman's library directory, so its
   `.lrc`, its own tags and its measured length are used.
+- **Prefetch:** while a song plays, the lyrics for the one MPD has queued next are looked up, so they are ready
+  when it starts; `--no-prefetch` turns that off. Spotify's queue cannot be read over MPRIS, so it is not
+  prefetched.
 - **Spotify** (or any MPRIS player, `--mpris spotify,vlc`) is read over D-Bus: its track, play state and
   position, read again on every change and seek and every 5 seconds while playing. `--no-mpd` and
   `--no-mpris` leave one side out.

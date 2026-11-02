@@ -20,6 +20,8 @@ export interface SessionCliOptions {
   timeout?: string;
   cache?: boolean;
   prefs?: boolean;
+  // commander's --no-prefetch sets it false
+  prefetch?: boolean;
 }
 
 // What the session needs from outside, replaced in tests
@@ -53,7 +55,7 @@ export function mprisNames(option: string | boolean | undefined): string[] {
 // Whether any option shapes the session (players, providers, stores), as opposed to how it is shown
 export function shapesSession(options: SessionCliOptions): boolean {
   return options.mpd !== undefined || options.mpris !== undefined || options.musicDir !== undefined || options.providers !== undefined
-    || options.timeout !== undefined || options.cache === false || options.prefs === false;
+    || options.timeout !== undefined || options.cache === false || options.prefs === false || options.prefetch === false;
 }
 
 // Checks the options, then opens everything and starts the session once every player has had its first try
@@ -110,6 +112,7 @@ export async function openSession(options: SessionCliOptions, io: Io, deps: Sess
     ...(deps.fetch ? { fetch: deps.fetch } : {}),
     ...(stores.cache ? { cache: stores.cache } : {}),
     ...(stores.prefs ? { prefs: stores.prefs } : {}),
+    ...(options.prefetch === false ? { prefetch: false } : {}),
     library
   });
   const close = async () => {

@@ -27,6 +27,8 @@ export interface Playback {
   rate: number;
   // When the state or the track last changed (monotonic ms), to choose between paused players
   changedAt: number;
+  // The track queued to play after this one, when the player says (MPD); for prefetching its lyrics
+  next?: PlayingTrack | null;
 }
 
 export interface Player {

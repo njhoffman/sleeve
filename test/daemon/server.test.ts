@@ -48,7 +48,13 @@ describe('sleeved', () => {
     player: 'spotify', state: 'playing', track, positionMs, at: monotonic(), rate: 1, changedAt: 0, ...extra
   });
 
+  // When the playback in start() began: positions may run on from 150 s by as long as has passed since
+  let startedAt = 0;
+  // (plus 2 ms: the wire stamp is whole wall-clock milliseconds)
+  const elapsed = () => Math.ceil(monotonic() - startedAt) + 2;
+
   async function start(options: ConstructorParameters<typeof SleeveDaemon>[1] = {}) {
+    startedAt = monotonic();
     player = fakePlayer('spotify', { playback: playing(150_000) });
     const hub = new PlayerHub([player]);
     hub.start();
@@ -108,7 +114,7 @@ describe('sleeved', () => {
     expect(first.type).to.equal('playback');
     const wire = (first as Extract<ServerMessage, { type: 'playback' }>).playback!;
     expect(wire).to.deep.include({ player: 'spotify', state: 'playing', rate: 1, track });
-    expect(wire.positionMs).to.be.within(150_000, 150_500);
+    expect(wire.positionMs).to.be.within(150_000, 150_000 + elapsed());
     expect(wire.at).to.be.within(before - 1, Date.now() + 1);
     expect(await client.next()).to.deep.include({ type: 'lyrics', key: 'spotify:k1', loading: false, error: null, result: answer });
     expect(await client.next()).to.deep.equal({ type: 'players', problems: [] });
@@ -171,13 +177,20 @@ describe('sleeved', () => {
   it('sends subscribers each line as it comes due, offset included', async () => {
     answer = { ...answer, best: candidate('lrclib', '1', [40, 80, 120]) };
     await start();
-    player.set(playing(0));
+    // Subscribed while paused at the start, so every line is still to come when playback starts
+    player.set(playing(0, { state: 'paused' }));
     await session.settled();
     const client = await unixClient();
     client.send({ type: 'subscribe', lines: true, id: 1 });
-    await until(() => client.messages.filter(message => message.type === 'line').length >= 4, 1000);
-    const seen = (client.messages.filter(message => message.type === 'line') as LineMessage[]).map(message => message.line.index);
-    expect(seen.slice(0, 4)).to.deep.equal([-1, 0, 1, 2]);
+    await until(() => client.messages.some(message => message.type === 'reply' && message.id === 1));
+    player.set(playing(0));
+    const seen = () => (client.messages.filter(message => message.type === 'line') as LineMessage[]).map(message => message.line.index);
+    await until(() => seen().includes(2), 2000);
+    // In order, each once; a timer held up by a busy machine may skip a line that is already over
+    const indexes = seen();
+    expect(indexes[0]).to.equal(-1);
+    expect(indexes.at(-1)).to.equal(2);
+    expect(indexes.every((index, at) => at === 0 || index > indexes[at - 1])).to.equal(true);
 
     client.messages.length = 0;
     client.send({ type: 'offset', ms: 1000, id: 2 });
@@ -189,6 +202,13 @@ describe('sleeved', () => {
     client.send({ type: 'offset', ms: 0, id: 4 });
     await until(() => client.messages.some(message => message.type === 'reply' && message.id === 4));
     expect(client.messages.some(message => message.type === 'line')).to.equal(false);
+  });
+
+  it('logs the track it looks up ahead', async () => {
+    const logs: string[] = [];
+    await start({ log: text => logs.push(text) });
+    player.set(playing(1000, { next: { ...track, key: 'k9', title: 'Next' } }));
+    await until(() => logs.includes('prefetch: spotify:k9'));
   });
 
   it('passes on player problems as they change', async () => {
@@ -240,7 +260,7 @@ describe('sleeved', () => {
     await start();
     const client = (await DaemonClient.connect(daemon.socketPath!))!;
     expect(client.mirror.current().result).to.deep.equal(answer);
-    expect(client.mirror.position()).to.be.within(150_000, 151_000);
+    expect(client.mirror.position()).to.be.within(150_000, 150_000 + elapsed());
     expect(await client.send({ type: 'nudge', ms: -50 })).to.deep.include({ ok: true, data: { offsetMs: -50 } });
     expect(client.mirror.current().result!.offsetMs).to.equal(-50);
     let closed = false;

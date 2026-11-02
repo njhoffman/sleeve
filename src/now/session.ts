@@ -22,6 +22,20 @@ export interface SessionOptions extends Pick<FetchOptions, 'providers' | 'timeou
   library?: MusicmanLibrary | null;
   tags?: TagReader;
   lookup?: typeof fetchLyrics;
+  // Look up the track the player has queued next once the current one is settled (default true)
+  prefetch?: boolean;
+}
+
+interface Answer {
+  query: TrackQuery | null;
+  result: LyricsResult | null;
+}
+
+// A lookup started ahead for the track queued next, adopted when that track starts
+interface Prefetch {
+  key: string;
+  abort: AbortController;
+  answer: Promise<Answer>;
 }
 
 function fromPlayer(track: PlayingTrack, extra: Partial<TrackQuery> = {}): TrackQuery {
@@ -79,6 +93,7 @@ export class NowPlaying {
   private loading: Promise<void> = Promise.resolve();
   private listeners = new Listeners<NowState>();
   private unsubscribe: (() => void) | null = null;
+  private prefetched: Prefetch | null = null;
 
   constructor(source: PlaybackSource, options: SessionOptions = {}) {
     this.source = source;
@@ -120,6 +135,7 @@ export class NowPlaying {
     const key = playback?.track ? `${playback.player}:${playback.track.key}` : null;
     this.state = { ...this.state, playback };
     if (key === this.key) {
+      this.prefetchNext();
       this.listeners.emit(this.state);
       return;
     }
@@ -137,9 +153,18 @@ export class NowPlaying {
 
   // Looks the track up. A new track (fresh) starts from nothing; a reload of the same track (refresh, a pick)
   // keeps showing what it had until the new answer is in.
+  private lookupOptions() {
+    const { library: _library, lookup = fetchLyrics, prefetch: _prefetch, ...fetchOptions } = this.options;
+    return { lookup, fetchOptions };
+  }
+
+  // Looks the track up. A new track (fresh) starts from nothing, from its prefetched lookup when there is one; a
+  // reload of the same track (refresh, a pick) keeps showing what it had until the new answer is in.
   private async load(track: PlayingTrack, { fresh = false, refresh = false }: { fresh?: boolean; refresh?: boolean } = {}): Promise<void> {
     this.abort?.abort();
-    const abort = new AbortController();
+    const adopted = fresh && this.prefetched?.key === this.key ? this.prefetched : null;
+    if (adopted) this.prefetched = null;
+    const abort = adopted?.abort ?? new AbortController();
     this.abort = abort;
     const generation = ++this.generation;
     const stale = () => this.generation !== generation;
@@ -148,21 +173,60 @@ export class NowPlaying {
       : { ...this.state, loading: true, error: null };
     this.listeners.emit(this.state);
     try {
-      const query = fresh || !this.state.query ? await queryForPlayback(track, this.options) : this.state.query;
+      // A prefetch that failed, or found nothing because providers failed, is asked again now
+      const answer = adopted ? await adopted.answer.catch(() => null) : null;
       if (stale()) return;
-      this.state = { ...this.state, query };
-      if (query) {
-        const { library: _library, lookup = fetchLyrics, ...fetchOptions } = this.options;
-        const result = await lookup(query, { ...fetchOptions, signal: abort.signal, ...(refresh ? { refresh } : {}) });
+      const usable = answer && !(answer.result && !answer.result.best && answer.result.errors.length);
+      if (usable) {
+        this.state = { ...this.state, query: answer.query, result: answer.result };
+      } else {
+        const query = fresh || !this.state.query ? await queryForPlayback(track, this.options) : this.state.query;
         if (stale()) return;
-        this.state = { ...this.state, result };
+        this.state = { ...this.state, query };
+        if (query) {
+          const { lookup, fetchOptions } = this.lookupOptions();
+          const result = await lookup(query, { ...fetchOptions, signal: abort.signal, ...(refresh ? { refresh } : {}) });
+          if (stale()) return;
+          this.state = { ...this.state, result };
+        }
       }
     } catch (error) {
       if (stale()) return;
       this.state = { ...this.state, error: error instanceof Error ? error.message : String(error) };
     }
     this.state = { ...this.state, loading: false };
+    this.prefetchNext();
     this.listeners.emit(this.state);
+  }
+
+  // Starts the lookup for the track queued next, once the current one is settled; drops one for a track that is no
+  // longer next. Errors stay in the prefetch, for load to deal with.
+  private prefetchNext(): void {
+    if (this.options.prefetch === false) return;
+    const playback = this.state.playback;
+    const next = playback?.next;
+    const key = playback && next ? `${playback.player}:${next.key}` : null;
+    const wanted = key !== this.key ? key : null;
+    if (this.prefetched && this.prefetched.key !== wanted) {
+      this.prefetched.abort.abort();
+      this.prefetched = null;
+    }
+    if (!wanted || !next || this.prefetched || this.state.loading) return;
+    const abort = new AbortController();
+    const answer = (async (): Promise<Answer> => {
+      const query = await queryForPlayback(next, this.options);
+      abort.signal.throwIfAborted();
+      if (!query) return { query: null, result: null };
+      const { lookup, fetchOptions } = this.lookupOptions();
+      return { query, result: await lookup(query, { ...fetchOptions, signal: abort.signal }) };
+    })();
+    answer.catch(() => {});
+    this.prefetched = { key: wanted, abort, answer };
+  }
+
+  // The key of the track whose lookup runs ahead, if any
+  prefetching(): string | null {
+    return this.prefetched?.key ?? null;
   }
 
   // Looks the current track up again, asking online providers instead of their stored answers
@@ -178,7 +242,7 @@ export class NowPlaying {
   async candidates(): Promise<LyricsResult> {
     const query = this.state.query;
     if (!query) throw new Error(this.state.playback?.track ? 'The track has no artist and title to look up' : 'Nothing playing');
-    const { library: _library, lookup = fetchLyrics, ...fetchOptions } = this.options;
+    const { lookup, fetchOptions } = this.lookupOptions();
     return lookup(query, { ...fetchOptions, all: true });
   }
 
@@ -247,5 +311,7 @@ export class NowPlaying {
     this.generation++;
     this.unsubscribe?.();
     this.abort?.abort();
+    this.prefetched?.abort.abort();
+    this.prefetched = null;
   }
 }

@@ -22,7 +22,8 @@ import { CLOSE, handshakeProblem, refuseUpgrade, upgrade, type WebSocketOptions 
 // hello, then the playback, lyrics and players messages, then every change as it happens; see
 // src/protocol/messages.ts and docs/protocol.md.
 
-export type DaemonSession = Pick<NowPlaying, 'current' | 'onChange' | 'line' | 'position' | 'nudge' | 'setOffset' | 'pick' | 'unpick' | 'refresh' | 'candidates'>;
+export type DaemonSession = Pick<NowPlaying, 'current' | 'onChange' | 'line' | 'position' | 'nudge' | 'setOffset' | 'pick' | 'unpick' | 'refresh' | 'candidates'>
+  & Partial<Pick<NowPlaying, 'prefetching'>>;
 
 export interface DaemonOptions {
   host?: string;
@@ -83,6 +84,7 @@ export class SleeveDaemon {
   private nextId = 1;
   private last: NowState;
   private lastProblems = '[]';
+  private lastPrefetch: string | null = null;
   private lineTimer: NodeJS.Timeout | null = null;
   private problemTimer: NodeJS.Timeout | null = null;
   private unsubscribe: (() => void) | null = null;
@@ -176,6 +178,11 @@ export class SleeveDaemon {
       if (!sameTrack) this.logTrack(state);
     }
     if (!state.loading && last.loading && sameTrack) this.logLookup(state);
+    const prefetch = this.session.prefetching?.() ?? null;
+    if (prefetch !== this.lastPrefetch) {
+      this.lastPrefetch = prefetch;
+      if (prefetch) this.log(`prefetch: ${prefetch}`);
+    }
     this.checkProblems();
     this.scheduleLines();
   }

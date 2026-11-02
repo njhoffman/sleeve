@@ -1,12 +1,14 @@
 import net from 'node:net';
 
-// A stand-in MPD server on a random local port: answers status and currentsong from `state`, holds `idle`
+// A stand-in MPD server on a random local port: answers status, currentsong and playlistid from `state`, holds `idle`
 // until change() is called, and records every command. drop() closes the open connections, as MPD restarting
 // would.
 
 export interface FakeMpdState {
   status: Record<string, string>;
   song: Record<string, string>;
+  // Songs by id, for playlistid
+  queue?: Record<string, Record<string, string>>;
 }
 
 export interface FakeMpd {
@@ -46,7 +48,11 @@ export async function fakeMpd(state: FakeMpdState, { password }: { password?: st
         } else if (!authorized) socket.write('ACK [4@0] {status} you don\'t have permission for "status"\n');
         else if (command === 'status') socket.write(reply(state.status));
         else if (command === 'currentsong') socket.write(reply(state.song));
-        else if (command === 'idle player') idlers.add(socket);
+        else if (command.startsWith('idle')) idlers.add(socket);
+        else if (/^playlistid \d+$/.test(command)) {
+          const song = state.queue?.[command.slice('playlistid '.length)];
+          socket.write(song ? reply(song) : 'ACK [50@0] {playlistid} No such song\n');
+        }
         else socket.write(`ACK [5@0] {} unknown command "${command}"\n`);
       }
     });

@@ -27,10 +27,28 @@ describe('MpdPlayer', () => {
   it('reads the song and the exact elapsed time once connected', async () => {
     await open();
     expect(player.current()).to.deep.equal({
-      player: 'mpd', state: 'playing', positionMs: 12_345, at: 1000, rate: 1, changedAt: 1000,
+      player: 'mpd', state: 'playing', positionMs: 12_345, at: 1000, rate: 1, changedAt: 1000, next: null,
       track: { key: 'Rock/A - T.mp3', artist: 'A', title: 'T', album: 'Al', durationMs: 201_500, file: '/music/Rock/A - T.mp3' }
     });
-    expect(server.commands).to.deep.equal(['status', 'currentsong', 'idle player']);
+    expect(server.commands).to.deep.equal(['status', 'currentsong', 'idle player playlist options']);
+  });
+
+  it('reads the song queued next, and goes on when it is gone', async () => {
+    server.state.status.nextsongid = '8';
+    server.state.queue = { 8: { file: 'Rock/B - U.mp3', Artist: 'B', Title: 'U', duration: '180.2', Id: '8' } };
+    await open();
+    expect(player.current()!.next).to.deep.equal({ key: 'Rock/B - U.mp3', artist: 'B', title: 'U', durationMs: 180_200, file: '/music/Rock/B - U.mp3' });
+    expect(server.commands).to.deep.equal(['status', 'currentsong', 'playlistid 8', 'idle player playlist options']);
+
+    // Removed from the queue between status and playlistid: unknown, and the connection carries on
+    const seen: Array<Playback | null> = [];
+    player.onChange(playback => seen.push(playback));
+    server.state.status.nextsongid = '9';
+    server.change();
+    await until(() => seen.length === 1);
+    expect(seen[0]).to.deep.include({ state: 'playing', next: null });
+    await server.idling();
+    expect(server.commands.filter(command => command === 'status')).to.have.length(2);
   });
 
   it('reads again on every player change, keeping changedAt across seeks', async () => {

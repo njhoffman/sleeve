@@ -6,6 +6,15 @@ All notable changes to sleeve are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-11-02
+
+### Added
+
+- Lyrics for the song MPD plays next are looked up while the current one plays, so they show the moment it
+  starts, LRCLIB's "server busy" retries included. It follows queue edits and random mode, and works with
+  `--no-cache` too. `--no-prefetch` turns it off. Spotify has no queue to read over MPRIS, so its tracks are
+  still looked up as they start.
+
 ## [0.7.0] - 2026-11-02
 
 ### Added

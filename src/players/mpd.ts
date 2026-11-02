@@ -3,8 +3,8 @@ import path from 'node:path';
 import { monotonic } from './clock.ts';
 import { Listeners, settle, type Playback, type PlaybackState, type Player, type PlayingTrack } from './types.ts';
 
-// MPD through its own protocol: one connection that reads `status` and `currentsong`, then waits in
-// `idle player` for the next change (play, pause, seek, a new song). MPD reports elapsed time exactly, so the
+// MPD through its own protocol: one connection that reads `status`, `currentsong` and the next song, then waits
+// in `idle` for the next change (play, pause, seek, a new song). MPD reports elapsed time exactly, so the
 // position needs no polling. A dropped connection is retried with growing waits, and reported as no playback.
 
 export interface MpdAddress {
@@ -122,6 +122,9 @@ export function quoteArgument(text: string): string {
   return `"${text.replace(/[\\"]/g, '\\$&')}"`;
 }
 
+// player: play, pause, seek, a new song; playlist and options: what plays next (queue edits, random, single)
+export const IDLE = 'player playlist options';
+
 const STATES: Record<string, PlaybackState> = { play: 'playing', pause: 'paused', stop: 'stopped' };
 
 function seconds(value: string | undefined): number | undefined {
@@ -199,7 +202,7 @@ export class MpdPlayer implements Player {
         await this.refresh(connection);
         this.first.resolve();
         while (!this.stopped) {
-          await connection.command('idle player');
+          await connection.command(`idle ${IDLE}`);
           await this.refresh(connection);
         }
       } catch (error) {
@@ -228,6 +231,12 @@ export class MpdPlayer implements Player {
     const song = state === 'stopped' ? new Map<string, string>() : await connection.fields('currentsong');
     const track = trackOf(song, this.options.musicDirectory);
     const durationMs = seconds(status.get('duration'));
+    // MPD chooses the next song ahead (random included); none when it will stop after this one
+    const nextId = status.get('nextsongid');
+    // An ACK here (the song removed in between) leaves the connection usable: the next song is just unknown
+    const next = state !== 'stopped' && nextId && /^\d+$/.test(nextId)
+      ? trackOf(await connection.fields(`playlistid ${nextId}`).catch(() => new Map<string, string>()), this.options.musicDirectory)
+      : null;
     const now = this.now();
     const previous = this.playback;
     const changed = !previous || previous.state !== state || previous.track?.key !== track?.key;
@@ -238,7 +247,8 @@ export class MpdPlayer implements Player {
       positionMs: Math.round(Number(status.get('elapsed') ?? 0) * 1000),
       at: now,
       rate: 1,
-      changedAt: changed ? now : previous.changedAt
+      changedAt: changed ? now : previous.changedAt,
+      next
     });
   }
 

@@ -214,3 +214,114 @@ describe('NowPlaying commands', () => {
     }
   });
 });
+
+describe('NowPlaying prefetch', () => {
+  const trackA: PlayingTrack = { key: 'a', artist: 'A', title: 'First' };
+  const trackB: PlayingTrack = { key: 'b', artist: 'B', title: 'Second' };
+  const trackC: PlayingTrack = { key: 'c', artist: 'C', title: 'Third' };
+  const started = (player: ReturnType<typeof fakePlayer>) => {
+    const hub = new PlayerHub([player]);
+    hub.start();
+    return hub;
+  };
+  const at = (track: PlayingTrack, next: PlayingTrack | null): Playback => ({ player: 'mpd', state: 'playing', track, next, positionMs: 0, at: 0, rate: 1, changedAt: 0 });
+
+  // Records each lookup by title; titles in `hold` wait until released, those in `fail` throw
+  function lookups() {
+    const asked: string[] = [];
+    const aborted: string[] = [];
+    const held = new Map<string, () => void>();
+    const hold = new Set<string>();
+    const fail = new Set<string>();
+    const lookup = async (query: TrackQuery, options: { signal?: AbortSignal } = {}) => {
+      asked.push(query.title);
+      if (options.signal?.aborted) aborted.push(query.title);
+      options.signal?.addEventListener('abort', () => aborted.push(query.title));
+      if (hold.has(query.title)) await new Promise<void>(resolve => held.set(query.title, resolve));
+      if (fail.has(query.title)) throw new Error(`${query.title} failed`);
+      return result();
+    };
+    return { asked, aborted, held, hold, fail, lookup: lookup as never };
+  }
+
+  it('looks the next track up once the current one is settled, and uses it when that track starts', async () => {
+    const calls = lookups();
+    const player = fakePlayer('mpd', { playback: at(trackA, trackB) });
+    const session = new NowPlaying(started(player), { lookup: calls.lookup });
+    session.start();
+    await session.settled();
+    await until(() => calls.asked.length === 2);
+    expect(calls.asked).to.deep.equal(['First', 'Second']);
+    expect(session.prefetching()).to.equal('mpd:b');
+
+    const states: NowState[] = [];
+    session.onChange(state => states.push(state));
+    player.set(at(trackB, trackC));
+    await session.settled();
+    // Second was not asked again; Third is now ahead
+    await until(() => calls.asked.length === 3);
+    expect(calls.asked).to.deep.equal(['First', 'Second', 'Third']);
+    expect(session.current()).to.deep.include({ loading: false, result: result() });
+    expect(session.current().query?.title).to.equal('Second');
+    expect(states[0]).to.deep.include({ loading: true, result: null });
+    session.close();
+    expect(calls.aborted).to.include('Third');
+  });
+
+  it('adopts a prefetch still running when its track starts, rather than asking twice', async () => {
+    const calls = lookups();
+    calls.hold.add('Second');
+    const player = fakePlayer('mpd', { playback: at(trackA, trackB) });
+    const session = new NowPlaying(started(player), { lookup: calls.lookup });
+    session.start();
+    await until(() => calls.asked.includes('Second'));
+    player.set(at(trackB, null));
+    expect(session.current().loading).to.equal(true);
+    calls.held.get('Second')!();
+    await session.settled();
+    expect(calls.asked).to.deep.equal(['First', 'Second']);
+    expect(session.current()).to.deep.include({ loading: false, result: result() });
+    expect(calls.aborted).to.not.include('Second');
+    session.close();
+  });
+
+  it('drops a prefetch when the queue changes, and asks again when one failed', async () => {
+    const calls = lookups();
+    calls.hold.add('Second');
+    const player = fakePlayer('mpd', { playback: at(trackA, trackB) });
+    const session = new NowPlaying(started(player), { lookup: calls.lookup });
+    session.start();
+    await until(() => calls.asked.includes('Second'));
+    player.set(at(trackA, trackC));
+    expect(calls.aborted).to.deep.equal(['Second']);
+    expect(session.prefetching()).to.equal('mpd:c');
+
+    calls.fail.add('Third');
+    await until(() => calls.asked.includes('Third'));
+    await new Promise(resolve => setImmediate(resolve));
+    calls.fail.delete('Third');
+    player.set(at(trackC, null));
+    await session.settled();
+    expect(calls.asked.filter(title => title === 'Third')).to.have.length(2);
+    expect(session.current()).to.deep.include({ error: null, result: result() });
+    expect(session.prefetching()).to.equal(null);
+    session.close();
+  });
+
+  it('prefetches nothing when turned off, when nothing is queued, or when the current track repeats', async () => {
+    const off = lookups();
+    const quiet = new NowPlaying(started(fakePlayer('mpd', { playback: at(trackA, trackB) })), { lookup: off.lookup, prefetch: false });
+    quiet.start();
+    await quiet.settled();
+    expect(off.asked).to.deep.equal(['First']);
+    quiet.close();
+
+    const repeat = lookups();
+    const looping = new NowPlaying(started(fakePlayer('mpd', { playback: at(trackA, trackA) })), { lookup: repeat.lookup });
+    looping.start();
+    await looping.settled();
+    expect(repeat.asked).to.deep.equal(['First']);
+    expect(looping.prefetching()).to.equal(null);
+    looping.close();
+  });
+});
