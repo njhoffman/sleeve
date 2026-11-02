@@ -1,16 +1,19 @@
 import pkg from '../../package.json' with { type: 'json' };
+import type { LyricsCache } from './cache.ts';
 import { rankCandidates, scoreCandidate, THRESHOLD } from './match.ts';
 import { lrclib } from './providers/lrclib.ts';
 import { embedded, sidecar } from './providers/local.ts';
 import type { Provider, ProviderContext } from './providers/provider.ts';
 import { musicMetadataReader } from './tags/musicMetadata.ts';
 import type { FileTags, TagReader } from './tags/reader.ts';
-import type { LyricsResult, ProviderError, ScoredCandidate, TrackQuery } from './types.ts';
+import type { Candidate, LyricsResult, ProviderError, ScoredCandidate, TrackQuery } from './types.ts';
 
 // Lyrics for a track from every provider, each a fallback for the others. Local providers (an .lrc next to the
 // file, the file's own tags) run first; when one of them has synced lyrics, those are the answer and nothing
 // goes online unless `all` asks for every candidate. Online providers run in parallel, each with its own
-// timeout, and a provider that fails or times out is reported in errors without holding up the rest.
+// timeout, and a provider that fails or times out is reported in errors without holding up the rest. With a
+// cache, an online provider's stored answer for the track stands in for asking it, and every answer it gives
+// (found or not) is stored; `refresh` asks again and replaces what is stored.
 
 export const DEFAULT_PROVIDERS: Provider[] = [sidecar, embedded, lrclib];
 export const DEFAULT_TIMEOUT_MS = 10_000;
@@ -25,6 +28,9 @@ export interface FetchOptions {
   tags?: TagReader;
   userAgent?: string;
   signal?: AbortSignal;
+  cache?: LyricsCache;
+  // Ask online providers even when the cache has their answer, and store the new one
+  refresh?: boolean;
 }
 
 export const USER_AGENT = `sleeve/${pkg.version} (https://github.com/njhoffman/sleeve)`;
@@ -45,18 +51,47 @@ function message(error: unknown, signal: AbortSignal): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-async function run(providers: Provider[], query: TrackQuery, options: Required<Pick<FetchOptions, 'timeoutMs' | 'fetch' | 'userAgent'>> & { tags: TagReader; signal?: AbortSignal }) {
+type RunOptions = Required<Pick<FetchOptions, 'timeoutMs' | 'fetch' | 'userAgent'>> & {
+  tags: TagReader; signal?: AbortSignal; cache?: LyricsCache; refresh?: boolean;
+};
+
+// A cache that cannot be read or written is reported once per lookup and otherwise ignored
+function cached(provider: Provider, query: TrackQuery, options: RunOptions, errors: ProviderError[]): Candidate[] | null {
+  if (!options.cache || provider.local || options.refresh) return null;
+  try {
+    const answer = options.cache.get(provider.name, query);
+    return answer ? answer.candidates.map(candidate => ({ ...candidate, cachedAt: answer.fetchedAt })) : null;
+  } catch (error) {
+    errors.push({ provider: 'cache', message: error instanceof Error ? error.message : String(error) });
+    return null;
+  }
+}
+
+function store(provider: Provider, query: TrackQuery, candidates: Candidate[], options: RunOptions, errors: ProviderError[]): void {
+  if (!options.cache || provider.local) return;
+  try {
+    options.cache.put(provider.name, query, candidates);
+  } catch (error) {
+    errors.push({ provider: 'cache', message: error instanceof Error ? error.message : String(error) });
+  }
+}
+
+async function run(providers: Provider[], query: TrackQuery, options: RunOptions) {
   const errors: ProviderError[] = [];
   const results = await Promise.all(providers.map(async provider => {
+    const stored = cached(provider, query, options, errors);
+    if (stored) return stored;
     const timeout = AbortSignal.timeout(options.timeoutMs);
     const signal = options.signal ? AbortSignal.any([timeout, options.signal]) : timeout;
     const context: ProviderContext = { fetch: options.fetch, signal, userAgent: options.userAgent, tags: options.tags };
     try {
-      return await Promise.race([
+      const candidates = await Promise.race([
         provider.search(query, context),
         // A provider that ignores its signal still ends its turn at the timeout
         new Promise<never>((resolve, reject) => signal.addEventListener('abort', () => reject(signal.reason), { once: true }))
       ]);
+      store(provider, query, candidates, options, errors);
+      return candidates;
     } catch (error) {
       errors.push({ provider: provider.name, message: message(error, signal) });
       return [];
@@ -67,12 +102,14 @@ async function run(providers: Provider[], query: TrackQuery, options: Required<P
 
 export async function fetchLyrics(query: TrackQuery, options: FetchOptions = {}): Promise<LyricsResult> {
   const providers = options.providers ?? DEFAULT_PROVIDERS;
-  const settings = {
+  const settings: RunOptions = {
     timeoutMs: options.timeoutMs ?? DEFAULT_TIMEOUT_MS,
     fetch: options.fetch ?? globalThis.fetch,
     userAgent: options.userAgent ?? USER_AGENT,
     tags: memoized(options.tags ?? musicMetadataReader),
-    ...(options.signal ? { signal: options.signal } : {})
+    ...(options.signal ? { signal: options.signal } : {}),
+    ...(options.cache ? { cache: options.cache } : {}),
+    ...(options.refresh ? { refresh: true } : {})
   };
   const local = await run(providers.filter(provider => provider.local), query, settings);
   const haveSynced = local.candidates.some(candidate => candidate.score >= THRESHOLD && candidate.lyrics.synced);

@@ -29,6 +29,9 @@ sleeve lyrics song.mp3 --format plain          # text without timestamps
 sleeve lyrics song.mp3 --all                   # every candidate with its score, rejected ones too
 sleeve lyrics song.mp3 --json                  # the query and every candidate, for scripts
 sleeve lyrics song.mp3 -p sidecar,embedded     # only the providers named
+sleeve lyrics song.mp3 --refresh               # ask online providers again instead of using stored answers
+sleeve cache                                   # how many answers are stored, by provider (also --json)
+sleeve cache clear --not-found                 # forget "no lyrics" answers so those tracks are asked again
 ```
 
 The lyrics go to stdout and a line naming their source to stderr, so `sleeve lyrics song.mp3 > song.lrc`
@@ -57,6 +60,15 @@ whatever the rest says. Of the candidates that pass, synced lyrics come first, t
 A file's duration is measured from its audio, since synced lyrics are timed against what plays; musicman's
 `sp_duration_ms` is the fallback. The file's ISRC and Spotify id (`TSRC`, `TXXX:sp_isrc`,
 `TXXX:sp_track_id`) are read for providers that look tracks up by them; LRCLIB does not.
+
+## Stored answers
+
+What online providers answer, found or not, is stored in `$XDG_DATA_HOME/sleeve/sleeve.db` (SQLite) and
+used instead of asking again: answers with lyrics for 180 days, answers without for 7 days. A track is its
+normalized artist and title plus the duration asked with, within 2 seconds. Candidates are stored unscored,
+so scoring changes apply to stored answers too. Failures (timeouts, "server busy") are not stored, and
+local providers are never cached. `--no-cache` neither reads nor stores; `--refresh` asks again and replaces
+the stored answer; `sleeve cache clear [-p provider] [--not-found]` forgets answers.
 
 LRCLIB answers "server busy" (503) under load, mostly for lookups it has not cached; sleeve retries twice
 and then reports it.

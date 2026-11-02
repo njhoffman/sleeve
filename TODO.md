@@ -88,18 +88,27 @@ build items that depend on it, listed in the later projects.
 - [ ] **Queries without a duration cannot tell versions apart.** (p3) [feature] `sleeve lyrics -a -t` without `-d`
       scores live and album versions alike (all 1.0 for "Everything In Its Right Place"). Prefer the record
       whose album matches, or the most common duration among candidates, when no duration is given.
-- [ ] **Port the Musixmatch, NetEase and Genius providers.** (p2) [feature] Musixmatch uses an unofficial desktop
-      token (fragile, against its terms) but has word-level richsync; NetEase uses plain HTTP and
-      mismatches often; Genius is unsynced only. All stay in the chain behind LRCLIB and local sources.
+- [ ] **Port the NetEase and Genius providers.** (p1) [feature] Decided 2026-11-02: NetEase next, to cover LRCLIB's
+      misses (synced LRC, no account, a different catalogue but frequent mismatches, so scoring matters);
+      Genius after it (unsynced only). Both stay in the chain behind local sources and LRCLIB.
+- [ ] **Look into Musixmatch again.** (p3) [feature] Wanted for word-level richsync and lookups by ISRC and
+      Spotify id. Blocked 2026-11-02: `token.get` now gives anonymous clients a placeholder token of zeros,
+      so Sunamu's approach no longer works, and getting past that by imitating the desktop app is out.
+      Options: (1) the user's own token from their logged-in Musixmatch account, in a sleeve config file:
+      keeps richsync and ID lookups, but still the unofficial API, against its terms, and the token can be
+      revoked; (2) the official API with a developer key: allowed, but the free plan has no synced lyrics
+      and full lyrics need a paid plan; (3) leave it out. Revisit after NetEase and the daemon.
 - [ ] **Match by IDs from the file's tags.** (p2) [feature] Files carry `sp_track_id`, `sp_isrc`/`TSRC`,
       `sp_duration_ms` and MusicBrainz IDs (not every file yet). Read them via the MPD path and pass
       them to providers that accept IDs; use the duration for scoring. Exact IDs beat fuzzy text.
       Partly done in 0.1.0: the tag reader reads ISRC, Spotify id and duration into the query, and the
-      duration is scored. No provider looks up by ID yet: LRCLIB cannot; Musixmatch is the candidate.
-- [ ] **Lyrics cache in SQLite.** (p2) [feature] Replace Sunamu's file cache with `node:sqlite` (as backdrop does):
+      duration is scored. No provider looks up by ID yet: LRCLIB cannot; Musixmatch would (see Look into Musixmatch again).
+- [x] **Lyrics cache in SQLite.** (p2) [feature] Replace Sunamu's file cache with `node:sqlite` (as backdrop does):
       track key, chosen candidate, alternatives, user offset, user-pinned flag.
+      Done in 0.2.0: online answers found and not found in `$XDG_DATA_HOME/sleeve/sleeve.db`,
+      `--no-cache`, `--refresh`, `sleeve cache [clear]`. The pick and offset parts moved to the next item.
 - [ ] **Per-track timing offset and manual pick.** (p2) [feature] Let the user nudge sync and choose another
-      candidate, and remember both.
+      candidate, and remember both. Store them in `sleeve.db` (schema 2) next to the cached answers.
 - [x] **Recorded HTTP fixtures for provider tests.** (p1) [test] Providers must be testable offline; record real
       responses once and replay them.
       Done in 0.1.0: `test/fixtures/lrclib/` replayed by `test/helpers/fetch.ts`.

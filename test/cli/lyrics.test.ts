@@ -8,13 +8,19 @@ import { fakeFetch, fixture } from '../helpers/fetch.ts';
 import { writeTaggedMp3 } from '../helpers/id3.ts';
 
 describe('sleeve lyrics', () => {
-  let out: string[], err: string[], io: Io, dir: string;
+  let out: string[], err: string[], io: Io, dir: string, savedData: string | undefined;
   beforeEach(async () => {
     out = []; err = [];
     io = { out: text => out.push(text), err: text => err.push(text) };
     dir = await mkdtemp(path.join(os.tmpdir(), 'sleeve-cli-'));
+    // Each test gets its own database, so stored answers never leak between tests
+    savedData = process.env.XDG_DATA_HOME;
+    process.env.XDG_DATA_HOME = path.join(dir, 'data');
   });
-  afterEach(async () => { await rm(dir, { recursive: true, force: true }); });
+  afterEach(async () => {
+    process.env.XDG_DATA_HOME = savedData;
+    await rm(dir, { recursive: true, force: true });
+  });
 
   const lrclib = (routes: Parameters<typeof fakeFetch>[0]) => fakeFetch(routes);
   const deathCab = fixture('lrclib/get-death-cab-interior-decorator.json');
@@ -39,7 +45,7 @@ describe('sleeve lyrics', () => {
     await lyricsCommand(undefined, { ...options, format: 'plain' }, io, { fetch: fake.fetch });
     expect(out.at(-1)!.split('\n')[0]).to.equal('You were the mother of three girls so sweet');
     await lyricsCommand(undefined, { ...options, all: true }, io, { fetch: fake.fetch });
-    expect(out.at(-1)).to.match(/^lrclib: Death Cab for Cutie .* score 1\.00$/);
+    expect(out.at(-1)).to.match(/^lrclib: Death Cab for Cutie .* score 1\.00, cached$/);
     await lyricsCommand(undefined, { ...options, json: true }, io, { fetch: fake.fetch });
     const json = JSON.parse(out.at(-1)!);
     expect(json.query).to.deep.equal({ artist: 'Death Cab for Cutie', title: 'Death of an Interior Decorator', durationMs: 177000 });
@@ -71,6 +77,30 @@ describe('sleeve lyrics', () => {
     expect(code).to.equal(1);
     expect(err[0]).to.equal('No lyrics found for Nobody - Nothing');
     expect(err[1]).to.match(/^ {2}lrclib failed: (timed out|LRCLIB answered 503)/);
+  });
+
+  it('stores online answers in the user\'s database, and skips it with --no-cache or asks again with --refresh', async () => {
+    const fake = lrclib([{ match: /\/api\/get\?/, body: deathCab }]);
+    const options = { artist: 'Death Cab for Cutie', title: 'Death of an Interior Decorator', duration: '177' };
+    await lyricsCommand(undefined, options, io, { fetch: fake.fetch });
+    await lyricsCommand(undefined, options, io, { fetch: fake.fetch });
+    expect(fake.calls).to.have.length(1);
+    expect(err.at(-1)).to.match(/score 1\.00, cached$/);
+
+    await lyricsCommand(undefined, { ...options, cache: false }, io, { fetch: fake.fetch });
+    await lyricsCommand(undefined, { ...options, refresh: true }, io, { fetch: fake.fetch });
+    expect(fake.calls).to.have.length(3);
+    expect(err.at(-1)).to.match(/score 1\.00$/);
+
+    expect(await main(['cache'], io)).to.equal(0);
+    expect(out.at(-2)).to.equal(`${path.join(dir, 'data', 'sleeve', 'sleeve.db')}: 1 answers, 1 with lyrics, 0 without`);
+    expect(out.at(-1)).to.equal('  lrclib: 1 with lyrics, 0 without');
+    expect(await main(['cache', '--json'], io)).to.equal(0);
+    expect(JSON.parse(out.at(-1)!)).to.include({ answers: 1, found: 1, notFound: 0 });
+    expect(await main(['cache', 'clear', '--not-found'], io)).to.equal(0);
+    expect(out.at(-1)).to.equal('Removed 0 "none" answers');
+    expect(await main(['cache', 'clear', '-p', 'LRCLIB'], io)).to.equal(0);
+    expect(out.at(-1)).to.equal('Removed 1 answers from lrclib');
   });
 
   it('reports bad usage through main with an exit code', async () => {

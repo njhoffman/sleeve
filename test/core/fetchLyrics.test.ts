@@ -1,4 +1,5 @@
 import { expect } from 'chai';
+import { LyricsCache } from '../../src/core/cache.ts';
 import { fetchLyrics, queryForFile } from '../../src/core/fetchLyrics.ts';
 import type { Provider } from '../../src/core/providers/provider.ts';
 import type { FileTags, TagReader } from '../../src/core/tags/reader.ts';
@@ -65,6 +66,54 @@ describe('fetchLyrics', () => {
     const reading = (name: string) => provider(name, true, async (q, context) => { await context.tags.read(q.path!); return []; });
     await fetchLyrics(query, { tags, providers: [reading('one'), reading('two')] });
     expect(reads).to.equal(1);
+  });
+
+  describe('with a cache', () => {
+    let cache: LyricsCache, asked: string[];
+    beforeEach(() => {
+      cache = new LyricsCache(':memory:');
+      asked = [];
+    });
+    afterEach(() => cache.close());
+
+    const online = (name: string, result: () => Promise<Candidate[]>) => provider(name, false, async () => { asked.push(name); return result(); });
+
+    it('stores online answers, found or not, and serves them instead of asking again', async () => {
+      const providers = [online('found', async () => [answer('found', synced)]), online('empty', async () => [])];
+      await fetchLyrics(query, { providers, cache });
+      const again = await fetchLyrics(query, { providers, cache });
+      expect(asked).to.deep.equal(['found', 'empty']);
+      expect(again.best?.provider).to.equal('found');
+      expect(again.best?.cachedAt).to.be.a('number');
+    });
+
+    it('asks again with refresh and replaces the stored answer', async () => {
+      let lyrics = unsynced;
+      const providers = [online('changing', async () => [answer('changing', lyrics)])];
+      await fetchLyrics(query, { providers, cache });
+      lyrics = synced;
+      const refreshed = await fetchLyrics(query, { providers, cache, refresh: true });
+      expect(refreshed.best?.lyrics.synced).to.equal(true);
+      expect(refreshed.best?.cachedAt).to.equal(undefined);
+      expect((await fetchLyrics(query, { providers, cache })).best?.lyrics.synced).to.equal(true);
+      expect(asked).to.have.length(2);
+    });
+
+    it('does not store failures or local answers', async () => {
+      const providers = [
+        provider('sidecar', true, async () => [answer('sidecar', unsynced, { exact: true })]),
+        online('broken', async () => { throw new Error('503'); })
+      ];
+      await fetchLyrics(query, { providers, cache });
+      expect(cache.stats().answers).to.equal(0);
+    });
+
+    it('reports a cache that fails and still answers', async () => {
+      const failing = { get: () => { throw new Error('database is locked'); }, put: () => { throw new Error('database is locked'); } } as unknown as LyricsCache;
+      const result = await fetchLyrics(query, { providers: [online('found', async () => [answer('found', synced)])], cache: failing });
+      expect(result.best?.provider).to.equal('found');
+      expect(result.errors).to.deep.equal([{ provider: 'cache', message: 'database is locked' }, { provider: 'cache', message: 'database is locked' }]);
+    });
   });
 });
 

@@ -3,6 +3,7 @@ import { realpathSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { Command, CommanderError } from 'commander';
 import pkg from '../../package.json' with { type: 'json' };
+import { cacheClearCommand, cacheStatsCommand, type CacheOptions, type ClearCommandOptions } from './cache.ts';
 import { FORMATS, lyricsCommand, type Io, type LyricsOptions } from './lyrics.ts';
 
 const stdio: Io = {
@@ -29,8 +30,25 @@ export function buildProgram(io: Io, setExit: (code: number) => void): Command {
     .option('-f, --format <format>', `output format: ${FORMATS.join(' or ')}`, 'lrc')
     .option('--all', 'list every candidate with its score instead of printing lyrics')
     .option('--json', 'print the query and every candidate as JSON')
+    .option('--no-cache', 'neither read nor store online answers')
+    .option('--refresh', 'ask online providers again even when their answer is stored, and store the new one')
     .action(async (file: string | undefined, options: LyricsOptions) => {
       setExit(await lyricsCommand(file, options, io));
+    });
+
+  const cache = program.command('cache')
+    .description('Show what online providers answered and is stored, by provider')
+    .option('--json', 'print the counts as JSON')
+    .action((options: CacheOptions) => {
+      setExit(cacheStatsCommand(options, io));
+    });
+
+  cache.command('clear')
+    .description('Forget stored answers, so providers are asked again')
+    .option('-p, --provider <name>', 'only this provider\'s answers')
+    .option('--not-found', 'only the answers without lyrics')
+    .action((options: ClearCommandOptions) => {
+      setExit(cacheClearCommand(options, io));
     });
 
   return program;

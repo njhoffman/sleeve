@@ -1,3 +1,4 @@
+import { LyricsCache } from '../core/cache.ts';
 import { DEFAULT_PROVIDERS, DEFAULT_TIMEOUT_MS, fetchLyrics, queryForFile, type FetchOptions } from '../core/fetchLyrics.ts';
 import { formatLrc, plainText } from '../core/lrc.ts';
 import { THRESHOLD } from '../core/match.ts';
@@ -16,6 +17,9 @@ export interface LyricsOptions {
   all?: boolean;
   json?: boolean;
   format?: string;
+  // commander's --no-cache sets this false
+  cache?: boolean;
+  refresh?: boolean;
 }
 
 export interface Io {
@@ -44,7 +48,8 @@ export function describeCandidate(candidate: ScoredCandidate): string {
   const kind = lyrics.instrumental ? 'instrumental' : `${lyrics.synced ? 'synced' : 'unsynced'}, ${lyrics.lines.length} line${lyrics.lines.length === 1 ? '' : 's'}`;
   const words = lyrics.lines.some(line => line.words?.length) ? ', word timing' : '';
   const album = track.album ? ` (${track.album})` : '';
-  return `${candidate.provider}: ${track.artist} - ${track.title}${album} ${clock(track.durationMs)}, ${kind}${words}, score ${candidate.score.toFixed(2)}`;
+  const cached = candidate.cachedAt ? ', cached' : '';
+  return `${candidate.provider}: ${track.artist} - ${track.title}${album} ${clock(track.durationMs)}, ${kind}${words}, score ${candidate.score.toFixed(2)}${cached}`;
 }
 
 function pickProviders(names: string | undefined): FetchOptions['providers'] {
@@ -89,7 +94,17 @@ export async function lyricsCommand(file: string | undefined, options: LyricsOpt
   const query = await buildQuery(file, options, fetchOptions.tags);
   const timeoutMs = options.timeout ? parseDuration(options.timeout) : DEFAULT_TIMEOUT_MS;
   const providers = pickProviders(options.providers);
-  const result = await fetchLyrics(query, { ...fetchOptions, providers, timeoutMs, all: Boolean(options.all) });
+  // The cache a caller passed, none with --no-cache, else the user's database (closed afterwards)
+  const opened = options.cache !== false && !fetchOptions.cache ? new LyricsCache() : undefined;
+  const cache = options.cache === false ? undefined : fetchOptions.cache ?? opened;
+  let result: LyricsResult;
+  try {
+    result = await fetchLyrics(query, {
+      ...fetchOptions, providers, timeoutMs, all: Boolean(options.all), refresh: Boolean(options.refresh), cache
+    });
+  } finally {
+    opened?.close();
+  }
   if (options.json) {
     io.out(JSON.stringify({ query, ...result }, null, 2));
     return result.best ? 0 : 1;

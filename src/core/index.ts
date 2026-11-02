@@ -1,6 +1,8 @@
 // The lyrics core: everything the CLI, and later the daemon, use.
 export { fetchLyrics, queryForFile, DEFAULT_PROVIDERS, DEFAULT_TIMEOUT_MS, USER_AGENT } from './fetchLyrics.ts';
 export type { FetchOptions } from './fetchLyrics.ts';
+export { LyricsCache, defaultDatabasePath, DURATION_WINDOW_MS, FOUND_TTL_MS, NOT_FOUND_TTL_MS } from './cache.ts';
+export type { CachedAnswer, CacheStats, ClearOptions } from './cache.ts';
 export { parseLrc, formatLrc, plainText, looksLikeLrc } from './lrc.ts';
 export { scoreCandidate, rankCandidates, normalizeTitle, normalizeArtist, similarity, durationScore, THRESHOLD } from './match.ts';
 export { lrclib, createLrclib } from './providers/lrclib.ts';

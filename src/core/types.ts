@@ -54,6 +54,8 @@ export interface Candidate {
   lyrics: Lyrics;
   // Found by an exact identifier or by the file itself, so the match needs no text comparison
   exact?: boolean;
+  // When the provider gave this answer, for candidates served from the cache (epoch milliseconds)
+  cachedAt?: number;
 }
 
 export interface ScoreDetail {
