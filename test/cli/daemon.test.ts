@@ -4,6 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { daemonCommand } from '../../src/cli/daemon.ts';
 import type { Io } from '../../src/cli/lyrics.ts';
+import { ctlCommand } from '../../src/cli/ctl.ts';
 import { nowCommand } from '../../src/cli/now.ts';
 import { shapesSession } from '../../src/cli/session.ts';
 import type { SleeveDaemon } from '../../src/daemon/server.ts';
@@ -106,6 +107,38 @@ describe('sleeve daemon', () => {
       for (const options of [{ mpd: false }, { mpris: 'vlc' }, { musicDir: '/m' }, { providers: 'lrclib' }, { timeout: '5' }, { cache: false }, { prefs: false }]) {
         expect(shapesSession(options), JSON.stringify(options)).to.equal(true);
       }
+    });
+  });
+
+  describe('sleeve ctl', () => {
+    it('nudges, sets and removes the offset, and lists and picks candidates', async () => {
+      await startDaemon();
+      expect(await ctlCommand('nudge', ['+100'], { socket }, io)).to.equal(0);
+      expect(await ctlCommand('nudge', ['-250'], { socket }, io)).to.equal(0);
+      expect(await ctlCommand('offset', ['0'], { socket }, io)).to.equal(0);
+      expect(out).to.deep.equal(['Offset +100ms', 'Offset -150ms', 'Offset removed']);
+      out.length = 0;
+      expect(await ctlCommand('candidates', [], { socket }, io)).to.equal(0);
+      expect(out[0]).to.match(/^\*\s*1\. lrclib:\d+  lrclib: Death Cab for Cutie - Death of an Interior Decorator/);
+      out.length = 0;
+      expect(await ctlCommand('pick', ['1'], { socket }, io)).to.equal(0);
+      expect(out[0]).to.match(/^Picked lrclib:\d+$/);
+      expect(await ctlCommand('unpick', [], { socket }, io)).to.equal(0);
+      expect(out.at(-1)).to.equal('Removed the pick');
+      expect(await ctlCommand('pick', ['9'], { socket }, io)).to.equal(1);
+      expect(err.at(-1)).to.equal('No candidate 9; list them with sleeve ctl candidates');
+      expect(await ctlCommand('pick', ['nope:1'], { socket }, io)).to.equal(1);
+      expect(err.at(-1)).to.match(/^No candidate nope:1 for /);
+    });
+
+    it('says when there is nothing to move, and refuses bad usage and a missing daemon', async () => {
+      const failure = async (action: string, args: string[]) => (await ctlCommand(action, args, { socket }, io).catch(error => error)).message;
+      expect(await failure('nudge', ['+100'])).to.equal(`sleeved is not running (nothing answers at ${socket})`);
+      expect(await failure('jump', [])).to.equal('Unknown action: jump (nudge, offset, pick, unpick, refresh, candidates)');
+      expect(await failure('nudge', [])).to.equal('Usage: sleeve ctl nudge <ms>');
+      expect(await failure('refresh', ['x'])).to.equal('Usage: sleeve ctl refresh');
+      expect(await failure('offset', ['soon'])).to.match(/^Invalid offset: soon/);
+      expect(await failure('pick', ['?'])).to.match(/^Invalid candidate: \?/);
     });
   });
 });

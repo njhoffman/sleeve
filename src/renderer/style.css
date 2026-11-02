@@ -137,3 +137,10 @@ kbd {
 }
 
 #toast.visible { opacity: 1; transform: translate(-50%, 0); }
+
+/* Overlay mode (the Electron shell over backdrop's wallpaper): transparent, lyrics only */
+html.overlay, html.overlay body { background: transparent; }
+html.overlay #status, html.overlay #message { display: none; }
+html.overlay .line { text-shadow: 0 2px 14px rgba(0, 0, 0, 0.55), 0 0 2px rgba(0, 0, 0, 0.35); }
+html.overlay .line.past { color: rgba(232, 236, 244, 0.32); }
+html.overlay .line:not(.current):not(.past) { color: rgba(232, 236, 244, 0.5); }

@@ -6,6 +6,7 @@ import pkg from '../../package.json' with { type: 'json' };
 import { cacheClearCommand, cacheStatsCommand, type CacheOptions, type ClearCommandOptions } from './cache.ts';
 import { DEFAULT_PROVIDERS } from '../core/fetchLyrics.ts';
 import { DEFAULT_HOST, DEFAULT_PORT } from '../daemon/paths.ts';
+import { ctlCommand, type CtlOptions } from './ctl.ts';
 import { daemonCommand, type DaemonCommandOptions } from './daemon.ts';
 import { FORMATS, lyricsCommand, type Io, type LyricsOptions } from './lyrics.ts';
 import { nowCommand, type NowOptions } from './now.ts';
@@ -90,6 +91,16 @@ export function buildProgram(io: Io, setExit: (code: number) => void): Command {
     .option('--allow-origin <origin...>', 'web origins that may connect besides localhost pages and file:// (* for any)')
     .action(async (options: DaemonCommandOptions) => {
       setExit(await daemonCommand(options, io));
+    });
+
+  program.command('ctl')
+    .description('Tell the running sleeved what to do with what plays, e.g. from an i3 binding: nudge <ms>, offset <ms>, pick <provider:id|n>, unpick, refresh, candidates')
+    .argument('<action>', 'nudge, offset, pick, unpick, refresh or candidates')
+    .argument('[args...]', 'milliseconds for nudge and offset (+100, -250; offset 0 removes it), a candidate for pick')
+    .option('--socket <path>', 'sleeved\'s Unix socket (default: $XDG_RUNTIME_DIR/sleeve/sleeved.sock)')
+    .option('--json', 'with candidates, print them all as JSON')
+    .action(async (action: string, args: string[], options: CtlOptions) => {
+      setExit(await ctlCommand(action, args, options, io));
     });
 
   trackOptions(program.command('pick'))

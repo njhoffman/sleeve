@@ -22,6 +22,10 @@ const candidateList = element<HTMLOListElement>('candidates');
 const help = element<HTMLElement>('help');
 const toast = element<HTMLDivElement>('toast');
 
+// ?mode=overlay: drawn over the wallpaper by the Electron shell, with nothing but the lyrics
+const overlay = new URLSearchParams(location.search).get('mode') === 'overlay';
+document.documentElement.classList.toggle('overlay', overlay);
+
 const connection = new Connection(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws`);
 
 let lineElements: HTMLDivElement[] = [];
@@ -34,6 +38,8 @@ let snap = true;
 let lastFrame = 0;
 let statusText = '';
 let entries: CandidateEntry[] = [];
+// The offset last seen for the lyrics shown, to say when it changes (from any client: this page, sleeve ctl)
+let seenOffset: { best: ScoredCandidate | null; offsetMs: number } = { best: null, offsetMs: 0 };
 
 function showToast(text: string): void {
   toast.textContent = text;
@@ -93,8 +99,11 @@ function render(now: number): void {
   }
   const best = state.result?.best ?? null;
   if (best !== shownLyrics || view.message !== shownMessage) rebuild(best, view.message);
+  const offsetMs = state.result?.offsetMs ?? 0;
+  if (best && best === seenOffset.best && offsetMs !== seenOffset.offsetMs) showToast(offsetMs ? `Offset ${formatOffset(offsetMs)}` : 'Offset removed');
+  seenOffset = { best, offsetMs };
 
-  const anchor = viewport.clientHeight * 0.42;
+  const anchor = viewport.clientHeight * (overlay ? 0.5 : 0.42);
   let target = 0;
   const lyrics = shownMessage ? null : shownLyrics?.lyrics;
   if (lyrics?.synced && centers.length) {
@@ -116,10 +125,9 @@ function render(now: number): void {
 // Commands
 
 async function nudge(command: { type: 'nudge'; ms: number } | { type: 'offset'; ms: number }): Promise<void> {
+  // Success shows as the offset changing (render), as it does for a nudge from anywhere else
   const reply = await connection.send(command);
-  if (!reply.ok) return showToast(reply.error ?? 'Failed');
-  const { offsetMs } = reply.data as { offsetMs: number };
-  showToast(offsetMs ? `Offset ${formatOffset(offsetMs)}` : 'Offset removed');
+  if (!reply.ok) showToast(reply.error ?? 'Failed');
 }
 
 function showEntries(list: CandidateEntry[]): void {

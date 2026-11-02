@@ -183,9 +183,19 @@ build items that depend on it, listed in the later projects.
       Done in 0.7.0: `src/renderer/` served by sleeved at `/`, types stripped on request (no build step);
       plain DOM, the line worked out per frame from the mirrored clock, scroll on a time-constant follow;
       keys for nudge, offset reset, pick, unpick and refresh.
-- [ ] **Electron shell over the renderer.** (p1) [feature] A thin window loading `http://127.0.0.1:6620/`:
+- [x] **Electron shell over the renderer.** (p1) [feature] A thin window loading `http://127.0.0.1:6620/`:
       transparent, click-through and marked `_BACKDROP_OVERLAY` for overlay mode, plain for window mode (see
       Three window modes). No IPC: everything goes over the page's WebSocket, as in a browser.
+      Done in 0.10.0: `shell/` (its own package, Electron 45, main process in TypeScript); the overlay is made
+      override-redirect before it maps (`shell/x11.ts`), so i3 never manages it, and backdrop restacks it on
+      map and on every daemon restart (watching `state.json`). `sleeve ctl` gives i3 bindings the keys.
+- [ ] **Sandbox without a profile.** (p3) [chore] On Ubuntu 25.10 AppArmor blocks the user namespaces Chromium's
+      sandbox needs, so the shell runs only after `just shell-sandbox` (a profile, sudo) or with
+      `--no-sandbox`. The profile names the binary's path, so it breaks when the checkout moves; Ubuntu's
+      own Electron apps ship one per app. Revisit if Electron or Ubuntu change this.
+- [ ] **Start the overlay with the session.** (p3) [feature] Today it is `exec just -f .../justfile shell` in the i3
+      config. A systemd user unit bound to graphical-session.target would restart it and order it after
+      sleeved and backdrop.
 - [ ] **Word-by-word highlight.** (p2) [feature] Lines carry `words` (enhanced LRC, later LRCLIB's lyricsfile and
       Musixmatch richsync); the renderer shows whole lines only. Fill each word as it comes due, from the same
       per-frame position.
@@ -196,6 +206,10 @@ build items that depend on it, listed in the later projects.
       GLava instance. `overlay` without backdrop: sleeve stacks its own transparent, click-through,
       desktop-type window above the root. `window`: borderless, focusable, resizable, remembers its
       geometry; backdrop ignores it. Needs a way to detect backdrop (its daemon socket or `status --json`).
+      0.10.0 has overlay under backdrop and window (detected by the live pid in backdrop's `state.json`).
+      Without backdrop the overlay falls back to a window: i3 has no desktop layer, and an unmanaged window
+      would need something to keep it at the bottom as backdrop does (a small restack of our own on map and
+      on every new top-level window).
 - [ ] **Album-art background without the GPU cost.** (p2) [perf] Sunamu rotates two 200vmax pseudo-elements with
       `blur(180px)` all the time (`Background.css`). Draw a downscaled cover in WebGL or canvas instead,
       where blur is nearly free.

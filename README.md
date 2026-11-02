@@ -121,6 +121,33 @@ While sleeved runs, `http://127.0.0.1:6620/` shows the lyrics in a browser, scro
 candidates to pick from, `r` looks the track up again online, and `?` lists the keys. The page is served from
 the sources (sleeved strips the TypeScript types as it sends each file), so there is nothing to build.
 
+### The overlay
+
+`just shell-install` installs Electron into `shell/` (about 100 MB, apart from the rest). `just shell` then
+shows the lyrics on the desktop: a transparent, click-through window just above backdrop's wallpaper and under
+its visualizer, from 15% of the monitor down to where the visualizer starts. i3 never manages it, so it is on
+every workspace and under every window, as the visualizer is. backdrop stacks it again when its daemon
+restarts. Options: `--position above` (over the visualizer), `--geometry 1200x500+360+200`, `--monitor
+HDMI-1`, `--url`. Without backdrop running it opens as a plain window instead; `just shell --window` always
+does, and remembers where it was.
+
+Ubuntu's AppArmor blocks the user namespaces Electron's sandbox needs, so Electron stops at once with a
+`chrome-sandbox` error. `just shell-sandbox` installs a profile that allows them for this checkout's Electron
+(it asks for sudo); `just shell --no-sandbox` runs without the sandbox instead.
+
+The overlay takes no keys, since clicks and keys go to the windows under it. `sleeve ctl` sends sleeved one
+command and prints the outcome, for i3 bindings:
+
+```
+bindsym $mod+equal exec --no-startup-id sleeve ctl nudge +100
+bindsym $mod+minus exec --no-startup-id sleeve ctl nudge -100
+bindsym $mod+0     exec --no-startup-id sleeve ctl offset 0
+bindsym $mod+r     exec --no-startup-id sleeve ctl refresh
+```
+
+`sleeve ctl candidates` lists every provider's lyrics for what plays, numbered, and `sleeve ctl pick 2` (or
+`pick provider:id`) shows one of them from then on; `sleeve ctl unpick` goes back to the ranking.
+
 While sleeved runs, `sleeve now` shows its session instead of opening the players itself, so a nudge in the
 terminal moves the lyrics in every display. Any player, provider or store option (`--mpd`, `-p`,
 `--no-cache`, ...) or `--no-daemon` makes `sleeve now` run its own session; `--daemon` fails rather than run

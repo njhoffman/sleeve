@@ -1,0 +1,12 @@
+{
+  "name": "sleeve-shell",
+  "version": "0.0.0",
+  "private": true,
+  "description": "The Electron window for sleeve's renderer: an overlay under backdrop, or a plain window",
+  "type": "module",
+  "main": "main.ts",
+  "dependencies": {
+    "electron": "^45.2.1",
+    "x11": "^4.3.3"
+  }
+}

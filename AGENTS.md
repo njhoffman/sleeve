@@ -58,6 +58,10 @@ just install-service     # the systemd user unit for sleeved
   `src/protocol/messages.ts` and `docs/protocol.md` together; a breaking one bumps `PROTOCOL_VERSION`.
 - The WebSocket server is our own (`src/daemon/websocket.ts`, on `node:http`); do not add ws. Playback goes on
   the wire stamped with the wall clock (`Date.now()`), never `performance.now()`, which differs per process.
+- The shell (`shell/`) is a separate package so the root install stays light: Electron and x11 are its
+  dependencies only. Its decisions (options, backdrop's state, geometry) live in `src/shell/layout.ts`, Electron
+  free and tested with the rest; `shell/main.ts` is the Electron glue and `shell/x11.ts` the only X11 code.
+  `just check` typechecks the shell when `shell/node_modules` exists.
 - Tests stay offline: inject `fetch` (`test/helpers/fetch.ts`) and replay recorded responses from
   `test/fixtures/<provider>/`; build tagged mp3s with `test/helpers/id3.ts`.
 

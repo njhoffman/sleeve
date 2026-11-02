@@ -6,6 +6,20 @@ All notable changes to sleeve are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-11-02
+
+### Added
+
+- The lyrics overlay: `just shell-install` once, then `just shell` puts the renderer on the desktop, transparent
+  and click-through, just above backdrop's wallpaper and under its visualizer (`--position above` for over
+  it), in a band from 15% of the monitor down to the visualizer (`--geometry`, `--monitor` to change it).
+  backdrop stacks it again whenever its daemon restarts. Without backdrop running it opens as a window.
+  `just shell --window` opens a plain window that remembers where it was.
+- `sleeve ctl nudge|offset|pick|unpick|refresh|candidates`: one command to the running sleeved, for i3
+  bindings (`bindsym $mod+equal exec sleeve ctl nudge +100`) and scripts.
+- The renderer shows a short note whenever the offset changes, from any client.
+- `just shell-sandbox` installs the AppArmor profile Electron's sandbox needs on Ubuntu (sudo).
+
 ## [0.9.0] - 2026-11-02
 
 ### Changed
