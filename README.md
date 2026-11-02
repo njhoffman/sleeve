@@ -5,8 +5,8 @@ desktop overlay above [backdrop](https://github.com/njhoffman/backdrop)'s wallpa
 [Sunamu](https://github.com/NyaomiDEV/Sunamu), whose maintainer has left it.
 
 > **Status:** the lyrics core, `sleeve now` (lyrics for what MPD or Spotify plays, in the terminal), the
-> `sleeve lyrics`, `pick` and `offset` commands and the daemon (`sleeved`) work. The display and writing
-> lyrics into tags are planned; see [TODO.md](TODO.md).
+> `sleeve lyrics`, `pick` and `offset` commands, the daemon (`sleeved`) and its web renderer work. The
+> Electron overlay and writing lyrics into tags are planned; see [TODO.md](TODO.md).
 
 ## Requirements
 
@@ -108,6 +108,11 @@ provider and store options, and serves what plays to any number of displays: ove
 `$XDG_RUNTIME_DIR/sleeve/sleeved.sock`, one JSON message per line, for scripts and status bars. It sends the
 lyrics once per change and the playback clock as it changes, and each display works out the current line;
 nudges, picks and refreshes go the other way. [docs/protocol.md](docs/protocol.md) has the messages.
+
+While sleeved runs, `http://127.0.0.1:6620/` shows the lyrics in a browser, scrolling as each line comes due.
+`+` and `-` move them 100 ms (saved for the track), `0` removes the offset, `p` lists every provider's
+candidates to pick from, `r` looks the track up again online, and `?` lists the keys. The page is served from
+the sources (sleeved strips the TypeScript types as it sends each file), so there is nothing to build.
 
 While sleeved runs, `sleeve now` shows its session instead of opening the players itself, so a nudge in the
 terminal moves the lyrics in every display. Any player, provider or store option (`--mpd`, `-p`,

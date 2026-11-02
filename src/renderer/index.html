@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>sleeve</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="/src/renderer/style.css">
+  <script type="module" src="/src/renderer/main.ts"></script>
+</head>
+<body>
+  <header id="status">
+    <div id="title"></div>
+    <div id="source"></div>
+  </header>
+  <main id="viewport">
+    <div id="lines"></div>
+    <div id="message"></div>
+  </main>
+  <section id="picker" hidden>
+    <h2>Lyrics for this track</h2>
+    <ol id="candidates"></ol>
+    <p class="hint"><kbd>1</kbd>-<kbd>9</kbd> pick · <kbd>u</kbd> back to the ranking · <kbd>Esc</kbd> close</p>
+  </section>
+  <section id="help" hidden>
+    <h2>Keys</h2>
+    <dl>
+      <dt><kbd>+</kbd> <kbd>-</kbd></dt><dd>lyrics 100 ms later or sooner (saved for the track)</dd>
+      <dt><kbd>0</kbd></dt><dd>remove the offset</dd>
+      <dt><kbd>p</kbd></dt><dd>choose other lyrics</dd>
+      <dt><kbd>r</kbd></dt><dd>look the track up again online</dd>
+      <dt><kbd>?</kbd></dt><dd>this help</dd>
+    </dl>
+  </section>
+  <div id="toast" role="status"></div>
+</body>
+</html>

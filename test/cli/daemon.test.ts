@@ -53,7 +53,7 @@ describe('sleeve daemon', () => {
   it('serves the session until stopped, logging to stderr', async () => {
     await startDaemon();
     expect(err).to.include(`listening on ${socket}`);
-    expect(err.some(line => /^listening on ws:\/\/127\.0\.0\.1:\d+\/ws$/.test(line))).to.equal(true);
+    expect(err.some(line => /^listening on ws:\/\/127\.0\.0\.1:(\d+)\/ws, renderer at http:\/\/127\.0\.0\.1:\1\/$/.test(line))).to.equal(true);
     const client = await wsClient(`ws://127.0.0.1:${daemon!.port}/ws`);
     const lyrics = await client.next(message => message.type === 'lyrics' && !message.loading);
     expect(lyrics).to.deep.include({ key: 'spotify:dc' });

@@ -4,7 +4,8 @@ import { connect, createServer as createNetServer, type Server as NetServer, typ
 import path from 'node:path';
 import pkg from '../../package.json' with { type: 'json' };
 import { formatRef, parseRef } from '../core/prefs.ts';
-import type { NowPlaying, NowState } from '../now/session.ts';
+import type { NowPlaying } from '../now/session.ts';
+import type { NowState } from '../now/state.ts';
 import { nextLineTime } from '../now/lines.ts';
 import { monotonic, positionAt } from '../players/clock.ts';
 import type { Playback } from '../players/types.ts';
@@ -13,6 +14,7 @@ import {
   type ServerMessage, type WireLine, type WirePlayback
 } from '../protocol/messages.ts';
 import { DEFAULT_HOST, DEFAULT_PORT, defaultSocketPath, WEBSOCKET_PATH } from './paths.ts';
+import { StaticFiles } from './static.ts';
 import { CLOSE, handshakeProblem, refuseUpgrade, upgrade, type WebSocketOptions } from './websocket.ts';
 
 // sleeved: one NowPlaying session served to any number of clients, over a WebSocket on localhost (browsers,
@@ -31,6 +33,8 @@ export interface DaemonOptions {
   // Origins allowed besides localhost pages and file://; '*' allows any
   allowOrigins?: string[];
   websocket?: WebSocketOptions;
+  // The renderer's files, served at /; null leaves them out
+  renderer?: StaticFiles | null;
   // Where player problems are read from, checked on every change and every few seconds
   problems?: () => PlayerProblem[];
   log?: (text: string) => void;
@@ -300,8 +304,10 @@ export class SleeveDaemon {
   // Transports
 
   private async listenWebSocket(): Promise<void> {
-    const server = createHttpServer((_request, response) => {
-      response.writeHead(404, { 'Content-Type': 'text/plain' }).end(`sleeved ${pkg.version}: WebSocket at ${WEBSOCKET_PATH}\n`);
+    const files = this.options.renderer === null ? null : this.options.renderer ?? new StaticFiles();
+    const server = createHttpServer(async (request, response) => {
+      if (files && await files.serve(request, response)) return;
+      response.writeHead(404, { 'Content-Type': 'text/plain' }).end(`sleeved ${pkg.version}: the renderer is at /, the WebSocket at ${WEBSOCKET_PATH}\n`);
     });
     server.on('upgrade', (request: IncomingMessage, socket: Socket, head: Buffer) => {
       socket.on('error', () => socket.destroy());
@@ -331,7 +337,8 @@ export class SleeveDaemon {
     this.http = server;
     const address = server.address();
     this.port = typeof address === 'object' && address ? address.port : null;
-    this.log(`listening on ws://${this.options.host ?? DEFAULT_HOST}:${this.port}${WEBSOCKET_PATH}`);
+    const base = `${this.options.host ?? DEFAULT_HOST}:${this.port}`;
+    this.log(`listening on ws://${base}${WEBSOCKET_PATH}${files ? `, renderer at http://${base}/` : ''}`);
   }
 
   private async listenUnix(socketPath: string): Promise<void> {

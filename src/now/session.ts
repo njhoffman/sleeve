@@ -8,21 +8,15 @@ import type { PlaybackSource } from '../players/hub.ts';
 import type { MusicmanLibrary } from '../players/musicman.ts';
 import { Listeners, type Playback, type PlayingTrack } from '../players/types.ts';
 import { lineAt, type CurrentLine } from './lines.ts';
+import type { NowState } from './state.ts';
 
 export { lineAt, nextLineTime, type CurrentLine } from './lines.ts';
+export type { NowState } from './state.ts';
 
 // Lyrics for whatever plays: follows the active playback, looks lyrics up once per track (the previous lookup
 // is abandoned when the track changes first), and says which line is current, the user's offset included.
 // What the daemon will serve; `sleeve now` prints it.
 
-export interface NowState {
-  playback: Playback | null;
-  // The track as asked for lyrics; null without a track, or while it is being worked out
-  query: TrackQuery | null;
-  result: LyricsResult | null;
-  loading: boolean;
-  error: string | null;
-}
 
 export interface SessionOptions extends Pick<FetchOptions, 'providers' | 'timeoutMs' | 'fetch' | 'cache' | 'prefs' | 'userAgent'> {
   library?: MusicmanLibrary | null;

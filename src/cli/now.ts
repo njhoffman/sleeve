@@ -2,7 +2,7 @@ import type { LyricsResult } from '../core/types.ts';
 import { DaemonClient } from '../daemon/client.ts';
 import { defaultSocketPath } from '../daemon/paths.ts';
 import type { CurrentLine } from '../now/lines.ts';
-import type { NowState } from '../now/session.ts';
+import type { NowState } from '../now/state.ts';
 import { clockTime } from '../players/clock.ts';
 import type { PlayerProblem } from '../protocol/messages.ts';
 import { describeCandidate, formatOffset, type Io } from './lyrics.ts';

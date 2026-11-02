@@ -170,10 +170,20 @@ build items that depend on it, listed in the later projects.
 
 ## 6. Display
 
-- [ ] **Renderer as a web client of the daemon.** (p1) [refactor] One WebSocket protocol for both the browser and
-      the Electron shell, dropping Sunamu's separate electron-npapi and browser-npapi paths. The protocol
-      and a browser-safe `SessionMirror` exist (0.6.0); sleeved's HTTP server answers 404 outside `/ws`
-      today and can serve the renderer's files at `/`, which also makes the page same-origin.
+- [x] **Renderer as a web client of the daemon.** (p1) [refactor] One WebSocket protocol for both the browser and
+      the Electron shell, dropping Sunamu's separate electron-npapi and browser-npapi paths.
+      Done in 0.7.0: `src/renderer/` served by sleeved at `/`, types stripped on request (no build step);
+      plain DOM, the line worked out per frame from the mirrored clock, scroll on a time-constant follow;
+      keys for nudge, offset reset, pick, unpick and refresh.
+- [ ] **Electron shell over the renderer.** (p1) [feature] A thin window loading `http://127.0.0.1:6620/`:
+      transparent, click-through and marked `_BACKDROP_OVERLAY` for overlay mode, plain for window mode (see
+      Three window modes). No IPC: everything goes over the page's WebSocket, as in a browser.
+- [ ] **Word-by-word highlight.** (p2) [feature] Lines carry `words` (enhanced LRC, later LRCLIB's lyricsfile and
+      Musixmatch richsync); the renderer shows whole lines only. Fill each word as it comes due, from the same
+      per-frame position.
+- [ ] **Mouse in the renderer.** (p3) [feature] Click a candidate in the pick panel, scroll back through the
+      lyrics by wheel (returning to the current line after a few seconds), click a line to seek (needs a seek
+      command and player support).
 - [ ] **Three window modes.** (p2) [feature] `overlay` under backdrop: backdrop places and stacks the window like a
       GLava instance. `overlay` without backdrop: sleeve stacks its own transparent, click-through,
       desktop-type window above the root. `window`: borderless, focusable, resizable, remembers its
@@ -183,7 +193,8 @@ build items that depend on it, listed in the later projects.
       where blur is nearly free.
 - [ ] **Live, seamless animation parameters.** (p2) [feature] Changing CSS keyframes restarts the animation.
       Drive the animation from a clock with parameters pushed over the socket and interpolated, so edits
-      from the config or a dev panel apply without a jump.
+      from the config or a dev panel apply without a jump. The renderer's scroll already works this way
+      (`follow` in `src/renderer/view.ts`); the line highlight is still a CSS transition.
 - [ ] **Lyric colors by contrast against what is actually behind them.** (p2) [feature] Sunamu picks from the cover
       palette; in overlay mode the background is the wallpaper. Choose text color by APCA/WCAG contrast
       against the wallpaper region (from backdrop) or the cover, with a shadow as fallback.

@@ -1,0 +1,86 @@
+import type { LyricsResult, ScoredCandidate } from '../core/types.ts';
+import type { NowState } from '../now/state.ts';
+
+// What the renderer shows, worked out without the DOM, so it is tested in Node.
+
+// Moves value toward target as a critically damped follow with time constant tauMs, the same whatever the frame
+// rate, and picking up from wherever it is when the target moves (no restart, no jump)
+export function follow(value: number, target: number, dtMs: number, tauMs: number): number {
+  if (tauMs <= 0 || dtMs <= 0) return dtMs <= 0 ? value : target;
+  const next = target + (value - target) * Math.exp(-dtMs / tauMs);
+  return Math.abs(next - target) < 0.05 ? target : next;
+}
+
+// "+250 ms", "-1.2 s"
+export function formatOffset(ms: number): string {
+  const sign = ms > 0 ? '+' : ms < 0 ? '-' : '';
+  const size = Math.abs(ms);
+  return size >= 1000 ? `${sign}${(size / 1000).toFixed(size % 1000 ? 1 : 0)} s` : `${sign}${size} ms`;
+}
+
+export interface Status {
+  // Artist - title, or why there is none
+  title: string;
+  // Where the lyrics came from, and the user's choices for them
+  source: string;
+  // Shown in place of lyrics
+  message: string | null;
+}
+
+export function status(state: NowState, connected: boolean): Status {
+  if (!connected) return { title: '', source: '', message: 'Waiting for sleeved' };
+  const track = state.playback?.track;
+  if (!track) return { title: '', source: '', message: 'Nothing playing' };
+  const title = `${track.artist ? `${track.artist} - ` : ''}${track.title}`;
+  const result = state.result;
+  const best = result?.best;
+  const source = best
+    ? [best.provider, best.lyrics.synced ? null : 'unsynced', result!.pinned ? 'pinned' : null, result!.offsetMs ? formatOffset(result!.offsetMs) : null]
+      .filter(Boolean).join(' · ')
+    : '';
+  let message: string | null = null;
+  if (state.error) message = `Lookup failed: ${state.error}`;
+  else if (!best && state.loading) message = 'Looking up lyrics';
+  else if (!state.query && !state.loading) message = 'No artist or title to look up';
+  else if (!best) message = 'No lyrics found';
+  else if (best.lyrics.instrumental) message = 'Instrumental';
+  return { title, source, message };
+}
+
+// The scroll position for unsynced lyrics: how far through the track playback is, 0 to 1
+export function progress(positionMs: number, durationMs: number | undefined): number {
+  if (!durationMs) return 0;
+  return Math.min(1, Math.max(0, positionMs / durationMs));
+}
+
+export interface CandidateEntry {
+  ref: string;
+  label: string;
+  shown: boolean;
+  rejected: boolean;
+}
+
+// Every candidate, numbered as `sleeve lyrics --all` numbers them, for the pick panel
+export function candidateEntries(result: LyricsResult, shown: ScoredCandidate | null): CandidateEntry[] {
+  const describe = (candidate: ScoredCandidate) => {
+    const { track, lyrics } = candidate;
+    const length = track.durationMs ? ` ${Math.floor(track.durationMs / 60_000)}:${String(Math.floor(track.durationMs / 1000) % 60).padStart(2, '0')}` : '';
+    const kind = lyrics.instrumental ? 'instrumental' : `${lyrics.synced ? 'synced' : 'unsynced'}, ${lyrics.lines.length} lines`;
+    return `${candidate.provider}: ${track.artist} - ${track.title}${track.album ? ` (${track.album})` : ''}${length}, ${kind}, score ${candidate.score.toFixed(2)}`;
+  };
+  const same = (a: ScoredCandidate, b: ScoredCandidate | null) => !!b && a.provider === b.provider && a.id === b.id;
+  return [
+    ...result.candidates.map(candidate => ({ candidate, rejected: false })),
+    ...result.rejected.map(candidate => ({ candidate, rejected: true }))
+  ].filter(({ candidate }) => candidate.id).map(({ candidate, rejected }) => ({
+    ref: `${candidate.provider}:${candidate.id}`,
+    label: describe(candidate),
+    shown: same(candidate, shown),
+    rejected
+  }));
+}
+
+// How long to wait before reconnecting, after `attempt` failures in a row
+export function reconnectDelay(attempt: number): number {
+  return Math.min(5000, 250 * 2 ** Math.max(0, attempt));
+}

@@ -6,6 +6,17 @@ All notable changes to sleeve are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-11-02
+
+### Added
+
+- The renderer: open `http://127.0.0.1:6620/` while sleeved runs for the lyrics of what plays, scrolling as
+  each line comes due. Keys: `+`/`-` move the lyrics 100 ms (saved for the track), `0` removes the offset,
+  `p` lists every provider's candidates to pick from (`1`-`9`, `u` back to the ranking), `r` looks the track
+  up again online, `?` lists the keys. It reconnects by itself when sleeved restarts.
+- sleeved serves the renderer from the sources, with no build step: TypeScript is turned into JavaScript on
+  request.
+
 ## [0.6.0] - 2026-11-02
 
 ### Added

@@ -50,8 +50,11 @@ just install-service     # the systemd user unit for sleeved
 - Players implement `Player` (`src/players/types.ts`) and push a `Playback` on every change; position runs on
   between changes (`positionAt`). Only `src/players/mprisDbus.ts` imports the D-Bus library; tests use a fake
   `MprisBus` and the fake MPD server in `test/helpers/fakeMpd.ts`.
-- `src/protocol/`, `src/now/lines.ts` and `src/players/clock.ts` stay free of Node imports (type imports
-  aside): the browser renderer will import them as they are. A protocol change is a change to
+- The renderer runs in the browser from the sources: sleeved serves `src/renderer/` and the files listed in
+  `SERVED` (`src/daemon/static.ts`), stripping types on request. Everything it imports (`src/protocol/`,
+  `src/now/lines.ts`, `src/now/state.ts`, `src/players/clock.ts`, `src/players/types.ts`) stays free of Node;
+  `src/renderer/tsconfig.json` (DOM lib, no Node types, run by `npm run typecheck`) enforces it. A new file the
+  renderer imports goes into `SERVED`. DOM code stays in `main.ts`; logic goes in `view.ts`, tested in Node. A protocol change is a change to
   `src/protocol/messages.ts` and `docs/protocol.md` together; a breaking one bumps `PROTOCOL_VERSION`.
 - The WebSocket server is our own (`src/daemon/websocket.ts`, on `node:http`); do not add ws. Playback goes on
   the wire stamped with the wall clock (`Date.now()`), never `performance.now()`, which differs per process.

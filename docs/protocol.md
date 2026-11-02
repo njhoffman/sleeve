@@ -90,6 +90,11 @@ back. Replies may come after the broadcasts the command caused.
 A command that cannot be done is answered `ok: false` with `error`, e.g. `No lyrics to move`, `Nothing playing`,
 `Picks are off (--no-prefs)`, `Unknown command: …`.
 
+## HTTP
+
+The WebSocket's HTTP server also serves the renderer: `GET /` is `src/renderer/index.html`, and `/src/...` the
+browser-safe sources it imports, TypeScript turned into JavaScript on request. Anything else is `404`.
+
 ## WebSocket details
 
 sleeved implements the server side of RFC 6455 itself (`src/daemon/websocket.ts`): text messages only (binary

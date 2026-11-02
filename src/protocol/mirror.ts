@@ -1,4 +1,4 @@
-import type { NowState } from '../now/session.ts';
+import type { NowState } from '../now/state.ts';
 import { lineAt, type CurrentLine } from '../now/lines.ts';
 import { monotonic, positionAt } from '../players/clock.ts';
 import { Listeners, type Playback } from '../players/types.ts';
