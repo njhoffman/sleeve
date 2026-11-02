@@ -6,6 +6,25 @@ All notable changes to sleeve are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-11-02
+
+### Added
+
+- `sleeved` (also `sleeve daemon`, `just daemon`): follows MPD and Spotify and serves what plays, with its
+  lyrics, to any number of displays over a WebSocket (`ws://127.0.0.1:6620/ws`) and a Unix socket
+  (`$XDG_RUNTIME_DIR/sleeve/sleeved.sock`, one JSON message per line). Displays get the lyrics once per change
+  and the playback clock as it changes, and can nudge, set the offset, list candidates, pick, unpick and
+  refresh. Scripts and status bars can subscribe to the current line instead. The messages are in
+  `docs/protocol.md`.
+- `sleeve now` shows sleeved's session when it runs, so a nudge in the terminal moves the lyrics in every
+  display; `--no-daemon` (or any player, provider or store option) runs its own, `--daemon` insists on
+  sleeved.
+- `just install-service` writes a systemd user unit for sleeved; `just logs` follows its log.
+
+### Changed
+
+- `sleeve now --help` gives the defaults of `--mpris` (spotify) and `--timeout` (10 s) in the descriptions.
+
 ## [0.5.0] - 2026-11-02
 
 ### Added

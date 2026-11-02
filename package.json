@@ -1,10 +1,11 @@
 {
   "name": "sleeve",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "Synced lyrics from several sources for what MPD or Spotify plays, shown in a window or as a desktop overlay",
   "type": "module",
   "bin": {
-    "sleeve": "./src/cli/index.ts"
+    "sleeve": "./src/cli/index.ts",
+    "sleeved": "./src/cli/sleeved.ts"
   },
   "scripts": {
     "test": "mocha",

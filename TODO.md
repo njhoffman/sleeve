@@ -146,9 +146,17 @@ build items that depend on it, listed in the later projects.
 
 ## 5. Players
 
-- [ ] **Headless daemon over the session.** (p1) [feature] `sleeved`: `NowPlaying` (`src/now/session.ts`)
+- [x] **Headless daemon over the session.** (p1) [feature] `sleeved`: `NowPlaying` (`src/now/session.ts`)
       behind the WebSocket protocol the renderer and Electron shell will use (state, current line, nudge,
       pick). Decide the protocol messages and how the daemon is started (systemd user unit like musicman's).
+      Done in 0.6.0: `src/daemon/` (own RFC 6455 server on `node:http`, NDJSON Unix socket), protocol in
+      `src/protocol/` and `docs/protocol.md`, `just install-service`; `sleeve now` is a client when it runs.
+- [ ] **Unit's node path goes stale.** (p3) [chore] `just install-service` writes the absolute path of the
+      `node` on PATH (pnpm's) into the unit, as musicman's does; a node upgrade or a moved checkout breaks
+      the service until it is run again. A wrapper that finds node at start would avoid it.
+- [ ] **`sleeve line` for status bars.** (p3) [feature] Print the current line each time it changes, from a
+      `subscribe` on the daemon's socket, so polybar/i3blocks need no socat and jq (docs/protocol.md shows
+      that pipeline today).
 - [ ] **Prefetch the next track's lyrics.** (p3) [perf] MPD's queue (`playlistinfo`) and Spotify's (no MPRIS
       queue; Web API only) could warm the cache, so lyrics are ready when a track starts. Lookups that wait
       on LRCLIB's "server busy" retries take several seconds today.
@@ -163,7 +171,9 @@ build items that depend on it, listed in the later projects.
 ## 6. Display
 
 - [ ] **Renderer as a web client of the daemon.** (p1) [refactor] One WebSocket protocol for both the browser and
-      the Electron shell, dropping Sunamu's separate electron-npapi and browser-npapi paths.
+      the Electron shell, dropping Sunamu's separate electron-npapi and browser-npapi paths. The protocol
+      and a browser-safe `SessionMirror` exist (0.6.0); sleeved's HTTP server answers 404 outside `/ws`
+      today and can serve the renderer's files at `/`, which also makes the page same-origin.
 - [ ] **Three window modes.** (p2) [feature] `overlay` under backdrop: backdrop places and stacks the window like a
       GLava instance. `overlay` without backdrop: sleeve stacks its own transparent, click-through,
       desktop-type window above the root. `window`: borderless, focusable, resizable, remembers its

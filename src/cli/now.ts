@@ -1,54 +1,48 @@
 import type { LyricsResult } from '../core/types.ts';
+import { DaemonClient } from '../daemon/client.ts';
+import { defaultSocketPath } from '../daemon/paths.ts';
+import type { CurrentLine } from '../now/lines.ts';
+import type { NowState } from '../now/session.ts';
 import { clockTime } from '../players/clock.ts';
-import { PlayerHub } from '../players/hub.ts';
-import { MpdPlayer } from '../players/mpd.ts';
-import { MprisPlayer, NOT_PLAYERS, type MprisBus } from '../players/mpris.ts';
-import { MusicmanLibrary, readMusicmanPaths, type MusicmanPaths } from '../players/musicman.ts';
-import { mpdSettings } from '../players/settings.ts';
-import type { Player } from '../players/types.ts';
-import { NowPlaying, type NowState } from '../now/session.ts';
-import { describeCandidate, formatOffset, parseDuration, pickProviders, type Io } from './lyrics.ts';
-import { openStores } from './stores.ts';
+import type { PlayerProblem } from '../protocol/messages.ts';
+import { describeCandidate, formatOffset, type Io } from './lyrics.ts';
+import { openSession, shapesSession, type SessionCliOptions, type SessionDeps } from './session.ts';
 
 // `sleeve now`: lyrics for what MPD or Spotify plays, line by line as they come due, with + and - to nudge the
 // timing (saved for the track) and q to quit; `--once` prints where playback is and the current line.
+//
+// When sleeved runs, `sleeve now` shows its session instead of opening the players itself (so a nudge here moves
+// the lyrics in every display), unless an option asks for players, providers or stores of its own, or
+// --no-daemon. --daemon insists on the daemon.
 
-export interface NowOptions {
+export interface NowOptions extends SessionCliOptions {
   once?: boolean;
   json?: boolean;
-  // commander's --no-mpd and --no-mpris set these false
-  mpd?: string | boolean;
-  mpris?: string | boolean;
-  musicDir?: string;
-  providers?: string;
-  timeout?: string;
-  cache?: boolean;
-  prefs?: boolean;
+  // undefined: the daemon when it runs; true: only the daemon; false: never
+  daemon?: boolean;
+  socket?: string;
 }
 
 export const NUDGE_MS = 100;
 
-// What `sleeve now` needs from outside, replaced in tests
-export interface NowDeps {
-  env?: NodeJS.ProcessEnv;
-  musicman?: () => MusicmanPaths | null;
-  openLibrary?: (paths: MusicmanPaths) => MusicmanLibrary | null;
-  mprisBus?: () => Promise<MprisBus>;
-  players?: Player[];
+export interface NowDeps extends SessionDeps {
   input?: NodeJS.ReadStream;
   tickMs?: number;
   now?: () => number;
-  fetch?: typeof fetch;
 }
 
-const realBus = async (): Promise<MprisBus> => (await import('../players/mprisDbus.ts')).dbusMprisBus();
-
-function mprisNames(option: string | boolean | undefined): string[] {
-  if (option === false) return [];
-  const names = (typeof option === 'string' ? option : 'spotify').split(',').map(name => name.trim()).filter(Boolean);
-  const proxies = names.filter(name => NOT_PLAYERS.includes(name));
-  if (proxies.length) throw new Error(`Not an MPRIS player of its own: ${proxies.join(', ')} (MPD is read directly; leave out playerctld)`);
-  return names;
+// What printing needs, from the session in-process or the daemon's mirror
+export interface NowView {
+  current(): NowState;
+  line(now?: number): CurrentLine;
+  position(now?: number): number;
+  problems(): PlayerProblem[];
+  // The new offset, or why there is none
+  nudge(deltaMs: number): Promise<{ offsetMs: number } | { error: string }>;
+  // Resolves once the current track's lookup has finished
+  settled(): Promise<void>;
+  // Resolves when the session goes away underneath (the daemon stopped); never for one in-process
+  lost: Promise<void>;
 }
 
 function trackLine(state: NowState): string {
@@ -83,7 +77,7 @@ export class LivePrinter {
     this.io = io;
   }
 
-  render(session: Pick<NowPlaying, 'current' | 'line'>, now?: number): void {
+  render(session: Pick<NowView, 'current' | 'line'>, now?: number): void {
     const state = session.current();
     const playback = state.playback;
     const key = playback?.track ? `${playback.player}:${playback.track.key}` : null;
@@ -117,29 +111,30 @@ export class LivePrinter {
   }
 }
 
-function snapshot(session: NowPlaying, hub: PlayerHub, now?: number) {
-  const state = session.current();
+
+function snapshot(view: NowView, now?: number) {
+  const state = view.current();
   const playback = state.playback;
-  const line = session.line(now);
+  const line = view.line(now);
   return {
     player: playback?.player ?? null,
     state: playback?.state ?? null,
-    positionMs: playback ? Math.round(session.position(now)) : null,
+    positionMs: playback ? Math.round(view.position(now)) : null,
     track: playback?.track ?? null,
     query: state.query,
     lyrics: state.result,
     line: line.line ? { index: line.index, timeMs: line.time, text: line.line.text } : null,
-    problems: hub.problems()
+    problems: view.problems()
   };
 }
 
-function printOnce(session: NowPlaying, hub: PlayerHub, options: NowOptions, io: Io, now?: number): number {
-  const shot = snapshot(session, hub, now);
+function printOnce(view: NowView, options: NowOptions, io: Io, now?: number): number {
+  const shot = snapshot(view, now);
   if (options.json) {
     io.out(JSON.stringify(shot, null, 2));
     return shot.track ? 0 : 1;
   }
-  const state = session.current();
+  const state = view.current();
   if (!shot.track) {
     io.out('Nothing playing');
     for (const { player, problem } of shot.problems) io.err(`  ${player}: ${problem}`);
@@ -154,7 +149,7 @@ function printOnce(session: NowPlaying, hub: PlayerHub, options: NowOptions, io:
 }
 
 // Raw keys from a terminal: + and - nudge, q quits
-function keys(input: NodeJS.ReadStream | undefined, session: NowPlaying, io: Io, quit: () => void): () => void {
+function keys(input: NodeJS.ReadStream | undefined, view: NowView, io: Io, quit: () => void): () => void {
   if (!input?.isTTY) return () => {};
   input.setRawMode(true);
   input.resume();
@@ -163,9 +158,9 @@ function keys(input: NodeJS.ReadStream | undefined, session: NowPlaying, io: Io,
       if (key === 'q' || key === '\u0003') quit();
       const delta = key === '+' || key === '=' ? NUDGE_MS : key === '-' || key === '_' ? -NUDGE_MS : 0;
       if (!delta) continue;
-      const offset = session.nudge(delta);
-      if (offset !== null) io.out(`-- offset ${offset ? formatOffset(offset) : 'removed'}`);
-      else io.out(session.current().loading ? '-- still looking up lyrics' : '-- no lyrics to move');
+      void view.nudge(delta).then(answer => {
+        io.out('error' in answer ? `-- ${answer.error.toLowerCase()}` : `-- offset ${answer.offsetMs ? formatOffset(answer.offsetMs) : 'removed'}`);
+      });
     }
   };
   input.on('data', press);
@@ -176,89 +171,106 @@ function keys(input: NodeJS.ReadStream | undefined, session: NowPlaying, io: Io,
   };
 }
 
-export async function nowCommand(options: NowOptions, io: Io, deps: NowDeps = {}): Promise<number> {
-  const env = deps.env ?? process.env;
-  const providers = pickProviders(options.providers);
-  const timeoutMs = options.timeout ? parseDuration(options.timeout) : undefined;
-  const names = mprisNames(options.mpris);
-  if (options.json && !options.once) throw new Error('--json needs --once');
-
-  let paths: MusicmanPaths | null = null;
-  try {
-    paths = (deps.musicman ?? (() => readMusicmanPaths()))();
-  } catch (error) {
-    io.err(`musicman: ${error instanceof Error ? error.message : String(error)}`);
-  }
-  let library: MusicmanLibrary | null = null;
-  if (paths && names.length) {
-    try {
-      library = (deps.openLibrary ?? MusicmanLibrary.fromPaths)(paths);
-    } catch (error) {
-      io.err(`musicman: ${error instanceof Error ? error.message : String(error)}`);
-    }
-  }
-
-  let bus: MprisBus | null = null;
-  const players: Player[] = deps.players ?? [];
-  if (!deps.players) {
-    if (options.mpd !== false) {
-      const settings = mpdSettings({
-        ...(typeof options.mpd === 'string' ? { mpd: options.mpd } : {}),
-        ...(options.musicDir ? { musicDirectory: options.musicDir } : {}),
-        env, musicman: paths
-      });
-      players.push(new MpdPlayer(settings));
-    }
-    if (names.length) {
-      bus = await (deps.mprisBus ?? realBus)();
-      for (const name of names) players.push(new MprisPlayer(bus, name));
-    }
-  }
-  if (!players.length) throw new Error('No players: leave MPD or MPRIS on');
-
-  const hub = new PlayerHub(players);
-  const stores = openStores({ cache: options.cache !== false, prefs: options.prefs !== false });
-  const session = new NowPlaying(hub, {
-    providers,
-    ...(timeoutMs ? { timeoutMs } : {}),
-    ...(deps.fetch ? { fetch: deps.fetch } : {}),
-    ...(stores.cache ? { cache: stores.cache } : {}),
-    ...(stores.prefs ? { prefs: stores.prefs } : {}),
-    library
-  });
-  try {
-    hub.start();
-    await hub.ready();
-    session.start();
-    if (options.once) {
-      await session.settled();
-      return printOnce(session, hub, options, io, deps.now?.());
-    }
-    for (const { player, problem } of hub.problems()) io.err(`${player}: ${problem}`);
-    const printer = new LivePrinter(io);
-    await new Promise<void>(resolve => {
-      const tick = setInterval(() => printer.render(session, deps.now?.()), deps.tickMs ?? 50);
-      const unsubscribe = session.onChange(() => printer.render(session, deps.now?.()));
-      let release = () => {};
-      const quit = () => {
-        clearInterval(tick);
-        unsubscribe();
-        release();
-        process.off('SIGINT', quit);
-        process.off('SIGTERM', quit);
-        resolve();
-      };
-      release = keys(deps.input ?? process.stdin, session, io, quit);
-      process.once('SIGINT', quit);
-      process.once('SIGTERM', quit);
-      printer.render(session, deps.now?.());
+// Prints lines as they come due until q, a signal, or the session going away; 0, or 1 when the daemon stopped
+async function follow(view: NowView, onChange: (listener: () => void) => () => void, io: Io, deps: NowDeps): Promise<number> {
+  for (const { player, problem } of view.problems()) io.err(`${player}: ${problem}`);
+  const printer = new LivePrinter(io);
+  return new Promise<number>(resolve => {
+    const render = () => printer.render(view, deps.now?.());
+    const tick = setInterval(render, deps.tickMs ?? 50);
+    const unsubscribe = onChange(render);
+    let release = () => {};
+    const quit = (code: number) => {
+      clearInterval(tick);
+      unsubscribe();
+      release();
+      process.off('SIGINT', interrupted);
+      process.off('SIGTERM', interrupted);
+      resolve(code);
+    };
+    const interrupted = () => quit(0);
+    release = keys(deps.input ?? process.stdin, view, io, () => quit(0));
+    process.once('SIGINT', interrupted);
+    process.once('SIGTERM', interrupted);
+    void view.lost.then(() => {
+      io.err('-- sleeved stopped');
+      quit(1);
     });
-    return 0;
+    render();
+  });
+}
+
+async function local(options: NowOptions, io: Io, deps: NowDeps): Promise<number> {
+  const { session, hub, close } = await openSession(options, io, deps);
+  const view: NowView = {
+    current: () => session.current(),
+    line: now => session.line(now),
+    position: now => session.position(now),
+    problems: () => hub.problems(),
+    nudge: async delta => {
+      const offsetMs = session.nudge(delta);
+      if (offsetMs !== null) return { offsetMs };
+      return { error: session.current().loading ? 'Still looking up lyrics' : 'No lyrics to move' };
+    },
+    settled: async () => { await session.settled(); },
+    lost: new Promise(() => {})
+  };
+  try {
+    if (options.once) {
+      await view.settled();
+      return printOnce(view, options, io, deps.now?.());
+    }
+    return await follow(view, listener => session.onChange(listener), io, deps);
   } finally {
-    session.close();
-    await hub.close();
-    bus?.close();
-    library?.close();
-    stores.close();
+    await close();
   }
+}
+
+async function remote(client: DaemonClient, options: NowOptions, io: Io, deps: NowDeps): Promise<number> {
+  const mirror = client.mirror;
+  const view: NowView = {
+    current: () => mirror.current(),
+    line: now => mirror.line(now),
+    position: now => mirror.position(now),
+    problems: () => mirror.problems(),
+    nudge: async delta => {
+      const reply = await client.send({ type: 'nudge', ms: delta });
+      return reply.ok ? (reply.data as { offsetMs: number }) : { error: reply.error ?? 'failed' };
+    },
+    settled: () => new Promise(resolve => {
+      if (!mirror.current().loading || !client.open) return resolve();
+      const stop = mirror.onChange(state => {
+        if (state.loading) return;
+        stop();
+        resolve();
+      });
+      client.onClose(() => resolve());
+    }),
+    lost: new Promise(resolve => client.onClose(resolve))
+  };
+  try {
+    if (options.once) {
+      await view.settled();
+      return printOnce(view, options, io, deps.now?.());
+    }
+    io.err(`-- following sleeved (${client.socketPath})`);
+    return await follow(view, listener => mirror.onChange(listener), io, deps);
+  } finally {
+    client.close();
+  }
+}
+
+export async function nowCommand(options: NowOptions, io: Io, deps: NowDeps = {}): Promise<number> {
+  if (options.json && !options.once) throw new Error('--json needs --once');
+  const own = shapesSession(options);
+  if (options.daemon === true && own) throw new Error('--daemon takes no player, provider or store options: sleeved has its own');
+  // A test that gives its own players never reaches for a real daemon
+  const tryDaemon = options.daemon === true || (options.daemon === undefined && !own && !deps.players);
+  if (tryDaemon) {
+    const socketPath = options.socket ?? defaultSocketPath(deps.env);
+    const client = await DaemonClient.connect(socketPath);
+    if (client) return remote(client, options, io, deps);
+    if (options.daemon === true) throw new Error(`sleeved is not running (nothing answers at ${socketPath})`);
+  }
+  return local(options, io, deps);
 }

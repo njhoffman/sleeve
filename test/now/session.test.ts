@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { TrackPrefs } from '../../src/core/prefs.ts';
 import type { LyricsResult, ScoredCandidate, TrackQuery } from '../../src/core/types.ts';
-import { lineAt, NowPlaying, queryForPlayback } from '../../src/now/session.ts';
+import { lineAt, NowPlaying, queryForPlayback, type NowState } from '../../src/now/session.ts';
 import { PlayerHub } from '../../src/players/hub.ts';
 import type { MusicmanLibrary } from '../../src/players/musicman.ts';
 import type { Playback, PlayingTrack } from '../../src/players/types.ts';
@@ -124,5 +124,93 @@ describe('NowPlaying', () => {
     const session = new NowPlaying(new PlayerHub([player]), { lookup: async () => { throw new Error('disk full'); } });
     session.start();
     expect(await session.settled()).to.deep.include({ error: 'disk full', loading: false, result: null });
+  });
+});
+
+describe('NowPlaying commands', () => {
+  const playing = (track: PlayingTrack): Playback => ({ player: 'spotify', state: 'playing', track, positionMs: 0, at: 0, rate: 1, changedAt: 0 });
+  const other: ScoredCandidate = { ...best, provider: 'netease', id: '9', score: 0.4 };
+  let prefs: TrackPrefs;
+  let calls: Array<{ all?: boolean; refresh?: boolean }>;
+  // Answers as fetchLyrics would: the pick first when there is one, every candidate with all
+  const lookup = async (query: TrackQuery, options: { all?: boolean; refresh?: boolean } = {}): Promise<LyricsResult> => {
+    calls.push({ ...(options.all ? { all: true } : {}), ...(options.refresh ? { refresh: true } : {}) });
+    const pick = prefs.get(query)?.pick;
+    if (pick) return { ...result(), best: { ...other, ...pick }, pinned: true };
+    return options.all ? { ...result(), rejected: [other] } : result();
+  };
+  const started = async (options: { prefs?: TrackPrefs | null } = {}) => {
+    const session = new NowPlaying(new PlayerHub([fakePlayer('spotify', { playback: playing(spotifyTrack) })]), {
+      lookup: lookup as never, ...(options.prefs === null ? {} : { prefs })
+    });
+    session.start();
+    await session.settled();
+    return session;
+  };
+  beforeEach(() => {
+    prefs = new TrackPrefs(':memory:');
+    calls = [];
+  });
+  afterEach(() => prefs.close());
+
+  it('refreshes, keeping the lyrics shown until the new answer is in', async () => {
+    const session = await started();
+    const states: NowState[] = [];
+    session.onChange(state => states.push(state));
+    await session.refresh();
+    expect(calls).to.deep.equal([{}, { refresh: true }]);
+    expect(states[0]).to.deep.include({ loading: true, result: result() });
+    expect(session.current()).to.deep.include({ loading: false, result: result() });
+  });
+
+  it('lists every candidate without changing what is shown', async () => {
+    const session = await started();
+    const all = await session.candidates();
+    expect(all.rejected).to.deep.equal([other]);
+    expect(calls.at(-1)).to.deep.equal({ all: true });
+    expect(session.current().result).to.deep.equal(result());
+  });
+
+  it('picks a candidate, asking every provider when it is not among those shown, and forgets the pick', async () => {
+    const session = await started();
+    const picked = await session.pick({ provider: 'netease', id: '9' });
+    expect(picked.provider).to.equal('netease');
+    expect(calls).to.deep.equal([{}, { all: true }, {}]);
+    expect(session.current().result).to.deep.include({ pinned: true });
+    expect(session.current().result!.best!.provider).to.equal('netease');
+    expect(prefs.get(spotifyTrack as unknown as TrackQuery)!.pick!.id).to.equal('9');
+
+    // Shown now, so no second lookup with all
+    await session.pick({ provider: 'netease', id: '9' });
+    expect(calls).to.have.length(4);
+
+    await session.pick({ provider: 'lrclib', id: 'nope' }).then(() => expect.fail('picked'), error => {
+      expect(error.message).to.equal('No candidate lrclib:nope for A - T');
+    });
+    expect(await session.unpick()).to.equal(true);
+    expect(session.current().result).to.deep.include({ pinned: false });
+    expect(await session.unpick()).to.equal(false);
+  });
+
+  it('refuses picks without prefs and odd offsets, and removes an offset set to 0', async () => {
+    const session = await started({ prefs: null });
+    await session.pick({ provider: 'lrclib', id: '1' }).then(() => expect.fail('picked'), error => {
+      expect(error.message).to.equal('Picks are off (--no-prefs)');
+    });
+    expect(() => session.setOffset(1.5)).to.throw('Offset must be whole milliseconds: 1.5');
+
+    const saved = await started();
+    expect(saved.setOffset(-300)).to.equal(-300);
+    expect(prefs.get(spotifyTrack as unknown as TrackQuery)!.offset!.ms).to.equal(-300);
+    expect(saved.setOffset(0)).to.equal(0);
+    expect(prefs.get(spotifyTrack as unknown as TrackQuery)).to.equal(null);
+  });
+
+  it('says nothing plays when there is no track', async () => {
+    const session = new NowPlaying(new PlayerHub([fakePlayer('spotify')]), { lookup: lookup as never, prefs });
+    session.start();
+    for (const command of [() => session.refresh(), () => session.candidates(), () => session.pick({ provider: 'a', id: 'b' }), () => session.unpick()]) {
+      await command().then(() => expect.fail('ran'), error => expect(error.message).to.equal('Nothing playing'));
+    }
   });
 });

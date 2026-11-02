@@ -5,6 +5,8 @@ import { Command, CommanderError } from 'commander';
 import pkg from '../../package.json' with { type: 'json' };
 import { cacheClearCommand, cacheStatsCommand, type CacheOptions, type ClearCommandOptions } from './cache.ts';
 import { DEFAULT_PROVIDERS } from '../core/fetchLyrics.ts';
+import { DEFAULT_HOST, DEFAULT_PORT } from '../daemon/paths.ts';
+import { daemonCommand, type DaemonCommandOptions } from './daemon.ts';
 import { FORMATS, lyricsCommand, type Io, type LyricsOptions } from './lyrics.ts';
 import { nowCommand, type NowOptions } from './now.ts';
 import { offsetCommand, pickCommand, type TrackCommandOptions } from './prefs.ts';
@@ -23,6 +25,21 @@ function trackOptions(command: Command): Command {
     .option('-d, --duration <length>', 'track length in seconds or m:ss')
     .option('-p, --providers <names>', 'comma-separated providers, as for sleeve lyrics')
     .option('--timeout <seconds>', 'per-provider timeout in seconds', '10');
+}
+
+// The options that choose players, providers and stores, shared by now and daemon. Defaults are applied by
+// openSession rather than here, so `sleeve now` can tell an option given from one left out.
+function sessionOptions(command: Command): Command {
+  return command
+    .option('--mpd <address>', 'MPD as host, host:port, password@host:port or a socket path (default: MPD_HOST, then musicman\'s paths.json, then localhost:6600)')
+    .option('--no-mpd', 'leave MPD out')
+    .option('--music-dir <dir>', 'MPD\'s music directory, to find the files it plays (default: musicman\'s)')
+    .option('--mpris <names>', 'comma-separated MPRIS players to follow (default: spotify)')
+    .option('--no-mpris', 'leave MPRIS players (Spotify) out')
+    .option('-p, --providers <names>', 'comma-separated providers to ask, as for sleeve lyrics')
+    .option('--timeout <seconds>', 'per-provider timeout in seconds (default: 10)')
+    .option('--no-cache', 'neither read nor store online answers')
+    .option('--no-prefs', 'ignore your picks and offsets');
 }
 
 export function buildProgram(io: Io, setExit: (code: number) => void): Command {
@@ -51,21 +68,27 @@ export function buildProgram(io: Io, setExit: (code: number) => void): Command {
       setExit(await lyricsCommand(file, options, io));
     });
 
-  program.command('now')
-    .description('Follow what MPD or Spotify plays and print its lyrics line by line; + and - move them 100 ms (saved), q quits')
+  sessionOptions(program.command('now'))
+    .description('Follow what MPD or Spotify plays and print its lyrics line by line; + and - move them 100 ms (saved), q quits. Shows sleeved\'s session when it runs.')
     .option('--once', 'print the track, where playback is and the current line, then exit')
     .option('--json', 'with --once, print it all as JSON')
-    .option('--mpd <address>', 'MPD as host, host:port, password@host:port or a socket path (default: MPD_HOST, then musicman\'s paths.json, then localhost:6600)')
-    .option('--no-mpd', 'leave MPD out')
-    .option('--music-dir <dir>', 'MPD\'s music directory, to find the files it plays (default: musicman\'s)')
-    .option('--mpris <names>', 'comma-separated MPRIS players to follow', 'spotify')
-    .option('--no-mpris', 'leave MPRIS players (Spotify) out')
-    .option('-p, --providers <names>', 'comma-separated providers to ask, as for sleeve lyrics')
-    .option('--timeout <seconds>', 'per-provider timeout in seconds', '10')
-    .option('--no-cache', 'neither read nor store online answers')
-    .option('--no-prefs', 'ignore your picks and offsets')
+    .option('--daemon', 'only through sleeved; fail when it is not running')
+    .option('--no-daemon', 'open the players here even when sleeved runs (any player, provider or store option does too)')
+    .option('--socket <path>', 'sleeved\'s Unix socket (default: $XDG_RUNTIME_DIR/sleeve/sleeved.sock)')
     .action(async (options: NowOptions) => {
       setExit(await nowCommand(options, io));
+    });
+
+  sessionOptions(program.command('daemon'))
+    .description('Run sleeved: follow the players and serve lyrics and playback to displays over a WebSocket and a Unix socket')
+    .option('--host <address>', 'address for the WebSocket', DEFAULT_HOST)
+    .option('--port <port>', `port for the WebSocket, at /ws (default: ${DEFAULT_PORT})`)
+    .option('--no-websocket', 'leave the WebSocket out')
+    .option('--socket <path>', 'the Unix socket, one JSON message per line (default: $XDG_RUNTIME_DIR/sleeve/sleeved.sock)')
+    .option('--no-socket', 'leave the Unix socket out')
+    .option('--allow-origin <origin...>', 'web origins that may connect besides localhost pages and file:// (* for any)')
+    .action(async (options: DaemonCommandOptions) => {
+      setExit(await daemonCommand(options, io));
     });
 
   trackOptions(program.command('pick'))

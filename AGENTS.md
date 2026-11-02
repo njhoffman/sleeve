@@ -29,7 +29,9 @@ just check               # npm run test:brief and npm run typecheck; agents run 
 just test-file test/core/match.test.ts   # only these files (plain `npx mocha FILE` runs every file too)
 npm test                 # mocha over test/**/*.test.ts (spec reporter)
 npm run typecheck        # tsc --noEmit (TypeScript 7)
-just now --once          # node src/cli/index.ts now --once
+just now --once          # node src/cli/index.ts now --once (through sleeved when it runs)
+just daemon              # sleeved in the foreground
+just install-service     # the systemd user unit for sleeved
 ```
 
 ## Conventions
@@ -48,6 +50,11 @@ just now --once          # node src/cli/index.ts now --once
 - Players implement `Player` (`src/players/types.ts`) and push a `Playback` on every change; position runs on
   between changes (`positionAt`). Only `src/players/mprisDbus.ts` imports the D-Bus library; tests use a fake
   `MprisBus` and the fake MPD server in `test/helpers/fakeMpd.ts`.
+- `src/protocol/`, `src/now/lines.ts` and `src/players/clock.ts` stay free of Node imports (type imports
+  aside): the browser renderer will import them as they are. A protocol change is a change to
+  `src/protocol/messages.ts` and `docs/protocol.md` together; a breaking one bumps `PROTOCOL_VERSION`.
+- The WebSocket server is our own (`src/daemon/websocket.ts`, on `node:http`); do not add ws. Playback goes on
+  the wire stamped with the wall clock (`Date.now()`), never `performance.now()`, which differs per process.
 - Tests stay offline: inject `fetch` (`test/helpers/fetch.ts`) and replay recorded responses from
   `test/fixtures/<provider>/`; build tagged mp3s with `test/helpers/id3.ts`.
 

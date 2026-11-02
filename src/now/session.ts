@@ -1,11 +1,15 @@
 import { DURATION_WINDOW_MS } from '../core/db.ts';
 import { fetchLyrics, queryForFile, type FetchOptions } from '../core/fetchLyrics.ts';
 import type { TagReader } from '../core/tags/reader.ts';
-import type { LyricLine, LyricsResult, TrackQuery } from '../core/types.ts';
+import { formatRef, sameCandidate, type CandidateRef } from '../core/prefs.ts';
+import type { LyricsResult, ScoredCandidate, TrackQuery } from '../core/types.ts';
 import { positionAt } from '../players/clock.ts';
 import type { PlaybackSource } from '../players/hub.ts';
 import type { MusicmanLibrary } from '../players/musicman.ts';
 import { Listeners, type Playback, type PlayingTrack } from '../players/types.ts';
+import { lineAt, type CurrentLine } from './lines.ts';
+
+export { lineAt, nextLineTime, type CurrentLine } from './lines.ts';
 
 // Lyrics for whatever plays: follows the active playback, looks lyrics up once per track (the previous lookup
 // is abandoned when the track changes first), and says which line is current, the user's offset included.
@@ -24,14 +28,6 @@ export interface SessionOptions extends Pick<FetchOptions, 'providers' | 'timeou
   library?: MusicmanLibrary | null;
   tags?: TagReader;
   lookup?: typeof fetchLyrics;
-}
-
-export interface CurrentLine {
-  // -1 before the first line
-  index: number;
-  line: LyricLine | null;
-  // When the line starts, the offset applied (ms)
-  time: number | null;
 }
 
 function fromPlayer(track: PlayingTrack, extra: Partial<TrackQuery> = {}): TrackQuery {
@@ -71,17 +67,11 @@ export async function queryForPlayback(track: PlayingTrack, { library, tags }: P
   }
 }
 
-// The line playing at positionMs, with lyrics shifted by offsetMs (positive: later)
-export function lineAt(result: LyricsResult | null, positionMs: number): CurrentLine {
-  const lyrics = result?.best?.lyrics;
-  if (!lyrics?.synced) return { index: -1, line: null, time: null };
-  const offset = result!.offsetMs;
-  let index = -1;
-  for (let at = 0; at < lyrics.lines.length; at++) {
-    if ((lyrics.lines[at].time ?? 0) + offset > positionMs) break;
-    index = at;
-  }
-  return index < 0 ? { index, line: null, time: null } : { index, line: lyrics.lines[index], time: lyrics.lines[index].time! + offset };
+// Every candidate a result holds: the one shown (a pick may be under the threshold and in neither list), then
+// the rest in the order `sleeve lyrics --all` numbers them
+function listed(result: LyricsResult | null): ScoredCandidate[] {
+  if (!result) return [];
+  return [...(result.best ? [result.best] : []), ...result.candidates, ...result.rejected];
 }
 
 export class NowPlaying {
@@ -89,6 +79,8 @@ export class NowPlaying {
   private options: SessionOptions;
   private state: NowState = { playback: null, query: null, result: null, loading: false, error: null };
   private key: string | null = null;
+  // Bumped by every lookup started, so a lookup overtaken by a newer one (next track, refresh, pick) is dropped
+  private generation = 0;
   private abort: AbortController | null = null;
   private loading: Promise<void> = Promise.resolve();
   private listeners = new Listeners<NowState>();
@@ -141,26 +133,33 @@ export class NowPlaying {
     this.abort?.abort();
     this.abort = null;
     if (!playback?.track) {
+      this.generation++;
       this.state = { playback, query: null, result: null, loading: false, error: null };
       this.listeners.emit(this.state);
       return;
     }
-    this.loading = this.load(key!, playback.track);
+    this.loading = this.load(playback.track, { fresh: true });
   }
 
-  private async load(key: string, track: PlayingTrack): Promise<void> {
+  // Looks the track up. A new track (fresh) starts from nothing; a reload of the same track (refresh, a pick)
+  // keeps showing what it had until the new answer is in.
+  private async load(track: PlayingTrack, { fresh = false, refresh = false }: { fresh?: boolean; refresh?: boolean } = {}): Promise<void> {
+    this.abort?.abort();
     const abort = new AbortController();
     this.abort = abort;
-    const stale = () => this.key !== key;
-    this.state = { ...this.state, query: null, result: null, loading: true, error: null };
+    const generation = ++this.generation;
+    const stale = () => this.generation !== generation;
+    this.state = fresh
+      ? { ...this.state, query: null, result: null, loading: true, error: null }
+      : { ...this.state, loading: true, error: null };
     this.listeners.emit(this.state);
     try {
-      const query = await queryForPlayback(track, this.options);
+      const query = fresh || !this.state.query ? await queryForPlayback(track, this.options) : this.state.query;
       if (stale()) return;
       this.state = { ...this.state, query };
       if (query) {
         const { library: _library, lookup = fetchLyrics, ...fetchOptions } = this.options;
-        const result = await lookup(query, { ...fetchOptions, signal: abort.signal });
+        const result = await lookup(query, { ...fetchOptions, signal: abort.signal, ...(refresh ? { refresh } : {}) });
         if (stale()) return;
         this.state = { ...this.state, result };
       }
@@ -172,12 +171,62 @@ export class NowPlaying {
     this.listeners.emit(this.state);
   }
 
+  // Looks the current track up again, asking online providers instead of their stored answers
+  async refresh(): Promise<NowState> {
+    const track = this.state.playback?.track;
+    if (!track) throw new Error('Nothing playing');
+    this.loading = this.load(track, { refresh: true });
+    return this.settled();
+  }
+
+  // Every provider's candidates for the current track, those under the threshold too, without changing what is
+  // shown
+  async candidates(): Promise<LyricsResult> {
+    const query = this.state.query;
+    if (!query) throw new Error(this.state.playback?.track ? 'The track has no artist and title to look up' : 'Nothing playing');
+    const { library: _library, lookup = fetchLyrics, ...fetchOptions } = this.options;
+    return lookup(query, { ...fetchOptions, all: true });
+  }
+
+  // Shows this candidate for the current track from now on (saved as `sleeve pick` saves it) and looks the track
+  // up again so it is shown. The candidate is one of those shown, else one every provider is asked for.
+  async pick(ref: CandidateRef): Promise<ScoredCandidate> {
+    const prefs = this.requirePrefs();
+    const { query, result } = this.state;
+    if (!query) throw new Error(this.state.playback?.track ? 'The track has no artist and title to look up' : 'Nothing playing');
+    const key = this.key;
+    let candidate = listed(result).find(item => sameCandidate(item, ref));
+    if (!candidate) candidate = listed(await this.candidates()).find(item => sameCandidate(item, ref));
+    if (this.key !== key) throw new Error('The track changed before the pick was made');
+    if (!candidate) throw new Error(`No candidate ${formatRef(ref)} for ${query.artist} - ${query.title}`);
+    prefs.setPick(query, candidate);
+    await this.reload();
+    return candidate;
+  }
+
+  // Forgets the pick for the current track, so the ranking decides again; whether there was one
+  async unpick(): Promise<boolean> {
+    const prefs = this.requirePrefs();
+    const query = this.state.query;
+    if (!query) throw new Error('Nothing playing');
+    const had = prefs.clearPick(query);
+    if (had) await this.reload();
+    return had;
+  }
+
   // Moves the lyrics shown by deltaMs (positive: later) and remembers it for the track; the new offset, or null
   // when there are no lyrics to move
   nudge(deltaMs: number): number | null {
+    const offsetMs = this.state.result?.best ? this.state.result.offsetMs + deltaMs : null;
+    return offsetMs === null ? null : this.setOffset(offsetMs);
+  }
+
+  // Sets the offset for the lyrics shown (0 removes it) and remembers it for the track; null when there are no
+  // lyrics to move
+  setOffset(offsetMs: number): number | null {
+    if (!Number.isInteger(offsetMs)) throw new Error(`Offset must be whole milliseconds: ${offsetMs}`);
     const { query, result } = this.state;
     if (!query || !result?.best) return null;
-    const offsetMs = result.offsetMs + deltaMs;
     const prefs = this.options.prefs;
     if (prefs) {
       if (offsetMs === 0) prefs.clearOffset(query);
@@ -188,7 +237,20 @@ export class NowPlaying {
     return offsetMs;
   }
 
+  private async reload(): Promise<void> {
+    const track = this.state.playback?.track;
+    if (!track) return;
+    this.loading = this.load(track);
+    await this.settled();
+  }
+
+  private requirePrefs() {
+    if (!this.options.prefs) throw new Error('Picks are off (--no-prefs)');
+    return this.options.prefs;
+  }
+
   close(): void {
+    this.generation++;
     this.unsubscribe?.();
     this.abort?.abort();
   }

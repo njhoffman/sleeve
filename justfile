@@ -37,6 +37,37 @@ lyrics *args:
 now *args:
     node src/cli/index.ts now "$@"
 
+# Run sleeved in the foreground, e.g. just daemon --port 6621
+daemon *args:
+    node src/cli/index.ts daemon "$@"
+
+# Write the systemd user unit for sleeved (this checkout, this node) and reload systemd; does not enable it
+install-service:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    node=$(command -v node)
+    unit="${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user/sleeved.service"
+    mkdir -p "$(dirname "$unit")"
+    printf '%s\n' \
+      '[Unit]' \
+      'Description=sleeve lyrics daemon (sleeved)' \
+      'After=mpd.service' \
+      '' \
+      '[Service]' \
+      "ExecStart=$node $PWD/src/cli/index.ts daemon" \
+      'Restart=on-failure' \
+      'RestartSec=5' \
+      '' \
+      '[Install]' \
+      'WantedBy=default.target' > "$unit"
+    systemctl --user daemon-reload
+    echo "Wrote $unit (node: $node)"
+    echo "Start it now and at login: systemctl --user enable --now sleeved"
+
+# sleeved's log
+logs:
+    journalctl --user -u sleeved -f
+
 # What plays, once, as JSON
 status:
     node src/cli/index.ts now --once --json

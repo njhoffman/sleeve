@@ -4,9 +4,9 @@ Synced lyrics for the song playing in MPD or Spotify, from several sources, show
 desktop overlay above [backdrop](https://github.com/njhoffman/backdrop)'s wallpaper. A restart of
 [Sunamu](https://github.com/NyaomiDEV/Sunamu), whose maintainer has left it.
 
-> **Status:** the lyrics core, `sleeve now` (lyrics for what MPD or Spotify plays, in the terminal) and the
-> `sleeve lyrics`, `pick` and `offset` commands work. The player daemon, the display and
-> writing lyrics into tags are planned; see [TODO.md](TODO.md).
+> **Status:** the lyrics core, `sleeve now` (lyrics for what MPD or Spotify plays, in the terminal), the
+> `sleeve lyrics`, `pick` and `offset` commands and the daemon (`sleeved`) work. The display and writing
+> lyrics into tags are planned; see [TODO.md](TODO.md).
 
 ## Requirements
 
@@ -18,7 +18,8 @@ desktop overlay above [backdrop](https://github.com/njhoffman/backdrop)'s wallpa
 git clone git@github.com:njhoffman/sleeve.git
 cd sleeve
 npm install
-npm link        # installs the `sleeve` command
+npm link        # installs the `sleeve` and `sleeved` commands
+just install-service && systemctl --user enable --now sleeved   # optional: run the daemon at login
 ```
 
 ## Usage
@@ -39,6 +40,7 @@ sleeve offset song.mp3                         # show the offset; 0 or --reset r
 sleeve now                                     # lyrics for what MPD or Spotify plays, line by line
 sleeve now --once                              # the track, where it is, and the current line
 sleeve now --once --json                       # the same with the lyrics, for scripts and status bars
+sleeved                                        # the daemon: serve what plays to displays (sleeve daemon)
 sleeve cache                                   # how many answers are stored, by provider (also --json)
 sleeve cache clear --not-found                 # forget "no lyrics" answers so those tracks are asked again
 ```
@@ -97,6 +99,25 @@ move the lyrics 100 ms later or sooner and save it for the track (as `sleeve off
   (`~/.local/state/musicman/paths.json`) and which library file a Spotify track is. The file's lyrics and tags
   are used if its length is within 2 seconds of Spotify's, since a different master would put them out of
   time. Without musicman, Spotify tracks are looked up online only.
+
+## The daemon
+
+`sleeved` (or `sleeve daemon`, `just daemon`) follows the players as `sleeve now` does, takes the same player,
+provider and store options, and serves what plays to any number of displays: over a WebSocket at
+`ws://127.0.0.1:6620/ws` for the browser renderer and the Electron shell, and over a Unix socket at
+`$XDG_RUNTIME_DIR/sleeve/sleeved.sock`, one JSON message per line, for scripts and status bars. It sends the
+lyrics once per change and the playback clock as it changes, and each display works out the current line;
+nudges, picks and refreshes go the other way. [docs/protocol.md](docs/protocol.md) has the messages.
+
+While sleeved runs, `sleeve now` shows its session instead of opening the players itself, so a nudge in the
+terminal moves the lyrics in every display. Any player, provider or store option (`--mpd`, `-p`,
+`--no-cache`, ...) or `--no-daemon` makes `sleeve now` run its own session; `--daemon` fails rather than run
+one.
+
+`just install-service` writes a systemd user unit for this checkout and the `node` on your PATH (run it
+again after moving either); `systemctl --user enable --now sleeved` starts it, `just logs` follows its log.
+The WebSocket refuses pages from other sites (`403`), since they could otherwise nudge and pick for you;
+`--allow-origin` lets one in.
 
 ## Picks and offsets
 
