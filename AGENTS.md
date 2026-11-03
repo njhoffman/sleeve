@@ -20,8 +20,9 @@ Related projects (keep them in mind before designing player, tagging or window f
   Without backdrop, sleeve stacks the overlay itself (`stackSelf` in `shell/x11.ts`) and leaves it unmarked.
 - **musicman** (`~/git/musicman`) manages the library, MPD and Spotify, and writes ID3 tags, including
   custom `TXXX:sp_*` fields. sleeve must never clobber them when it writes lyrics. sleeve reads only what
-  musicman's `docs/09-contract.md` promises (`paths.json`, the `spotify_track_files` view, read-only); never
-  its other tables. A change sleeve needs from musicman goes into that contract first.
+  musicman's `docs/09-contract.md` promises (`paths.json`, the `spotify_track_files` view read-only, and
+  `musicman spotify queue --format json`); never its other tables. A change sleeve needs from musicman goes
+  into that contract first.
 
 ## Commands
 

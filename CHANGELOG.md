@@ -6,6 +6,14 @@ All notable changes to sleeve are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.24.0] - 2026-11-03
+
+### Added
+
+- Spotify's next track is looked up ahead, as MPD's is, so its lyrics are ready when it starts. sleeve asks
+  musicman for Spotify's queue (`musicman spotify queue --format json`, which needs musicman's Spotify login)
+  once per track; without it nothing changes.
+
 ## [0.23.0] - 2026-11-03
 
 ### Added

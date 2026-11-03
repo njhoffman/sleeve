@@ -40,6 +40,9 @@ export interface MprisPlayerOptions {
   resyncMs?: number;
   // Wait after a new track before reading the position again, since players report a new track in pieces
   settleMs?: number;
+  // What plays after a track (MPRIS has no queue; for Spotify, musicman's spotifyNext), asked once per track and
+  // given as playback.next; failures leave it unknown
+  next?: (track: PlayingTrack) => Promise<PlayingTrack | null>;
 }
 
 const STATES: Record<string, PlaybackState> = { Playing: 'playing', Paused: 'paused', Stopped: 'stopped' };
@@ -101,10 +104,14 @@ export class MprisPlayer implements Player {
   private resyncTimer: NodeJS.Timeout | null = null;
   private lastProblem: string | null = null;
   private closed = false;
+  private nextOf: MprisPlayerOptions['next'];
+  // The track next was asked for, and the answer once it came
+  private following: { key: string; next: PlayingTrack | null } | null = null;
 
   // identity: the part of the bus name after org.mpris.MediaPlayer2. ('spotify')
   constructor(bus: MprisBus, identity: string, options: MprisPlayerOptions = {}) {
     this.bus = bus;
+    this.nextOf = options.next;
     this.name = identity;
     this.now = options.now ?? monotonic;
     this.resyncMs = options.resyncMs ?? 5000;
@@ -233,9 +240,26 @@ export class MprisPlayer implements Player {
       positionMs: this.position.ms,
       at: this.position.at,
       rate: Number.isFinite(rate) && rate > 0 ? rate : 1,
-      changedAt: changed ? this.now() : previous.changedAt
+      changedAt: changed ? this.now() : previous.changedAt,
+      ...(track && this.following?.key === track.key && this.following.next ? { next: this.following.next } : {})
     };
     this.listeners.emit(this.playback);
+    if (track) this.askNext(track);
+  }
+
+  // Asks once per track what plays after it, and gives it with the playback when it comes
+  private askNext(track: PlayingTrack): void {
+    if (!this.nextOf || this.following?.key === track.key) return;
+    const following = { key: track.key, next: null as PlayingTrack | null };
+    this.following = following;
+    this.nextOf(track).then(next => {
+      if (this.following !== following || this.closed || !next) return;
+      following.next = next;
+      if (this.playback?.track?.key === track.key) {
+        this.playback = { ...this.playback, next };
+        this.listeners.emit(this.playback);
+      }
+    }, () => {});
   }
 
   async close(): Promise<void> {

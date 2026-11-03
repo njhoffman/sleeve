@@ -1,9 +1,9 @@
 import { PlayerHub } from '../players/hub.ts';
 import { MpdPlayer } from '../players/mpd.ts';
 import { MprisPlayer, NOT_PLAYERS, type MprisBus } from '../players/mpris.ts';
-import { MusicmanLibrary, readMusicmanPaths, type MusicmanPaths } from '../players/musicman.ts';
+import { MusicmanLibrary, readMusicmanPaths, spotifyNext, type MusicmanPaths } from '../players/musicman.ts';
 import { mpdSettings } from '../players/settings.ts';
-import type { Player } from '../players/types.ts';
+import type { Player, PlayingTrack } from '../players/types.ts';
 import { NowPlaying } from '../now/session.ts';
 import { parseDuration, pickProviders, type Io } from './lyrics.ts';
 import { openStores } from './stores.ts';
@@ -99,7 +99,11 @@ export async function openSession(options: SessionCliOptions, io: Io, deps: Sess
         library?.close();
         throw error;
       }
-      for (const name of names) players.push(new MprisPlayer(bus, name));
+      // Spotify's queue comes from musicman, which holds the Spotify token; without it nothing is prefetched
+      const next = (track: PlayingTrack) => track.spotifyId ? spotifyNext(track.spotifyId) : Promise.resolve(null);
+      for (const name of names) {
+        players.push(new MprisPlayer(bus, name, name === 'spotify' && options.prefetch !== false ? { next } : {}));
+      }
     }
   }
   if (!players.length) throw new Error('No players: leave MPD or MPRIS on');

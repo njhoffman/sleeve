@@ -262,9 +262,13 @@ build items that depend on it, listed in the later projects.
       on LRCLIB's "server busy" retries take several seconds today.
       Done in 0.8.0 for MPD: `nextsongid` and `playlistid` give the song queued next (random included), the
       session looks it up once the current track is settled and adopts the lookup when the track starts.
-- [ ] **Prefetch for Spotify.** (p3) [perf] MPRIS has no queue. Spotify's Web API does (`/me/player/queue`),
+- [x] **Prefetch for Spotify.** (p3) [perf] MPRIS has no queue. Spotify's Web API does (`/me/player/queue`),
       which needs an OAuth token; musicman manages Spotify and may have one. Any such data would have to be
       added to musicman's contract (`docs/09-contract.md`) first, not read from its tables.
+      Done in 0.24.0 with musicman's `spotify queue --format json` (its contract, version 1; musicman keeps the
+      token): `spotifyNext` in src/players/musicman.ts, asked once per Spotify track by MprisPlayer's `next`
+      option and given as `playback.next`, so the session prefetches it as it does MPD's. Needs the musicman
+      release that has the command.
 - [x] **Native MPD client.** (p1) [feature] Use MPD's protocol directly (idle events, precise elapsed time, file
       path for local lyrics and cover art) instead of going through an MPRIS bridge.
       Done in 0.5.0: `src/players/mpd.ts` (`node:net`, `idle player`, reconnects with backoff, MPD_HOST forms).

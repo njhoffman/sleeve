@@ -106,6 +106,36 @@ describe('MprisPlayer', () => {
     expect(player.problem()).to.equal('no session bus');
   });
 
+  it('gives what plays next with the playback once asked, once per track, and drops an answer for a track gone', async () => {
+    const fake = fakeBus({ PlaybackStatus: 'Playing', Rate: 1, Metadata: metadata(ID1), Position: 0 });
+    const asked: string[] = [];
+    const answers = new Map<string, (track: { key: string; artist: string; title: string } | null) => void>();
+    player = new MprisPlayer(fake.bus, 'spotify', {
+      now: () => time, resyncMs: 0, settleMs: 0,
+      next: track => { asked.push(track.key); return new Promise(resolve => answers.set(track.key, resolve)); }
+    });
+    player.start();
+    await player.ready();
+    await until(() => answers.has(`/com/spotify/track/${ID1}`));
+    expect(player.current()!.next).to.equal(undefined);
+    answers.get(`/com/spotify/track/${ID1}`)!({ key: `/com/spotify/track/${ID2}`, artist: 'A', title: 'Next' });
+    await until(() => player.current()?.next?.title === 'Next');
+    // A change that is not a new track keeps it, and does not ask again
+    fake.change({ PlaybackStatus: 'Paused' });
+    await until(() => player.current()?.state === 'paused');
+    expect(player.current()!.next?.title).to.equal('Next');
+    expect(asked).to.have.length(1);
+
+    // The next track: asked again; the old answer, coming late, is dropped
+    fake.change({ PlaybackStatus: 'Playing', Metadata: metadata(ID2, 'Other') });
+    await until(() => answers.has(`/com/spotify/track/${ID2}`));
+    expect(player.current()!.next).to.equal(undefined);
+    answers.get(`/com/spotify/track/${ID1}`)!({ key: 'late', artist: 'A', title: 'Late' });
+    await new Promise(resolve => setTimeout(resolve, 10));
+    expect(player.current()!.next).to.equal(undefined);
+    expect(asked).to.deep.equal([`/com/spotify/track/${ID1}`, `/com/spotify/track/${ID2}`]);
+  });
+
   it('reads metadata from other players: local files, missing fields', () => {
     expect(trackFromMetadata({ 'xesam:url': 'file:///music/a%20b.flac', 'xesam:title': 'AB', 'xesam:artist': ['X', 'Y'] }))
       .to.deep.equal({ key: 'file:///music/a%20b.flac', artist: 'X, Y', title: 'AB', file: '/music/a b.flac' });
