@@ -6,6 +6,15 @@ All notable changes to sleeve are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.16.2] - 2026-11-03
+
+### Fixed
+
+- A lookup made while LRCLIB's `Retry-After` holds requests back waits for the hold to end when that is at most
+  5 seconds away, instead of failing at once. LRCLIB's 503s ask for a second, and in a library run every file
+  looked up during that second was deferred for an hour without LRCLIB being asked: two thirds of the deferrals.
+  Longer holds (a 429's) still fail at once and are asked again later.
+
 ## [0.16.1] - 2026-11-02
 
 ### Fixed

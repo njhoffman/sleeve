@@ -1,5 +1,5 @@
 import { expect } from 'chai';
-import { createLrclib, LrclibHeldError, retryAfterMs, toCandidate, type LrclibRecord } from '../../src/core/providers/lrclib.ts';
+import { createLrclib, LrclibHeldError, MAX_HOLD_WAIT_MS, retryAfterMs, toCandidate, type LrclibRecord } from '../../src/core/providers/lrclib.ts';
 import type { ProviderContext } from '../../src/core/providers/provider.ts';
 import { fakeFetch, fixture, type Route } from '../helpers/fetch.ts';
 
@@ -62,14 +62,47 @@ describe('LRCLIB provider', () => {
       const { lrclib, advance } = clocked(0);
       const busy = context([{ match: /\/api\/get\?/, sequence: [{ status: 429, body: limited, headers: { 'Retry-After': '20' } }, { status: 200, body: deathCab }] }]);
       expect((await lrclib.search(query, busy.context).catch(caught => caught)).status).to.equal(429);
-      // 20 s and 15% of it (random 0.5 of the 30%): nothing is sent before 23 s
-      advance(22_900);
+      // 20 s and 15% of it (random 0.5 of the 30%): nothing is sent before 23 s, and 5.1 s before is too long to wait
+      advance(17_900);
       const held = await lrclib.search(query, busy.context).catch(caught => caught);
       expect(held).to.be.instanceOf(LrclibHeldError);
       expect(busy.calls).to.have.length(1);
-      advance(200);
+      advance(5200);
       expect(await lrclib.search(query, busy.context)).to.have.length(1);
       expect(busy.calls).to.have.length(2);
+    });
+
+    it('waits out a short hold instead of failing, as after a 503 that asks for a second', async () => {
+      const { lrclib, slept } = clocked(0);
+      const busy = context([{ match: /\/api\/get\?/, sequence: [{ status: 503, body: overloaded, headers: { 'Retry-After': '1' } }, { status: 200, body: deathCab }] }]);
+      expect((await lrclib.search(query, busy.context).catch(caught => caught)).status).to.equal(503);
+      // 1 s and 15% of it
+      expect(await lrclib.search(query, busy.context)).to.have.length(1);
+      expect(slept).to.deep.equal([1150]);
+      expect(busy.calls).to.have.length(2);
+    });
+
+    it('fails without asking when a hold has more than MAX_HOLD_WAIT_MS left, and waits once it has less', async () => {
+      const { lrclib, slept, advance } = clocked(0);
+      const busy = context([{ match: /\/api\/get\?/, sequence: [{ status: 429, body: limited, headers: { 'Retry-After': '10' } }, { status: 200, body: deathCab }] }]);
+      await lrclib.search(query, busy.context).catch(() => undefined);
+      // Held until 11.5 s: 6.5 s left, then 5 s
+      advance(5000);
+      expect(await lrclib.search(query, busy.context).catch(caught => caught)).to.be.instanceOf(LrclibHeldError);
+      advance(1500);
+      expect(await lrclib.search(query, busy.context)).to.have.length(1);
+      expect(slept).to.deep.equal([MAX_HOLD_WAIT_MS]);
+    });
+
+    it('stops waiting for a hold when the lookup is cancelled', async () => {
+      const lrclib = createLrclib({ retries: 0 });
+      const busy = context([{ match: /\/api\/get\?/, sequence: [{ status: 503, body: overloaded, headers: { 'Retry-After': '3' } }, { status: 200, body: deathCab }] }]);
+      await lrclib.search(query, busy.context).catch(() => undefined);
+      const controller = new AbortController();
+      const waiting = lrclib.search(query, { ...busy.context, signal: controller.signal }).catch(caught => caught);
+      controller.abort(new Error('cancelled'));
+      expect((await waiting).message).to.equal('cancelled');
+      expect(busy.calls).to.have.length(1);
     });
 
     it('retries no sooner than it says, and as before when it does not say', async () => {

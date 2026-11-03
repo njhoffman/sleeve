@@ -17,6 +17,9 @@ import { ProviderHttpError, type Provider, type ProviderContext, type RateLimit 
 const BASE = 'https://lrclib.net/api';
 const RETRIES = 1;
 const RETRY_DELAY_MS = 1000;
+// A hold with no more than this left is waited out rather than failed: a 503's Retry-After is usually 1 s, and
+// failing every lookup during it would defer a run's files by the dozen without asking. Half the provider timeout.
+export const MAX_HOLD_WAIT_MS = 5000;
 export const LRCLIB_RATE_LIMIT: RateLimit = { host: 'lrclib.net', gapMs: 700, serial: true };
 
 // One LRCLIB record, as /api/get and /api/search return it
@@ -106,11 +109,14 @@ interface Hold {
 
 // The parsed JSON of a GET, or null for 404; retries 429 and 503, throws on other failures. A Retry-After on
 // either is honored, as LRCLIB's docs require: nothing is sent until it has run out (plus up to 30% jitter, so
-// throttled clients do not come back all at once), and a retry waits at least that long.
+// throttled clients do not come back all at once), and a retry waits at least that long. A lookup made during a
+// hold waits for its end when that is at most MAX_HOLD_WAIT_MS away, and fails without asking otherwise.
 async function request(path: string, params: Record<string, string>, context: ProviderContext, retry: Retry, clock: Clock, hold: Hold): Promise<unknown> {
   const url = `${BASE}${path}?${new URLSearchParams(params)}`;
   for (let attempt = 0; ; attempt++) {
-    if (clock.now() < hold.until) throw new LrclibHeldError(hold.until);
+    const left = hold.until - clock.now();
+    if (left > MAX_HOLD_WAIT_MS) throw new LrclibHeldError(hold.until);
+    if (left > 0) await clock.sleep(left, context.signal);
     const response = await context.fetch(url, { headers: { 'User-Agent': context.userAgent, Accept: 'application/json' }, signal: context.signal });
     if (response.status === 404) return null;
     if (response.ok) return response.json();

@@ -190,8 +190,9 @@ live in the same database as the stored answers, match tracks the same way, and 
 LRCLIB answers "server busy" (503) under load, mostly for lookups it has not cached, and stays busy for those
 for minutes; sleeve retries once after a second and then reports it (`sleeve tag` does not retry, see below).
 When LRCLIB says how long to wait (`Retry-After`, on a 503 or a 429 "Too many requests"), sleeve sends it nothing
-until that has run out, plus up to 30% more, as LRCLIB's docs require of clients; a lookup in the meantime fails
-at once ("asked to wait until ...") and is asked again later,
+until that has run out, plus up to 30% more, as LRCLIB's docs require of clients; a lookup in the meantime waits
+when the hold ends within 5 seconds (a 503 usually asks for one), and otherwise fails at once ("asked to wait
+until ...") and is asked again later,
 and NetEase usually has the song. NetEase's search ranks loosely (live versions and covers come first), so its
 results are scored by title, artist and length before any lyrics are fetched, and only the best two are
 fetched; credit lines at the top of its lyrics ("作词 : ...") are dropped, and lyrics that only say the song is
