@@ -6,6 +6,14 @@ All notable changes to sleeve are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-11-02
+
+### Added
+
+- The overlay's lyrics follow the wallpaper behind them: light or dark text by contrast against the colors
+  backdrop samples there, with a stronger shadow and less faded lines when no color reads well over all of
+  it. A new wallpaper or a dim change restyles the text in place.
+
 ## [0.10.0] - 2026-11-02
 
 ### Added

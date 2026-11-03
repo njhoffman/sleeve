@@ -138,9 +138,21 @@ kbd {
 
 #toast.visible { opacity: 1; transform: translate(-50%, 0); }
 
-/* Overlay mode (the Electron shell over backdrop's wallpaper): transparent, lyrics only */
+/* Overlay mode (the Electron shell over backdrop's wallpaper): transparent, lyrics only. The colors come from
+   the wallpaper behind the window when the shell passes them (contrast.ts); these defaults are light text. */
+html.overlay {
+  --overlay-text: 244, 246, 251;
+  --overlay-shadow: 18, 21, 28;
+  --overlay-shadow-alpha: 0.55;
+  --overlay-upcoming-alpha: 0.5;
+  --overlay-past-alpha: 0.32;
+}
 html.overlay, html.overlay body { background: transparent; }
 html.overlay #status, html.overlay #message { display: none; }
-html.overlay .line { text-shadow: 0 2px 14px rgba(0, 0, 0, 0.55), 0 0 2px rgba(0, 0, 0, 0.35); }
-html.overlay .line.past { color: rgba(232, 236, 244, 0.32); }
-html.overlay .line:not(.current):not(.past) { color: rgba(232, 236, 244, 0.5); }
+html.overlay .line {
+  color: rgba(var(--overlay-text), var(--overlay-upcoming-alpha));
+  text-shadow: 0 2px 14px rgba(var(--overlay-shadow), var(--overlay-shadow-alpha)), 0 0 2px rgba(var(--overlay-shadow), calc(var(--overlay-shadow-alpha) * 0.7));
+  transition: color 220ms ease, transform 320ms cubic-bezier(0.2, 0.7, 0.2, 1), text-shadow 600ms ease;
+}
+html.overlay .line.past { color: rgba(var(--overlay-text), var(--overlay-past-alpha)); }
+html.overlay .line.current { color: rgb(var(--overlay-text)); }

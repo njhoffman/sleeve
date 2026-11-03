@@ -3,7 +3,7 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import {
-  backdropRunning, backdropStatePath, chooseMonitor, DEFAULT_URL, formatGeometry, overlayGeometry, parseGeometry, parseShellArgs,
+  backdropRunning, backdropStatePath, chooseMonitor, DEFAULT_URL, formatGeometry, overlayColors, overlayGeometry, parseGeometry, parseShellArgs,
   readBackdropState, rendererUrl, type BackdropMonitor
 } from '../../src/shell/layout.ts';
 
@@ -63,6 +63,15 @@ describe('shell layout', () => {
     }
     expect(backdropStatePath({ XDG_RUNTIME_DIR: '/run/user/1000' })).to.equal('/run/user/1000/backdrop/state.json');
     expect(backdropStatePath({})).to.equal(null);
+  });
+
+  it('finds the colors backdrop sampled behind a window', () => {
+    const colors = { background: '#3e323a', main: [{ color: '#1e151b', share: 0.5 }] };
+    const state = { pid: 1, monitors: [hdmi, { ...dp3, overlays: [{ window: 7, colors: null }, { window: 9, colors }] }] };
+    expect(overlayColors(state, 9)).to.deep.equal(colors);
+    expect(overlayColors(state, 7)).to.equal(null);
+    expect(overlayColors(state, 8)).to.equal(null);
+    expect(overlayColors(null, 9)).to.equal(null);
   });
 
   it('asks the renderer for overlay mode in the URL', () => {

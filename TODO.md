@@ -38,11 +38,13 @@ Reviewed: 2026-11-02
 Design questions raised in the stack review of 2026-11-02. Each is a decision to settle before the
 build items that depend on it, listed in the later projects.
 
-- [ ] **Overlay text contrast against the wallpaper.** (p2) [chore] In overlay mode the lyrics sit on backdrop's
+- [x] **Overlay text contrast against the wallpaper.** (p2) [chore] In overlay mode the lyrics sit on backdrop's
       wallpaper, not the cover. Source settled: backdrop 2.41.0 writes `{ background, main }` per overlay
       into `state.json` (average shown after dim, main colors with shares), rewritten on loads and dim
       changes; it covers the whole overlay window, so ask for a sub-region later if that is too coarse.
       Still open: which contrast measure (APCA or WCAG 2) and the fallback (shadow, outline).
+      Done in 0.11.0: WCAG 2 against every color covering 10% or more; the shadow (opposite color) and the
+      dim lines' opacity grow as contrast falls. The shell passes the colors to its page (`preload.cjs`).
 - [x] **Window stacking ownership.** (p2) [chore] Settled 2026-11-02 with backdrop 2.41.0: sleeve marks its overlay
       window `_BACKDROP_OVERLAY` = `below` or `above` (per overlay, changeable at runtime) and runs
       `backdrop restack` when the window maps, when the mark changes, and when backdrop's daemon pid in
@@ -185,7 +187,8 @@ build items that depend on it, listed in the later projects.
       keys for nudge, offset reset, pick, unpick and refresh.
 - [x] **Electron shell over the renderer.** (p1) [feature] A thin window loading `http://127.0.0.1:6620/`:
       transparent, click-through and marked `_BACKDROP_OVERLAY` for overlay mode, plain for window mode (see
-      Three window modes). No IPC: everything goes over the page's WebSocket, as in a browser.
+      Three window modes). No IPC: everything goes over the page's WebSocket, as in a browser. (Since 0.11.0
+      one exception, one way: the wallpaper colors behind the overlay, which only the shell knows.)
       Done in 0.10.0: `shell/` (its own package, Electron 45, main process in TypeScript); the overlay is made
       override-redirect before it maps (`shell/x11.ts`), so i3 never manages it, and backdrop restacks it on
       map and on every daemon restart (watching `state.json`). `sleeve ctl` gives i3 bindings the keys.
@@ -220,5 +223,7 @@ build items that depend on it, listed in the later projects.
 - [ ] **Lyric colors by contrast against what is actually behind them.** (p2) [feature] Sunamu picks from the cover
       palette; in overlay mode the background is the wallpaper. Choose text color by APCA/WCAG contrast
       against the wallpaper region (from backdrop) or the cover, with a shadow as fallback.
+      The overlay half is done in 0.11.0 (`src/renderer/contrast.ts`); the cover half waits on an album-art
+      background in window mode (see Album-art background without the GPU cost).
 - [ ] **Palette extraction without sharp.** (p3) [chore] Sunamu's sharp + node-vibrant needed a rebuild hack
       (`build:prepare:sharp`). Extract in the renderer from a canvas, or with ffmpeg as backdrop does.

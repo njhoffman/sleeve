@@ -128,7 +128,9 @@ shows the lyrics on the desktop: a transparent, click-through window just above 
 its visualizer, from 15% of the monitor down to where the visualizer starts. i3 never manages it, so it is on
 every workspace and under every window, as the visualizer is. backdrop stacks it again when its daemon
 restarts. Options: `--position above` (over the visualizer), `--geometry 1200x500+360+200`, `--monitor
-HDMI-1`, `--url`. Without backdrop running it opens as a plain window instead; `just shell --window` always
+HDMI-1`, `--url`. The text color follows the wallpaper: backdrop samples the colors behind the overlay, and the
+lyrics turn light or dark by contrast against every part that covers a tenth of it, with a stronger shadow when
+no color reads well over all of it (a picture half dark, half bright). Without backdrop running it opens as a plain window instead; `just shell --window` always
 does, and remembers where it was.
 
 Ubuntu's AppArmor blocks the user namespaces Electron's sandbox needs, so Electron stops at once with a

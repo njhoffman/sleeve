@@ -61,6 +61,8 @@ just install-service     # the systemd user unit for sleeved
 - The shell (`shell/`) is a separate package so the root install stays light: Electron and x11 are its
   dependencies only. Its decisions (options, backdrop's state, geometry) live in `src/shell/layout.ts`, Electron
   free and tested with the rest; `shell/main.ts` is the Electron glue and `shell/x11.ts` the only X11 code.
+  The page gets nothing from the shell but the wallpaper colors behind the overlay (`shell/preload.cjs`, one
+  way); everything else goes over sleeved's WebSocket, so the page works the same in a browser.
   `just check` typechecks the shell when `shell/node_modules` exists.
 - Tests stay offline: inject `fetch` (`test/helpers/fetch.ts`) and replay recorded responses from
   `test/fixtures/<provider>/`; build tagged mp3s with `test/helpers/id3.ts`.

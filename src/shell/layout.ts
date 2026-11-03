@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { parseArgs } from 'node:util';
 import { DEFAULT_HOST, DEFAULT_PORT } from '../daemon/paths.ts';
+import { validColors, type OverlayColors } from '../renderer/contrast.ts';
 
 // What the Electron shell (shell/main.ts) decides before it opens a window: its options, whether backdrop runs,
 // and where the overlay goes. Free of Electron, so it is tested and typechecked with the rest.
@@ -39,6 +40,8 @@ export interface BackdropMonitor {
   primary?: boolean;
   // The visualizer's geometry, "WxH+X+Y"
   visualizer?: { geometry?: string; running?: boolean } | null;
+  // The overlays backdrop stacked there, with the wallpaper colors behind each (null until sampled)
+  overlays?: Array<{ window: number; colors?: unknown }>;
 }
 
 export interface BackdropState {
@@ -147,4 +150,13 @@ export function rendererUrl(base: string, mode: ShellMode): string {
   const url = new URL(base);
   if (mode === 'overlay') url.searchParams.set('mode', 'overlay');
   return url.toString();
+}
+
+// The wallpaper colors backdrop sampled behind the window (its X id), or null until it has
+export function overlayColors(state: BackdropState | null, window: number): OverlayColors | null {
+  for (const monitor of state?.monitors ?? []) {
+    const overlay = monitor.overlays?.find(entry => entry.window === window);
+    if (overlay) return validColors(overlay.colors);
+  }
+  return null;
 }

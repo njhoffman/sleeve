@@ -1,6 +1,7 @@
 import type { LyricsResult, ScoredCandidate } from '../core/types.ts';
 import type { NowState } from '../now/state.ts';
 import { Connection } from './connection.ts';
+import { textTheme, themeVariables, validColors } from './contrast.ts';
 import { candidateEntries, follow, formatOffset, progress, status, type CandidateEntry } from './view.ts';
 
 // The renderer: sleeved's session as scrolling lyrics. The current line is worked out every frame from the
@@ -25,6 +26,18 @@ const toast = element<HTMLDivElement>('toast');
 // ?mode=overlay: drawn over the wallpaper by the Electron shell, with nothing but the lyrics
 const overlay = new URLSearchParams(location.search).get('mode') === 'overlay';
 document.documentElement.classList.toggle('overlay', overlay);
+
+// The Electron shell's one-way channel (shell/preload.cjs): the wallpaper colors behind the overlay, from backdrop
+declare global {
+  interface Window {
+    sleeveShell?: { onColors(listener: (colors: unknown) => void): void };
+  }
+}
+window.sleeveShell?.onColors(value => {
+  const colors = validColors(value);
+  if (!colors) return;
+  for (const [name, setting] of Object.entries(themeVariables(textTheme(colors)))) document.documentElement.style.setProperty(name, setting);
+});
 
 const connection = new Connection(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws`);
 

@@ -1,17 +1,19 @@
-import { app, BrowserWindow, type BrowserWindowConstructorOptions, type Rectangle } from 'electron';
+import { app, BrowserWindow, ipcMain, type BrowserWindowConstructorOptions, type Rectangle } from 'electron';
 import { execFile } from 'node:child_process';
 import { mkdirSync, readFileSync, watch, writeFileSync, type FSWatcher } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import {
-  backdropRunning, backdropStatePath, chooseMonitor, formatGeometry, overlayGeometry, parseShellArgs, readBackdropState,
-  rendererUrl, type ShellOptions
+  backdropRunning, backdropStatePath, chooseMonitor, formatGeometry, overlayColors, overlayGeometry, parseShellArgs,
+  readBackdropState, rendererUrl, type BackdropState, type ShellOptions
 } from '../src/shell/layout.ts';
 import { markOverlay } from './x11.ts';
 
 // sleeve's window: the renderer sleeved serves, either as an overlay on the desktop (transparent, click-through,
 // unmanaged, stacked by backdrop just above the wallpaper) or as a plain window that remembers where it was.
-// Everything else (lyrics, keys, picks) is the page's, over its WebSocket to sleeved; there is no IPC.
+// Everything else (lyrics, keys, picks) is the page's, over its WebSocket to sleeved. The one channel from the shell
+// to its page is one way and carries only the wallpaper colors behind the overlay (preload.cjs), which backdrop
+// gives the window's owner and nobody else knows.
 
 const log = (text: string) => process.stderr.write(`sleeve shell: ${text}\n`);
 const RETRY_MS = 2000;
@@ -56,14 +58,17 @@ function restack(): void {
   });
 }
 
-// Restacks whenever backdrop's daemon changes (a restart puts a new wallpaper at the bottom)
-function followBackdrop(statePath: string, pid: number): FSWatcher | null {
+// Follows backdrop's state.json: restacks when its daemon changes (a restart puts a new wallpaper at the bottom),
+// and hands each new reading of the state to onState
+function followBackdrop(statePath: string, pid: number, onState: (state: BackdropState) => void): FSWatcher | null {
   let current = pid;
   try {
     return watch(path.dirname(statePath), (_event, name) => {
       if (name !== path.basename(statePath)) return;
       const state = readBackdropState(statePath);
-      if (!state || state.pid === current || !backdropRunning(state)) return;
+      if (!state || !backdropRunning(state)) return;
+      onState(state);
+      if (state.pid === current) return;
       current = state.pid;
       log(`backdrop restarted (pid ${current}); restacking`);
       setTimeout(restack, 500);
@@ -72,6 +77,24 @@ function followBackdrop(statePath: string, pid: number): FSWatcher | null {
     log(`cannot watch ${statePath}: ${error instanceof Error ? error.message : String(error)}`);
     return null;
   }
+}
+
+// Passes the wallpaper colors behind the overlay to its page (preload.cjs) whenever backdrop samples new ones, and
+// when the page (re)loads and asks
+function forwardColors(window: BrowserWindow, id: number, initial: BackdropState): (state: BackdropState) => void {
+  let colors = overlayColors(initial, id);
+  if (colors) log(`wallpaper behind the overlay: ${colors.background}, ${colors.main.length} main colors`);
+  const send = () => { if (colors && !window.isDestroyed()) window.webContents.send('sleeve:colors', colors); };
+  const wanted = (event: Electron.IpcMainEvent) => { if (event.sender === window.webContents) send(); };
+  ipcMain.on('sleeve:colors-wanted', wanted);
+  window.on('closed', () => ipcMain.off('sleeve:colors-wanted', wanted));
+  return state => {
+    const next = overlayColors(state, id);
+    if (!next || JSON.stringify(next) === JSON.stringify(colors)) return;
+    colors = next;
+    log(`wallpaper behind the overlay: ${next.background}, ${next.main.length} main colors`);
+    send();
+  };
 }
 
 async function openOverlay(options: ShellOptions): Promise<BrowserWindow> {
@@ -96,10 +119,12 @@ async function openOverlay(options: ShellOptions): Promise<BrowserWindow> {
     focusable: false,
     skipTaskbar: true,
     hasShadow: false,
-    webPreferences
+    webPreferences: { ...webPreferences, preload: path.join(import.meta.dirname, 'preload.cjs') }
   });
   window.setIgnoreMouseEvents(true);
-  await markOverlay(windowId(window), options.position);
+  const id = windowId(window);
+  await markOverlay(id, options.position);
+  const onState = forwardColors(window, id, state!);
   load(window, rendererUrl(options.url, 'overlay'));
   window.once('show', () => {
     restack();
@@ -108,7 +133,7 @@ async function openOverlay(options: ShellOptions): Promise<BrowserWindow> {
   });
   window.showInactive();
   log(`overlay ${formatGeometry(bounds)} on ${monitor?.name ?? 'the screen'}, ${options.position} the visualizer`);
-  const watcher = followBackdrop(statePath!, state!.pid);
+  const watcher = followBackdrop(statePath!, state!.pid, onState);
   window.on('closed', () => watcher?.close());
   return window;
 }
