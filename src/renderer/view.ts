@@ -80,6 +80,33 @@ export function candidateEntries(result: LyricsResult, shown: ScoredCandidate | 
   }));
 }
 
+// Scrolling back through the lyrics by wheel: the wheel moves the view by offset pixels from where playback
+// would put it, until SCROLL_BACK_MS after the last turn, when it returns to the current line (the scroll follows its
+// target, so it glides back). The offset is kept between first and last line: some line always sits at the anchor.
+export const SCROLL_BACK_MS = 4000;
+// A wheel step given in lines rather than pixels (Firefox), in pixels
+const WHEEL_LINE_PX = 40;
+
+export interface ScrollBack {
+  offset: number;
+  until: number;
+}
+
+export const NO_SCROLL_BACK: ScrollBack = { offset: 0, until: 0 };
+
+// After a wheel turn of deltaY (positive: down, toward later lines; deltaMode 1: in lines), with the offset kept
+// within [min, max]
+export function wheel(back: ScrollBack, deltaY: number, deltaMode: number, now: number, min: number, max: number): ScrollBack {
+  const px = deltaMode === 1 ? deltaY * WHEEL_LINE_PX : deltaY;
+  const start = now < back.until ? back.offset : 0;
+  return { offset: Math.min(max, Math.max(min, start - px)), until: now + SCROLL_BACK_MS };
+}
+
+// The offset to add to the scroll target at now: none once the pause after the last turn has run out
+export function scrollBackOffset(back: ScrollBack, now: number): number {
+  return now < back.until ? back.offset : 0;
+}
+
 // How long to wait before reconnecting, after `attempt` failures in a row
 export function reconnectDelay(attempt: number): number {
   return Math.min(5000, 250 * 2 ** Math.max(0, attempt));

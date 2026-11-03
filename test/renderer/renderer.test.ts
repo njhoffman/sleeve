@@ -10,7 +10,7 @@ import { NowPlaying } from '../../src/now/session.ts';
 import type { NowState } from '../../src/now/state.ts';
 import { PlayerHub } from '../../src/players/hub.ts';
 import { Connection } from '../../src/renderer/connection.ts';
-import { candidateEntries, follow, formatOffset, progress, reconnectDelay, status } from '../../src/renderer/view.ts';
+import { candidateEntries, follow, formatOffset, NO_SCROLL_BACK, progress, reconnectDelay, SCROLL_BACK_MS, scrollBackOffset, status, wheel } from '../../src/renderer/view.ts';
 import { until } from '../helpers/fakeMpd.ts';
 import { fakePlayer } from '../helpers/players.ts';
 
@@ -56,6 +56,21 @@ describe('renderer view', () => {
     expect(status(state({ result: result({ best: instrumental }) }), true)).to.deep.include({ source: 'lrclib · unsynced', message: 'Instrumental' });
     // A reload keeps the lyrics shown
     expect(status(state({ loading: true }), true).message).to.equal(null);
+  });
+
+  it('scrolls back by wheel within the lyrics, and returns to the current line a while after the last turn', () => {
+    // Down a step of 100 px from where playback puts the lines: they move up
+    let back = wheel(NO_SCROLL_BACK, 100, 0, 1000, -500, 300);
+    expect(back).to.deep.equal({ offset: -100, until: 1000 + SCROLL_BACK_MS });
+    // Up three lines (deltaMode 1), stopped at the first line
+    back = wheel(back, -3, 1, 2000, -500, 300);
+    expect(back.offset).to.equal(20);
+    back = wheel(back, -1000, 0, 2500, -500, 300);
+    expect(back.offset).to.equal(300);
+    expect(scrollBackOffset(back, 2500 + SCROLL_BACK_MS - 1)).to.equal(300);
+    expect(scrollBackOffset(back, 2500 + SCROLL_BACK_MS)).to.equal(0);
+    // A turn after it has gone back starts from the current line again
+    expect(wheel(back, 50, 0, 9000, -500, 300).offset).to.equal(-50);
   });
 
   it('lists candidates as sleeve lyrics --all numbers them, leaving out those without an id', () => {

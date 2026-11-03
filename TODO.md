@@ -310,9 +310,15 @@ build items that depend on it, listed in the later projects.
       Done in 0.20.0: in a terminal (not NO_COLOR) the current line is redrawn in place, word by word as each
       starts, the rest dim (`LivePrinter`); `--estimate-words` for lines without word times; every other message
       ends the line first.
-- [ ] **Mouse in the renderer.** (p3) [feature] Click a candidate in the pick panel, scroll back through the
+- [x] **Mouse in the renderer.** (p3) [feature] Click a candidate in the pick panel, scroll back through the
       lyrics by wheel (returning to the current line after a few seconds), click a line to seek (needs a seek
       command and player support).
+      Done in 0.21.0 without the seek (see Click a line to seek): candidates take a click, and the wheel shifts
+      the scroll target (`wheel`, `scrollBackOffset` in view.ts), kept between first and last line, until 4 s
+      after the last turn. Window mode and browsers only; the overlay stays click-through.
+- [ ] **Click a line to seek.** (p3) [feature] A `seek` protocol message (messages.ts and docs/protocol.md; an
+      addition, so PROTOCOL_VERSION stays), sent to the active player: MPD `seekcur`, MPRIS `SetPosition`
+      (Spotify supports it). Then a click on a line in the renderer seeks to its time, offset applied.
 - [x] **Three window modes.** (p2) [feature] `overlay` under backdrop: backdrop places and stacks the window like a
       GLava instance. `overlay` without backdrop: sleeve stacks its own transparent, click-through,
       desktop-type window above the root. `window`: borderless, focusable, resizable, remembers its

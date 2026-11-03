@@ -127,7 +127,9 @@ nudges, picks and refreshes go the other way. [docs/protocol.md](docs/protocol.m
 
 While sleeved runs, `http://127.0.0.1:6620/` shows the lyrics in a browser, scrolling as each line comes due.
 `+` and `-` move them 100 ms (saved for the track), `0` removes the offset, `p` lists every provider's
-candidates to pick from, `r` looks the track up again online, and `?` lists the keys. The page is served from
+candidates to pick from (by number or a click), `r` looks the track up again online, and `?` lists the keys.
+The wheel scrolls back through the lyrics; a few seconds after the last turn they return to the current line.
+The page is served from
 the sources (sleeved strips the TypeScript types as it sends each file), so there is nothing to build.
 
 Lyrics with word times (enhanced LRC, such as a word-timed `.lrc` next to the file) fill word by word as they

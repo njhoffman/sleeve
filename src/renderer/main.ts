@@ -3,12 +3,13 @@ import { nextLineTime, wordFill, wordTexts, wordTimings } from '../now/lines.ts'
 import type { NowState } from '../now/state.ts';
 import { Connection } from './connection.ts';
 import { textTheme, themeVariables, validColors } from './contrast.ts';
-import { candidateEntries, follow, formatOffset, progress, status, type CandidateEntry } from './view.ts';
+import { candidateEntries, follow, formatOffset, NO_SCROLL_BACK, progress, scrollBackOffset, status, wheel, type CandidateEntry, type ScrollBack } from './view.ts';
 
 // The renderer: sleeved's session as scrolling lyrics. The current line is worked out every frame from the
 // mirrored playback clock, so line changes land on the frame they are due whatever the socket does; the scroll
 // follows its target with a time constant rather than a CSS transition, so a new target (next line, seek, nudge)
-// carries on from where the scroll is instead of restarting.
+// carries on from where the scroll is instead of restarting. The wheel scrolls back through the lyrics for a few
+// seconds, and a click picks a candidate in the pick panel; the overlay takes no mouse at all.
 
 const NUDGE_MS = 100;
 const SCROLL_TAU_MS = 110;
@@ -55,6 +56,10 @@ let currentIndex = -2;
 let scroll = 0;
 let snap = true;
 let lastFrame = 0;
+let back: ScrollBack = NO_SCROLL_BACK;
+// Where playback puts the lyrics, and the anchor line's place, last frame: what the wheel scrolls from
+let playbackTarget = 0;
+let anchorY = 0;
 let statusText = '';
 let entries: CandidateEntry[] = [];
 // The offset last seen for the lyrics shown, to say when it changes (from any client: this page, sleeve ctl)
@@ -77,6 +82,7 @@ function rebuild(best: ScoredCandidate | null, text: string | null): void {
   shownMessage = text;
   currentIndex = -2;
   snap = true;
+  back = NO_SCROLL_BACK;
   const lyrics = text ? null : best?.lyrics;
   viewport.classList.toggle('unsynced', !!lyrics && !lyrics.synced);
   const lines = lyrics?.lines ?? [];
@@ -176,6 +182,9 @@ function render(now: number): void {
     const share = progress(connection.mirror.position(now), state.playback?.track?.durationMs);
     target = viewport.clientHeight * 0.2 - share * Math.max(0, height - viewport.clientHeight * 0.6);
   }
+  playbackTarget = target;
+  anchorY = anchor;
+  target += scrollBackOffset(back, now);
   scroll = snap ? target : follow(scroll, target, dt, SCROLL_TAU_MS);
   snap = false;
   linesBox.style.transform = `translate3d(0, ${scroll.toFixed(2)}px, 0)`;
@@ -197,6 +206,7 @@ function showEntries(list: CandidateEntry[]): void {
     item.textContent = entry.label;
     item.classList.toggle('shown', entry.shown);
     item.classList.toggle('rejected', entry.rejected);
+    item.addEventListener('click', () => void pick(entry));
     return item;
   }));
   if (!entries.length) {
@@ -260,6 +270,17 @@ document.addEventListener('keydown', event => {
   else return;
   event.preventDefault();
 });
+
+// The wheel scrolls back (or on) through the lyrics, as far as the first and last line
+viewport.addEventListener('wheel', event => {
+  if (overlay || !centers.length || !picker.hidden) return;
+  event.preventDefault();
+  const synced = !shownMessage && shownLyrics?.lyrics.synced;
+  // Synced: a line at the anchor at either end; unsynced: the text's top and bottom within the view
+  const min = synced ? anchorY - centers.at(-1)! - playbackTarget : -linesBox.offsetHeight - playbackTarget + viewport.clientHeight * 0.6;
+  const max = synced ? anchorY - centers[0] - playbackTarget : viewport.clientHeight * 0.2 - playbackTarget;
+  back = wheel(back, event.deltaY, event.deltaMode, performance.now(), Math.min(min, 0), Math.max(max, 0));
+}, { passive: false });
 
 new ResizeObserver(() => measure()).observe(linesBox);
 connection.onConnected(connected => {

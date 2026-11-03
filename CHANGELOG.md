@@ -6,6 +6,13 @@ All notable changes to sleeve are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.21.0] - 2026-11-03
+
+### Added
+
+- In a browser or window mode, the wheel scrolls back through the lyrics, which return to the current line a few
+  seconds after the last turn, and a click picks a candidate in the pick panel.
+
 ## [0.20.0] - 2026-11-03
 
 ### Added

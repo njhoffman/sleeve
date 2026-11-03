@@ -118,7 +118,9 @@ html, body {
 h2 { margin: 0 0 12px; font-size: 16px; }
 
 #candidates { margin: 0; padding-left: 1.6em; }
-#candidates li { padding: 4px 0; }
+#candidates li { padding: 4px 0; cursor: pointer; }
+#candidates li:hover { text-decoration: underline; }
+#candidates li.loading { cursor: default; text-decoration: none; }
 #candidates li.shown { color: var(--accent); }
 #candidates li.rejected { color: var(--dim); }
 #candidates li.loading { list-style: none; color: var(--dim); }
