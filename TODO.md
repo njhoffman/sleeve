@@ -337,16 +337,21 @@ build items that depend on it, listed in the later projects.
       managed window; override-redirect windows (menus, notifications) stay over it. `--stack auto|backdrop|self`;
       monitors from `xrandr --listactivemonitors`. Window mode is borderless, class `sleeve`. Not handled: a
       wallpaper window (xwinwrap, GLava without backdrop) that does not lower itself covers the overlay.
-- [ ] **Album-art background without the GPU cost.** (p2) [perf] Sunamu rotates two 200vmax pseudo-elements with
+- [x] **Album-art background without the GPU cost.** (p2) [perf] Sunamu rotates two 200vmax pseudo-elements with
       `blur(180px)` all the time (`Background.css`). Draw a downscaled cover in WebGL or canvas instead,
       where blur is nearly free. Take the cover's palette from the same canvas, in the renderer: no sharp or
       node-vibrant (Sunamu's needed a rebuild hack), and nothing to install.
+      Done in 0.23.0: sleeved serves `/art/current?key=` for the track playing only (src/daemon/art.ts: MPRIS
+      artUrl, the file's APIC through `TagReader.picture`, cover/folder/front beside it). The renderer draws it
+      blurred into a 64 px canvas, stretched and cross-faded, an optional animation on transform only; text
+      colors from `coverColors` (view.ts) through contrast.ts, as over the wallpaper. Every setting is a CSS
+      variable, overridable in ~/.config/sleeve/style.css (served at /user.css).
 - [ ] **Live, seamless animation parameters.** (p2) [feature] Changing CSS keyframes restarts the animation.
       Drive the animation from a clock with parameters pushed over the socket and interpolated, so edits
       from the config or a dev panel apply without a jump. The renderer's scroll already works this way
       (`follow` in `src/renderer/view.ts`); the line highlight is still a CSS transition.
-- [ ] **Lyric colors by contrast against what is actually behind them.** (p2) [feature] Sunamu picks from the cover
+- [x] **Lyric colors by contrast against what is actually behind them.** (p2) [feature] Sunamu picks from the cover
       palette; in overlay mode the background is the wallpaper. Choose text color by APCA/WCAG contrast
       against the wallpaper region (from backdrop) or the cover, with a shadow as fallback.
-      The overlay half is done in 0.11.0 (`src/renderer/contrast.ts`); the cover half waits on an album-art
-      background in window mode (see Album-art background without the GPU cost).
+      The overlay half is done in 0.11.0 (`src/renderer/contrast.ts`); the cover half in 0.23.0, from the cover
+      as it shows (faded and dimmed, `coverColors` in view.ts).

@@ -129,6 +129,24 @@ While sleeved runs, `http://127.0.0.1:6620/` shows the lyrics in a browser, scro
 `+` and `-` move them 100 ms (saved for the track), `0` removes the offset, `p` lists every provider's
 candidates to pick from (by number or a click), `r` looks the track up again online, and `?` lists the keys.
 The wheel scrolls back through the lyrics; a few seconds after the last turn they return to the current line.
+
+Behind the lyrics lies the track's cover, blurred and dimmed, with the text colored for it as over the overlay's
+wallpaper. It comes from the player (Spotify's cover over MPRIS), the file's own picture, or a `cover`, `folder` or
+`front` image beside the file. It is a 64-pixel canvas stretched over the window, so it costs nothing per frame.
+Everything about it is a CSS variable you can set in `~/.config/sleeve/style.css`, which the page loads after its
+own (reload the page to apply):
+
+```css
+:root {
+  --art-animation: sleeve-art-drift;  /* none (default), sleeve-art-drift (slow turn), sleeve-art-breathe (slow zoom) */
+  --art-duration: 120s;               /* also --art-timing, --art-delay, --art-iteration, --art-direction */
+  --art-opacity: 0.6;                 /* also --art-dim, --art-saturation, --art-scale, --art-blur, --art-fade */
+  --art-background: on;               /* off: no cover */
+}
+```
+
+`src/renderer/style.css` lists every variable with its default; `?background=none` in the URL turns the cover off
+for one page. The overlay never shows a cover.
 The page is served from
 the sources (sleeved strips the TypeScript types as it sends each file), so there is nothing to build.
 

@@ -8,6 +8,22 @@
   --line-size: clamp(22px, 3.4vw, 44px);
   --anchor: 0.42;
   color-scheme: dark;
+
+  /* The cover behind the lyrics (window mode and browsers; never the overlay). Set any of these in
+     ~/.config/sleeve/style.css (served as /user.css, loaded after this file), e.g. :root { --art-animation: sleeve-art-drift; } */
+  --art-background: on;          /* off: no cover at all */
+  --art-animation: none;         /* sleeve-art-drift (slow turn) or sleeve-art-breathe (slow zoom; pair with alternate) */
+  --art-duration: 120s;
+  --art-timing: linear;
+  --art-delay: 0s;
+  --art-iteration: infinite;
+  --art-direction: normal;       /* reverse, alternate, alternate-reverse */
+  --art-scale: 1.6;              /* the layer's size, in viewport lengths (1.42 or more keeps corners hidden when it turns) */
+  --art-opacity: 0.6;
+  --art-dim: 0.45;               /* share of black laid over the cover, 0 to 1 */
+  --art-saturation: 1.3;
+  --art-blur: 6;                 /* blur of the 64 px cover before it is stretched, in its own pixels (drawn once, free) */
+  --art-fade: 900ms;             /* cross-fade to the next track's cover */
 }
 
 * { box-sizing: border-box; }
@@ -34,6 +50,46 @@ html, body {
 
 #title { font-weight: 600; }
 #source { color: var(--dim); font-size: 12px; }
+
+/* The cover: a tiny blurred canvas stretched over the window, so the blur costs nothing per frame, and any
+   animation only moves a composited layer (rotate, scale) */
+#art {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+#art::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, var(--art-dim));
+}
+#art canvas {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: calc(var(--art-scale) * 100vmax);
+  height: calc(var(--art-scale) * 100vmax);
+  translate: -50% -50%;
+  opacity: 0;
+  filter: saturate(var(--art-saturation));
+  transition: opacity var(--art-fade) ease;
+  animation: var(--art-animation) var(--art-duration) var(--art-timing) var(--art-delay) var(--art-iteration) var(--art-direction);
+  will-change: transform, opacity;
+}
+#art canvas.shown { opacity: var(--art-opacity); }
+html:not(.art) #art::after { display: none; }
+
+@keyframes sleeve-art-drift {
+  0% { transform: rotate(0deg) scale(1); }
+  50% { transform: rotate(180deg) scale(1.08); }
+  100% { transform: rotate(360deg) scale(1); }
+}
+@keyframes sleeve-art-breathe {
+  from { transform: scale(1); }
+  to { transform: scale(1.15); }
+}
 
 #viewport {
   position: absolute;
@@ -156,8 +212,9 @@ kbd {
 #toast.visible { opacity: 1; transform: translate(-50%, 0); }
 
 /* Overlay mode (the Electron shell over backdrop's wallpaper): transparent, lyrics only. The colors come from
-   the wallpaper behind the window when the shell passes them (contrast.ts); these defaults are light text. */
-html.overlay {
+   the wallpaper behind the window when the shell passes them (contrast.ts); these defaults are light text.
+   Over a cover (html.art) the text is colored the same way, from the cover's colors. */
+html.overlay, html.art {
   --overlay-text: 244, 246, 251;
   --overlay-shadow: 18, 21, 28;
   --overlay-shadow-alpha: 0.55;
@@ -166,12 +223,12 @@ html.overlay {
 }
 html.overlay, html.overlay body { background: transparent; }
 html.overlay #status, html.overlay #message { display: none; }
-html.overlay .line {
+html.overlay .line, html.art .line {
   color: rgba(var(--overlay-text), var(--overlay-upcoming-alpha));
   text-shadow: 0 2px 14px rgba(var(--overlay-shadow), var(--overlay-shadow-alpha)), 0 0 2px rgba(var(--overlay-shadow), calc(var(--overlay-shadow-alpha) * 0.7));
   transition: color 220ms ease, transform 320ms cubic-bezier(0.2, 0.7, 0.2, 1), text-shadow 600ms ease;
 }
-html.overlay .line.past { color: rgba(var(--overlay-text), var(--overlay-past-alpha)); }
-html.overlay .line.current { color: rgb(var(--overlay-text)); }
-html.overlay .line.current.worded { color: rgba(var(--overlay-text), var(--overlay-upcoming-alpha)); }
-html.overlay .word .fill { color: rgb(var(--overlay-text)); }
+html.overlay .line.past, html.art .line.past { color: rgba(var(--overlay-text), var(--overlay-past-alpha)); }
+html.overlay .line.current, html.art .line.current { color: rgb(var(--overlay-text)); }
+html.overlay .line.current.worded, html.art .line.current.worded { color: rgba(var(--overlay-text), var(--overlay-upcoming-alpha)); }
+html.overlay .word .fill, html.art .word .fill { color: rgb(var(--overlay-text)); }

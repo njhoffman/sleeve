@@ -33,6 +33,15 @@ describe('music-metadata tag reader', () => {
     expect(lyrics).to.deep.include({ frame: 'SYLT', synced: true, text: '', lines: [{ time: 1000, text: 'One' }, { time: 2500, text: 'Two' }] });
   });
 
+  it('reads the cover embedded in the file, or none', async () => {
+    const data = Buffer.from([0x89, 0x50, 0x4e, 0x47, 1, 2, 3, 4]);
+    const file = await writeTaggedMp3(path.join(dir, 'art.mp3'), { title: 'T', picture: { format: 'image/png', data } });
+    const picture = await musicMetadataReader.picture!(file);
+    expect(picture!.format).to.equal('image/png');
+    expect(Buffer.from(picture!.data).equals(data)).to.equal(true);
+    expect(await musicMetadataReader.picture!(SILENCE)).to.equal(null);
+  });
+
   it('reads a file without tags', async () => {
     const tags = await musicMetadataReader.read(SILENCE);
     expect(tags.artist).to.equal(undefined);

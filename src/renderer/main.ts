@@ -2,14 +2,15 @@ import type { LyricLine, LyricsResult, ScoredCandidate } from '../core/types.ts'
 import { nextLineTime, wordFill, wordTexts, wordTimings } from '../now/lines.ts';
 import type { NowState } from '../now/state.ts';
 import { Connection } from './connection.ts';
-import { textTheme, themeVariables, validColors } from './contrast.ts';
-import { candidateEntries, follow, formatOffset, NO_SCROLL_BACK, progress, scrollBackOffset, status, wheel, type CandidateEntry, type ScrollBack } from './view.ts';
+import { parseHex, textTheme, themeVariables, validColors } from './contrast.ts';
+import { candidateEntries, coverColors, follow, formatOffset, NO_SCROLL_BACK, progress, scrollBackOffset, status, wheel, type CandidateEntry, type ScrollBack } from './view.ts';
 
 // The renderer: sleeved's session as scrolling lyrics. The current line is worked out every frame from the
 // mirrored playback clock, so line changes land on the frame they are due whatever the socket does; the scroll
 // follows its target with a time constant rather than a CSS transition, so a new target (next line, seek, nudge)
 // carries on from where the scroll is instead of restarting. The wheel scrolls back through the lyrics for a few
-// seconds, and a click picks a candidate in the pick panel; the overlay takes no mouse at all.
+// seconds, and a click picks a candidate in the pick panel; the overlay takes no mouse at all. Outside the overlay
+// the track's cover lies behind the lyrics (see #art in style.css for what /user.css can set).
 
 const NUDGE_MS = 100;
 const SCROLL_TAU_MS = 110;
@@ -24,11 +25,14 @@ const picker = element<HTMLElement>('picker');
 const candidateList = element<HTMLOListElement>('candidates');
 const help = element<HTMLElement>('help');
 const toast = element<HTMLDivElement>('toast');
+const art = element<HTMLDivElement>('art');
 
 // ?mode=overlay: drawn over the wallpaper by the Electron shell, with nothing but the lyrics
 const overlay = new URLSearchParams(location.search).get('mode') === 'overlay';
 // ?words=estimate: fill lines without word times word by word too, their timing estimated from the line's
 const estimateWords = new URLSearchParams(location.search).get('words') === 'estimate';
+// ?background=none: no cover behind the lyrics, whatever the stylesheets say
+const noBackground = new URLSearchParams(location.search).get('background') === 'none';
 document.documentElement.classList.toggle('overlay', overlay);
 
 // The Electron shell's one-way channel (shell/preload.cjs): the wallpaper colors behind the overlay, from backdrop
@@ -42,6 +46,76 @@ window.sleeveShell?.onColors(value => {
   if (!colors) return;
   for (const [name, setting] of Object.entries(themeVariables(textTheme(colors)))) document.documentElement.style.setProperty(name, setting);
 });
+
+// The cover behind the lyrics
+
+const ART_SIZE = 64;
+let artKey: string | null | undefined = undefined;
+
+const setting = (name: string) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+const number = (name: string, fallback: number) => {
+  const value = Number.parseFloat(setting(name));
+  return Number.isFinite(value) ? value : fallback;
+};
+const artWanted = () => !overlay && !noBackground && setting('--art-background') !== 'off';
+
+function setTheme(variables: Record<string, string> | null): void {
+  const names = ['--overlay-text', '--overlay-shadow', '--overlay-shadow-alpha', '--overlay-upcoming-alpha', '--overlay-past-alpha'];
+  for (const name of names) {
+    if (variables?.[name]) document.documentElement.style.setProperty(name, variables[name]);
+    else document.documentElement.style.removeProperty(name);
+  }
+}
+
+// Fades the layers out and away; the newest stays when keep is given
+function fadeArt(keep: HTMLCanvasElement | null = null): void {
+  const fadeMs = number('--art-fade', 900) * (setting('--art-fade').endsWith('ms') ? 1 : 1000);
+  for (const layer of art.querySelectorAll('canvas')) {
+    if (layer === keep) continue;
+    layer.classList.remove('shown');
+    window.setTimeout(() => layer.remove(), fadeMs + 100);
+  }
+}
+
+function clearArt(): void {
+  fadeArt();
+  document.documentElement.classList.remove('art');
+  setTheme(null);
+}
+
+// The cover drawn small and blurred (cropped to a square), faded in over the last, and the text colored for it
+function showArt(image: HTMLImageElement): void {
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = ART_SIZE;
+  const context = canvas.getContext('2d', { willReadFrequently: true });
+  if (!context) return;
+  const side = Math.min(image.naturalWidth, image.naturalHeight);
+  const blur = number('--art-blur', 6);
+  // Drawn a little past the edges, so the blur does not fade them to transparent
+  const margin = blur * 2;
+  context.filter = blur > 0 ? `blur(${blur}px)` : 'none';
+  context.drawImage(image, (image.naturalWidth - side) / 2, (image.naturalHeight - side) / 2, side, side, -margin, -margin, ART_SIZE + 2 * margin, ART_SIZE + 2 * margin);
+  art.append(canvas);
+  requestAnimationFrame(() => canvas.classList.add('shown'));
+  fadeArt(canvas);
+  document.documentElement.classList.add('art');
+  const base = parseHex(setting('--bg')) ?? [15, 18, 24];
+  const colors = coverColors(context.getImageData(0, 0, ART_SIZE, ART_SIZE).data, { opacity: number('--art-opacity', 0.6), dim: number('--art-dim', 0.45), base });
+  setTheme(themeVariables(textTheme(colors)));
+}
+
+function updateArt(state: NowState): void {
+  // The overlay's colors come from the wallpaper (the shell), never from a cover
+  if (overlay) return;
+  const key = state.playback?.track?.key ?? null;
+  if (key === artKey) return;
+  artKey = key;
+  if (!key || !artWanted()) return clearArt();
+  const image = new Image();
+  image.onload = () => { if (artKey === key) showArt(image); };
+  image.onerror = () => { if (artKey === key) clearArt(); };
+  image.src = `/art/current?key=${encodeURIComponent(key)}`;
+}
 
 const connection = new Connection(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws`);
 
@@ -154,6 +228,7 @@ function render(now: number): void {
   const dt = lastFrame ? Math.min(now - lastFrame, 250) : 0;
   lastFrame = now;
   const state: NowState = connection.mirror.current();
+  updateArt(state);
   const view = status(state, connection.connected);
   const text = `${view.title}\n${view.source}`;
   if (text !== statusText) {

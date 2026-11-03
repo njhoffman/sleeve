@@ -111,6 +111,10 @@ describe('MprisPlayer', () => {
       .to.deep.equal({ key: 'file:///music/a%20b.flac', artist: 'X, Y', title: 'AB', file: '/music/a b.flac' });
     expect(trackFromMetadata({})).to.equal(null);
     expect(trackFromMetadata(null)).to.equal(null);
+    // The cover, when the player names one over https or as a file
+    expect(trackFromMetadata({ 'xesam:title': 'T', 'mpris:artUrl': 'https://i.scdn.co/image/ab67' })!.artUrl).to.equal('https://i.scdn.co/image/ab67');
+    expect(trackFromMetadata({ 'xesam:title': 'T', 'mpris:artUrl': 'file:///tmp/cover.png' })!.artUrl).to.equal('file:///tmp/cover.png');
+    expect(trackFromMetadata({ 'xesam:title': 'T', 'mpris:artUrl': 'http://example.com/a.jpg' })!.artUrl).to.equal(undefined);
     expect(spotifyIdOf(`spotify:track:${ID1}`)).to.equal(ID1);
     expect(spotifyIdOf('/org/mpris/MediaPlayer2/TrackList/NoTrack')).to.equal(undefined);
   });

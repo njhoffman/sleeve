@@ -6,6 +6,16 @@ All notable changes to sleeve are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.23.0] - 2026-11-03
+
+### Added
+
+- The track's cover lies behind the lyrics in a browser and in window mode, blurred and dimmed, with the text
+  colored for it. It comes from the player (Spotify's cover), the file's own picture, or a cover image beside it.
+- `~/.config/sleeve/style.css` is loaded after sleeve's own stylesheet: every setting of the cover is a CSS
+  variable there, including an optional slow animation (`--art-animation: sleeve-art-drift`) and its duration,
+  timing, delay, iteration and direction. `?background=none` turns the cover off for one page.
+
 ## [0.22.0] - 2026-11-03
 
 ### Added

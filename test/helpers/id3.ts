@@ -36,6 +36,8 @@ export interface TestTags {
   unsynced?: string;
   // SYLT lines with millisecond timestamps
   synced?: Array<{ time: number; text: string }>;
+  // An APIC frame: the front cover
+  picture?: { format: string; data: Buffer };
 }
 
 export function id3Tag(tags: TestTags): Buffer {
@@ -60,6 +62,10 @@ export function id3Tag(tags: TestTags): Buffer {
       parts.push(utf16z(line.text), time);
     }
     frames.push(frame('SYLT', Buffer.concat(parts)));
+  }
+  if (tags.picture) {
+    // Encoding 0, MIME type, picture type 3 (front cover), empty description, the image
+    frames.push(frame('APIC', Buffer.concat([Buffer.from([0]), Buffer.from(`${tags.picture.format}\0`, 'latin1'), Buffer.from([3, 0]), tags.picture.data])));
   }
   const body = Buffer.concat(frames);
   const header = Buffer.from([0x49, 0x44, 0x33, 3, 0, 0, 0, 0, 0, 0]);

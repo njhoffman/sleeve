@@ -67,6 +67,7 @@ export function trackFromMetadata(metadata: unknown): PlayingTrack | null {
   const length = Number(fields['mpris:length']);
   const durationMs = Number.isFinite(length) && length > 0 ? Math.round(length / 1000) : undefined;
   const spotifyId = spotifyIdOf(url) ?? spotifyIdOf(id);
+  const artUrl = text(fields['mpris:artUrl']);
   let file: string | undefined;
   if (url?.startsWith('file://')) {
     try { file = fileURLToPath(url); } catch { file = undefined; }
@@ -78,6 +79,7 @@ export function trackFromMetadata(metadata: unknown): PlayingTrack | null {
     ...(album ? { album } : {}),
     ...(durationMs ? { durationMs } : {}),
     ...(file ? { file } : {}),
+    ...(artUrl && /^(https|file):\/\//.test(artUrl) ? { artUrl } : {}),
     ...(spotifyId ? { spotifyId } : {})
   };
 }

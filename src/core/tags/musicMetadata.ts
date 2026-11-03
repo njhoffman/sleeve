@@ -1,6 +1,6 @@
 import { parseFile, type IAudioMetadata, type ILyricsTag } from 'music-metadata';
 import type { LyricLine } from '../types.ts';
-import type { FileTags, StoredLyrics, TagReader } from './reader.ts';
+import type { FileTags, Picture, StoredLyrics, TagReader } from './reader.ts';
 
 // The TagReader on music-metadata (read-only). ID3 custom frames such as musicman's TXXX:sp_track_id come
 // from the native tags; the rest from music-metadata's common tags.
@@ -50,5 +50,12 @@ export const musicMetadataReader: TagReader = {
   async read(file: string): Promise<FileTags> {
     // duration: true measures the audio when the header does not state it (common for VBR mp3s)
     return fromMetadata(await parseFile(file, { duration: true, skipCovers: true }));
+  },
+
+  async picture(file: string): Promise<Picture | null> {
+    const { common } = await parseFile(file, { skipCovers: false, skipPostHeaders: true });
+    const pictures = common.picture ?? [];
+    const front = pictures.find(picture => /front/i.test(picture.type ?? '')) ?? pictures[0];
+    return front ? { format: front.format, data: front.data } : null;
   }
 };

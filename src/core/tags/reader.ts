@@ -29,6 +29,15 @@ export interface FileTags {
   lyrics: StoredLyrics[];
 }
 
+// A picture embedded in the file (the front cover when it says which)
+export interface Picture {
+  // e.g. image/jpeg
+  format: string;
+  data: Uint8Array;
+}
+
 export interface TagReader {
   read(file: string): Promise<FileTags>;
+  // The file's cover, or null when it has none; readers without pictures leave it out
+  picture?(file: string): Promise<Picture | null>;
 }

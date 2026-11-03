@@ -14,6 +14,8 @@ export interface PlayingTrack {
   // The local file playing, absolute (MPD, or an MPRIS player playing a file:// URL)
   file?: string;
   spotifyId?: string;
+  // The cover the player names (MPRIS mpris:artUrl: https for Spotify, file:// for local players)
+  artUrl?: string;
 }
 
 export interface Playback {

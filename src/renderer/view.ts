@@ -1,5 +1,6 @@
 import type { LyricsResult, ScoredCandidate } from '../core/types.ts';
 import type { NowState } from '../now/state.ts';
+import type { OverlayColors } from './contrast.ts';
 
 // What the renderer shows, worked out without the DOM, so it is tested in Node.
 
@@ -105,6 +106,31 @@ export function wheel(back: ScrollBack, deltaY: number, deltaMode: number, now: 
 // The offset to add to the scroll target at now: none once the pause after the last turn has run out
 export function scrollBackOffset(back: ScrollBack, now: number): number {
   return now < back.until ? back.offset : 0;
+}
+
+// The colors behind the lyrics when the cover is the background, for textTheme (contrast.ts): each pixel of the
+// drawn cover as it shows on screen, laid at opacity over the page's base color and darkened by dim (the share of
+// black over it), then grouped into coarse colors (4 bits a channel). background is their average; main the
+// commonest, with their shares.
+export function coverColors(pixels: ArrayLike<number>, { opacity, dim, base }: { opacity: number; dim: number; base: [number, number, number] }): OverlayColors {
+  const groups = new Map<number, { count: number; sum: [number, number, number] }>();
+  const total: [number, number, number] = [0, 0, 0];
+  let count = 0;
+  for (let at = 0; at + 3 < pixels.length; at += 4) {
+    const alpha = (pixels[at + 3] / 255) * opacity;
+    const shown = [0, 1, 2].map(channel => (base[channel] * (1 - alpha) + pixels[at + channel] * alpha) * (1 - dim)) as [number, number, number];
+    const group = ((shown[0] >> 4) << 8) | ((shown[1] >> 4) << 4) | (shown[2] >> 4);
+    const entry = groups.get(group) ?? { count: 0, sum: [0, 0, 0] };
+    entry.count++;
+    shown.forEach((value, channel) => { entry.sum[channel] += value; total[channel] += value; });
+    groups.set(group, entry);
+    count++;
+  }
+  const hex = (rgb: number[]) => `#${rgb.map(value => Math.round(value).toString(16).padStart(2, '0')).join('')}`;
+  if (!count) return { background: hex(base.map(value => value * (1 - dim))), main: [] };
+  const main = [...groups.values()].sort((a, b) => b.count - a.count).slice(0, 6)
+    .map(entry => ({ color: hex(entry.sum.map(value => value / entry.count)), share: Math.round(entry.count / count * 1000) / 1000 }));
+  return { background: hex(total.map(value => value / count)), main };
 }
 
 // How long to wait before reconnecting, after `attempt` failures in a row

@@ -1,6 +1,7 @@
 import { readFile, stat } from 'node:fs/promises';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { stripTypeScriptTypes } from 'node:module';
+import os from 'node:os';
 import path from 'node:path';
 
 // The renderer, served by sleeved from the sources as they are: `/` is src/renderer/index.html, and `/src/...`
@@ -21,6 +22,14 @@ const TYPES: Record<string, string> = {
   '.png': 'image/png',
   '.woff2': 'font/woff2'
 };
+
+// The user's own stylesheet, loaded by the page after sleeve's (src/renderer/style.css lists what it can set): served at
+// /user.css, empty when there is none
+export const USER_CSS_PATH = '/user.css';
+
+export function userStylesheet(env: NodeJS.ProcessEnv = process.env): string {
+  return path.join(env.XDG_CONFIG_HOME || path.join(os.homedir(), '.config'), 'sleeve', 'style.css');
+}
 
 // The page's own code and sleeved's socket only
 const POLICY = "default-src 'self'; connect-src 'self'; img-src 'self' data: https:; style-src 'self' 'unsafe-inline'";
@@ -59,10 +68,12 @@ function strip(source: string, sourceUrl: string): string {
 
 export class StaticFiles {
   private root: string;
+  private userCss: string;
   private cache = new Map<string, { mtimeMs: number; body: Buffer }>();
 
-  constructor(root: string = SOURCE_ROOT) {
+  constructor(root: string = SOURCE_ROOT, userCss: string = userStylesheet()) {
     this.root = root;
+    this.userCss = userCss;
   }
 
   private async body(file: string): Promise<Buffer | null> {
@@ -86,18 +97,20 @@ export class StaticFiles {
   // Answers the request; false when it names nothing served, so the caller answers it
   async serve(request: IncomingMessage, response: ServerResponse): Promise<boolean> {
     if (request.method !== 'GET' && request.method !== 'HEAD') return false;
-    const file = sourceFor(new URL(request.url ?? '/', 'http://localhost').pathname, this.root);
+    const urlPath = new URL(request.url ?? '/', 'http://localhost').pathname;
+    const user = urlPath === USER_CSS_PATH;
+    const file = user ? this.userCss : sourceFor(urlPath, this.root);
     if (!file) return false;
     let body: Buffer | null;
     try {
-      body = await this.body(file);
+      body = await this.body(file) ?? (user ? Buffer.alloc(0) : null);
     } catch (error) {
       response.writeHead(500, { 'Content-Type': 'text/plain' }).end(`${error instanceof Error ? error.message : String(error)}\n`);
       return true;
     }
     if (!body) return false;
     response.writeHead(200, {
-      'Content-Type': TYPES[path.extname(file)],
+      'Content-Type': user ? TYPES['.css'] : TYPES[path.extname(file)],
       'Content-Length': body.length,
       'Cache-Control': 'no-cache',
       'X-Content-Type-Options': 'nosniff',

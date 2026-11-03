@@ -14,6 +14,7 @@ import {
   type ServerMessage, type WireLine, type WirePlayback
 } from '../protocol/messages.ts';
 import { DEFAULT_HOST, DEFAULT_PORT, defaultSocketPath, WEBSOCKET_PATH } from './paths.ts';
+import { CoverArt } from './art.ts';
 import { StaticFiles } from './static.ts';
 import { CLOSE, handshakeProblem, refuseUpgrade, upgrade, type WebSocketOptions } from './websocket.ts';
 
@@ -36,6 +37,8 @@ export interface DaemonOptions {
   websocket?: WebSocketOptions;
   // The renderer's files, served at /; null leaves them out
   renderer?: StaticFiles | null;
+  // The cover of the track playing, at /art/current (src/daemon/art.ts); left out with the renderer
+  art?: CoverArt;
   // Where player problems are read from, checked on every change and every few seconds
   problems?: () => PlayerProblem[];
   log?: (text: string) => void;
@@ -314,8 +317,10 @@ export class SleeveDaemon {
 
   private async listenWebSocket(): Promise<void> {
     const files = this.options.renderer === null ? null : this.options.renderer ?? new StaticFiles();
+    const art = files ? this.options.art ?? new CoverArt() : null;
     const server = createHttpServer(async (request, response) => {
       if (files && await files.serve(request, response)) return;
+      if (art && await art.serve(request, response, this.session.current().playback)) return;
       response.writeHead(404, { 'Content-Type': 'text/plain' }).end(`sleeved ${pkg.version}: the renderer is at /, the WebSocket at ${WEBSOCKET_PATH}\n`);
     });
     server.on('upgrade', (request: IncomingMessage, socket: Socket, head: Buffer) => {

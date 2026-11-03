@@ -10,7 +10,7 @@ import { NowPlaying } from '../../src/now/session.ts';
 import type { NowState } from '../../src/now/state.ts';
 import { PlayerHub } from '../../src/players/hub.ts';
 import { Connection } from '../../src/renderer/connection.ts';
-import { candidateEntries, follow, formatOffset, NO_SCROLL_BACK, progress, reconnectDelay, SCROLL_BACK_MS, scrollBackOffset, status, wheel } from '../../src/renderer/view.ts';
+import { candidateEntries, coverColors, follow, formatOffset, NO_SCROLL_BACK, progress, reconnectDelay, SCROLL_BACK_MS, scrollBackOffset, status, wheel } from '../../src/renderer/view.ts';
 import { until } from '../helpers/fakeMpd.ts';
 import { fakePlayer } from '../helpers/players.ts';
 
@@ -73,6 +73,18 @@ describe('renderer view', () => {
     expect(wheel(back, 50, 0, 9000, -500, 300).offset).to.equal(-50);
   });
 
+  it('works out the colors behind the lyrics from the cover as it shows: faded over the page and dimmed', () => {
+    // Three white pixels and one red, fully opaque
+    const pixels = [255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 0, 0, 255];
+    const plain = coverColors(pixels, { opacity: 1, dim: 0, base: [0, 0, 0] });
+    expect(plain.main).to.deep.equal([{ color: '#ffffff', share: 0.75 }, { color: '#ff0000', share: 0.25 }]);
+    expect(plain.background).to.equal('#ffbfbf');
+    // Half over black, then half dimmed: white shows as a quarter grey
+    const shown = coverColors(pixels, { opacity: 0.5, dim: 0.5, base: [0, 0, 0] });
+    expect(shown.main[0].color).to.equal('#404040');
+    expect(coverColors([], { opacity: 1, dim: 0.5, base: [16, 18, 24] })).to.deep.equal({ background: '#08090c', main: [] });
+  });
+
   it('lists candidates as sleeve lyrics --all numbers them, leaving out those without an id', () => {
     const shown = candidate('lrclib', '1');
     const entries = candidateEntries(result({ candidates: [shown, candidate('local', undefined)], rejected: [candidate('netease', '9', { score: 0.3 })] }), shown);
@@ -120,7 +132,7 @@ describe('renderer files', () => {
       await writeFile(path.join(dir, 'renderer', 'a.ts'), 'import type { X } from "./x.ts";\nexport const a: number = 1;\n');
       session = new NowPlaying(new PlayerHub([fakePlayer('mpd')]));
       session.start();
-      daemon = new SleeveDaemon(session, { port: 0, socketPath: null, renderer: new StaticFiles(dir) });
+      daemon = new SleeveDaemon(session, { port: 0, socketPath: null, renderer: new StaticFiles(dir, path.join(dir, 'user.css')) });
       await daemon.listen();
     });
     afterEach(async () => {
@@ -143,6 +155,14 @@ describe('renderer files', () => {
       await utimes(path.join(dir, 'renderer', 'a.ts'), later, later);
       expect((await get('/src/renderer/a.ts')).body).to.match(/export const b\s*= "x";/);
       expect(await get('/src/renderer/a.ts', 'HEAD')).to.deep.include({ status: 200, body: '' });
+    });
+
+    it('serves the user\'s stylesheet, or an empty one', async () => {
+      expect(await get('/user.css')).to.deep.include({ status: 200, body: '' });
+      await writeFile(path.join(dir, 'user.css'), ':root { --art-animation: sleeve-art-drift; }');
+      const css = await get('/user.css');
+      expect(css).to.deep.include({ status: 200, body: ':root { --art-animation: sleeve-art-drift; }' });
+      expect(css.headers['content-type']).to.equal('text/css; charset=utf-8');
     });
 
     it('answers 404 for anything else', async () => {
