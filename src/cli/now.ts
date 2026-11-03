@@ -1,7 +1,7 @@
 import type { LyricsResult } from '../core/types.ts';
 import { DaemonClient } from '../daemon/client.ts';
 import { defaultSocketPath } from '../daemon/paths.ts';
-import type { CurrentLine } from '../now/lines.ts';
+import { nextLineTime, wordTimings, type CurrentLine } from '../now/lines.ts';
 import type { NowState } from '../now/state.ts';
 import { clockTime } from '../players/clock.ts';
 import type { PlayerProblem } from '../protocol/messages.ts';
@@ -9,7 +9,9 @@ import { describeCandidate, formatOffset, type Io } from './lyrics.ts';
 import { openSession, shapesSession, type SessionCliOptions, type SessionDeps } from './session.ts';
 
 // `sleeve now`: lyrics for what MPD or Spotify plays, line by line as they come due, with + and - to nudge the
-// timing (saved for the track) and q to quit; `--once` prints where playback is and the current line.
+// timing (saved for the track) and q to quit; `--once` prints where playback is and the current line. In a terminal
+// (and without NO_COLOR) a line with word times is drawn in place as it is sung, the words still to come dim;
+// --estimate-words times every line that way, by word length.
 //
 // When sleeved runs, `sleeve now` shows its session instead of opening the players itself (so a nudge here moves
 // the lyrics in every display), unless an option asks for players, providers or stores of its own, or
@@ -21,12 +23,15 @@ export interface NowOptions extends SessionCliOptions {
   // undefined: the daemon when it runs; true: only the daemon; false: never
   daemon?: boolean;
   socket?: string;
+  estimateWords?: boolean;
 }
 
 export const NUDGE_MS = 100;
 
 export interface NowDeps extends SessionDeps {
   input?: NodeJS.ReadStream;
+  // Where a line is drawn in place; stdout by default, used when it is a terminal and NO_COLOR is not set
+  output?: { isTTY?: boolean; write(text: string): unknown };
   tickMs?: number;
   now?: () => number;
 }
@@ -65,19 +70,48 @@ function sourceLine(result: LyricsResult | null): string {
 }
 
 // Prints what changed since it last printed: the track, where its lyrics came from, pauses, and each line as it
-// becomes current (again after a seek back)
+// becomes current (again after a seek back). With a live writer, a line with word times (or estimated ones) is
+// drawn in place as it is sung, the words to come dim, and becomes an ordinary line once the next one starts or
+// anything else is printed.
+export interface LiveOptions {
+  write(text: string): unknown;
+  estimateWords?: boolean;
+}
+
+const CLEAR_LINE = '\r\u001b[2K';
+const DIM = '\u001b[2m';
+const UNDIM = '\u001b[22m';
+
 export class LivePrinter {
   private io: Io;
+  private live: LiveOptions | null;
   private track: string | null | undefined = undefined;
   private looked = false;
   private paused = false;
   private lastLine = -2;
+  // The line being drawn in place, and how many of its words were sung when it was drawn
+  private drawing: { text: string; sung: number } | null = null;
 
-  constructor(io: Io) {
+  constructor(io: Io, live: LiveOptions | null = null) {
     this.io = io;
+    this.live = live;
   }
 
-  render(session: Pick<NowView, 'current' | 'line'>, now?: number): void {
+  // Prints a line of its own, ending the one drawn in place first
+  say(text: string): void {
+    this.settle();
+    this.io.out(text);
+  }
+
+  // The line drawn in place, left as an ordinary line
+  private settle(): void {
+    if (!this.drawing) return;
+    this.live!.write(`${CLEAR_LINE}${this.drawing.text}\n`);
+    this.drawing = null;
+  }
+
+  // position is needed only to draw lines in place
+  render(session: Pick<NowView, 'current' | 'line'> & Partial<Pick<NowView, 'position'>>, now?: number): void {
     const state = session.current();
     const playback = state.playback;
     const key = playback?.track ? `${playback.player}:${playback.track.key}` : null;
@@ -86,28 +120,50 @@ export class LivePrinter {
       this.looked = false;
       this.paused = false;
       this.lastLine = -2;
-      this.io.out(key ? `\n== ${trackLine(state)} [${playback!.player}]` : '\n== Nothing playing');
+      this.say(key ? `\n== ${trackLine(state)} [${playback!.player}]` : '\n== Nothing playing');
     }
     if (!key) return;
     if (!state.loading && !this.looked) {
       this.looked = true;
-      this.io.out(`-- ${state.error ? `lookup failed: ${state.error}` : state.query ? sourceLine(state.result) : 'no artist or title to look up'}`);
-      for (const failure of failures(state.result)) this.io.out(`-- ${failure}`);
+      this.say(`-- ${state.error ? `lookup failed: ${state.error}` : state.query ? sourceLine(state.result) : 'no artist or title to look up'}`);
+      for (const failure of failures(state.result)) this.say(`-- ${failure}`);
       const lyrics = state.result?.best?.lyrics;
-      if (lyrics?.instrumental) this.io.out('(instrumental)');
-      else if (lyrics && !lyrics.synced) for (const line of lyrics.lines) this.io.out(line.text);
+      if (lyrics?.instrumental) this.say('(instrumental)');
+      else if (lyrics && !lyrics.synced) for (const line of lyrics.lines) this.say(line.text);
     }
     const paused = playback!.state !== 'playing';
     if (paused !== this.paused) {
       this.paused = paused;
-      this.io.out(paused ? '-- paused' : '-- playing');
+      this.say(paused ? '-- paused' : '-- playing');
     }
     if (state.loading) return;
     const current = session.line(now);
     if (current.index !== this.lastLine) {
-      if (current.line && current.line.text) this.io.out(`[${clockTime(current.time!)}] ${current.line.text}`);
+      this.settle();
       this.lastLine = current.index;
+      if (!current.line?.text) return;
+      const text = `[${clockTime(current.time!)}] ${current.line.text}`;
+      if (!this.live || !session.position || !(current.line.words?.length || this.live.estimateWords)) return this.io.out(text);
+      this.drawing = { text, sung: -1 };
     }
+    if (this.drawing && current.line && session.position) this.draw(current, state, session.position(now));
+  }
+
+  // The line in place: sung words as they are, the rest dim; drawn again only when another word comes due
+  private draw(current: CurrentLine, state: NowState, positionMs: number): void {
+    const words = wordTimings(current.line!, state.result!.offsetMs, nextLineTime(state.result, positionMs));
+    // A word lights up as it starts: a terminal has no partial fill
+    const sung = words.filter(word => positionMs >= word.start).length;
+    if (sung === this.drawing!.sung) return;
+    this.drawing!.sung = sung;
+    const done = words.slice(0, sung).map(word => word.text).join('');
+    const rest = words.slice(sung).map(word => word.text).join('');
+    this.live!.write(`${CLEAR_LINE}[${clockTime(current.time!)}] ${done}${rest ? `${DIM}${rest}${UNDIM}` : ''}`);
+  }
+
+  // Ends the line in place, when following stops
+  close(): void {
+    this.settle();
   }
 }
 
@@ -149,7 +205,7 @@ function printOnce(view: NowView, options: NowOptions, io: Io, now?: number): nu
 }
 
 // Raw keys from a terminal: + and - nudge, q quits
-function keys(input: NodeJS.ReadStream | undefined, view: NowView, io: Io, quit: () => void): () => void {
+function keys(input: NodeJS.ReadStream | undefined, view: NowView, say: (text: string) => void, quit: () => void): () => void {
   if (!input?.isTTY) return () => {};
   input.setRawMode(true);
   input.resume();
@@ -159,7 +215,7 @@ function keys(input: NodeJS.ReadStream | undefined, view: NowView, io: Io, quit:
       const delta = key === '+' || key === '=' ? NUDGE_MS : key === '-' || key === '_' ? -NUDGE_MS : 0;
       if (!delta) continue;
       void view.nudge(delta).then(answer => {
-        io.out('error' in answer ? `-- ${answer.error.toLowerCase()}` : `-- offset ${answer.offsetMs ? formatOffset(answer.offsetMs) : 'removed'}`);
+        say('error' in answer ? `-- ${answer.error.toLowerCase()}` : `-- offset ${answer.offsetMs ? formatOffset(answer.offsetMs) : 'removed'}`);
       });
     }
   };
@@ -172,9 +228,11 @@ function keys(input: NodeJS.ReadStream | undefined, view: NowView, io: Io, quit:
 }
 
 // Prints lines as they come due until q, a signal, or the session going away; 0, or 1 when the daemon stopped
-async function follow(view: NowView, onChange: (listener: () => void) => () => void, io: Io, deps: NowDeps): Promise<number> {
+async function follow(view: NowView, onChange: (listener: () => void) => () => void, io: Io, deps: NowDeps, options: NowOptions): Promise<number> {
   for (const { player, problem } of view.problems()) io.err(`${player}: ${problem}`);
-  const printer = new LivePrinter(io);
+  const output = deps.output ?? process.stdout;
+  const colors = output.isTTY && !(deps.env ?? process.env).NO_COLOR;
+  const printer = new LivePrinter(io, colors ? { write: text => output.write(text), estimateWords: options.estimateWords === true } : null);
   return new Promise<number>(resolve => {
     const render = () => printer.render(view, deps.now?.());
     const tick = setInterval(render, deps.tickMs ?? 50);
@@ -184,15 +242,17 @@ async function follow(view: NowView, onChange: (listener: () => void) => () => v
       clearInterval(tick);
       unsubscribe();
       release();
+      printer.close();
       process.off('SIGINT', interrupted);
       process.off('SIGTERM', interrupted);
       resolve(code);
     };
     const interrupted = () => quit(0);
-    release = keys(deps.input ?? process.stdin, view, io, () => quit(0));
+    release = keys(deps.input ?? process.stdin, view, text => printer.say(text), () => quit(0));
     process.once('SIGINT', interrupted);
     process.once('SIGTERM', interrupted);
     void view.lost.then(() => {
+      printer.close();
       io.err('-- sleeved stopped');
       quit(1);
     });
@@ -220,7 +280,7 @@ async function local(options: NowOptions, io: Io, deps: NowDeps): Promise<number
       await view.settled();
       return printOnce(view, options, io, deps.now?.());
     }
-    return await follow(view, listener => session.onChange(listener), io, deps);
+    return await follow(view, listener => session.onChange(listener), io, deps, options);
   } finally {
     await close();
   }
@@ -254,7 +314,7 @@ async function remote(client: DaemonClient, options: NowOptions, io: Io, deps: N
       return printOnce(view, options, io, deps.now?.());
     }
     io.err(`-- following sleeved (${client.socketPath})`);
-    return await follow(view, listener => mirror.onChange(listener), io, deps);
+    return await follow(view, listener => mirror.onChange(listener), io, deps, options);
   } finally {
     client.close();
   }

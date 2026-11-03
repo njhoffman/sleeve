@@ -6,6 +6,13 @@ All notable changes to sleeve are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.20.0] - 2026-11-03
+
+### Added
+
+- `sleeve now` fills the current line word by word in a terminal, the words still to come dim, for lyrics with
+  word times; `--estimate-words` times every line by word length. Piped output and `NO_COLOR` are unchanged.
+
 ## [0.19.1] - 2026-11-03
 
 ### Changed

@@ -3,6 +3,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { LivePrinter, nowCommand } from '../../src/cli/now.ts';
+import { lineAt } from '../../src/now/lines.ts';
 import type { Io } from '../../src/cli/lyrics.ts';
 import type { NowState } from '../../src/now/session.ts';
 import type { Playback } from '../../src/players/types.ts';
@@ -130,5 +131,60 @@ describe('LivePrinter', () => {
       '\n== A - U [spotify]', '-- lrclib: A - T ?:??, unsynced, 2 lines, score 1.00', 'la', 'di',
       '\n== A - V [spotify]', '-- no lyrics found', '-- lrclib failed: timed out'
     ]);
+  });
+
+  describe('drawing a line in place', () => {
+    // A line with word times, one without, and a last one
+    const lines = [
+      { time: 1000, text: 'Hello there', words: [{ time: 1000, text: 'Hello ' }, { time: 1500, text: 'there' }] },
+      { time: 3000, text: 'no times here' },
+      { time: 6000, text: 'end' }
+    ];
+    const best = {
+      provider: 'lrclib', id: '1', track: { artist: 'A', title: 'T', durationMs: 60_000 }, score: 1, detail: { title: 1, artist: 1, album: null, duration: null },
+      lyrics: { synced: true, instrumental: false, lines }
+    };
+    const playback: Playback = { player: 'mpd', state: 'playing', positionMs: 0, at: 0, rate: 1, changedAt: 0, track: { key: 'k', artist: 'A', title: 'T' } };
+    const result = { best, candidates: [best], rejected: [], errors: [], pinned: false, offsetMs: 0 };
+
+    const run = (estimateWords: boolean, positions: number[], between?: (printer: LivePrinter) => void) => {
+      const out: string[] = [];
+      const written: string[] = [];
+      const printer = new LivePrinter({ out: text => out.push(text), err: () => {} }, { write: text => written.push(text), estimateWords });
+      let position = 0;
+      const session = {
+        current: (): NowState => ({ playback, query: { artist: 'A', title: 'T' }, result, loading: false, error: null }),
+        line: () => lineAt(result, position),
+        position: () => position
+      };
+      for (position of positions) printer.render(session);
+      between?.(printer);
+      printer.close();
+      return { out, written };
+    };
+
+    it('fills a line with word times as it is sung, the rest dim, and leaves it whole when the next starts', () => {
+      const { out, written } = run(false, [1000, 1100, 1500, 3000]);
+      expect(written).to.deep.equal([
+        '\r\u001b[2K[0:01] Hello \u001b[2mthere\u001b[22m',
+        '\r\u001b[2K[0:01] Hello there',
+        '\r\u001b[2K[0:01] Hello there\n'
+      ]);
+      // A line without word times is printed as before, unless estimates are asked for
+      expect(out.slice(-1)).to.deep.equal(['[0:03] no times here']);
+    });
+
+    it('estimates word times for every line when asked', () => {
+      const { written } = run(true, [3000, 4000]);
+      expect(written[0]).to.equal('\r\u001b[2K[0:03] no \u001b[2mtimes here\u001b[22m');
+      expect(written.at(-1)).to.equal('\r\u001b[2K[0:03] no times here\n');
+    });
+
+    it('ends the line in place before printing anything else', () => {
+      const { out, written } = run(false, [1000], printer => printer.say('-- offset +100ms'));
+      expect(written.at(-1)).to.equal('\r\u001b[2K[0:01] Hello there\n');
+      expect(out.at(-1)).to.equal('-- offset +100ms');
+      expect(written).to.have.length(2);
+    });
   });
 });

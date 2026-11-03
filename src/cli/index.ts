@@ -79,6 +79,7 @@ export function buildProgram(io: Io, setExit: (code: number) => void): Command {
     .option('--daemon', 'only through sleeved; fail when it is not running')
     .option('--no-daemon', 'open the players here even when sleeved runs (any player, provider or store option does too)')
     .option('--socket <path>', 'sleeved\'s Unix socket (default: $XDG_RUNTIME_DIR/sleeve/sleeved.sock)')
+    .option('--estimate-words', 'in a terminal, fill every line word by word, timed by word length, not only lines with word times')
     .action(async (options: NowOptions) => {
       setExit(await nowCommand(options, io));
     });

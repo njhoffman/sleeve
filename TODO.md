@@ -305,8 +305,11 @@ build items that depend on it, listed in the later projects.
       full-color copy clipped to how much is sung, so the overlay's shadow stays whole. `?words=estimate`
       (`--estimate-words`) times lines without words by word length, capped at 250 ms a letter. Few lyrics
       have word times yet (see A source of word timings).
-- [ ] **Word highlight in the terminal.** (p3) [feature] `sleeve now` shows whole lines; it could color the sung
+- [x] **Word highlight in the terminal.** (p3) [feature] `sleeve now` shows whole lines; it could color the sung
       part of the current line with the same `wordTimings`.
+      Done in 0.20.0: in a terminal (not NO_COLOR) the current line is redrawn in place, word by word as each
+      starts, the rest dim (`LivePrinter`); `--estimate-words` for lines without word times; every other message
+      ends the line first.
 - [ ] **Mouse in the renderer.** (p3) [feature] Click a candidate in the pick panel, scroll back through the
       lyrics by wheel (returning to the current line after a few seconds), click a line to seek (needs a seek
       command and player support).

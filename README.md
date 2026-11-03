@@ -97,7 +97,9 @@ the stored answer; `sleeve cache clear [-p provider] [--not-found]` forgets answ
 
 `sleeve now` follows MPD and Spotify at once and shows lyrics for the active one: the one playing (Spotify
 when both are, as musicman decides), else the one paused last. Each line prints as it comes due; `+` and `-`
-move the lyrics 100 ms later or sooner and save it for the track (as `sleeve offset` does), `q` quits.
+move the lyrics 100 ms later or sooner and save it for the track (as `sleeve offset` does), `q` quits. In a
+terminal, a line with word times is drawn in place as it is sung, the words still to come dim; `--estimate-words`
+does that for every line, timing the words by their length. Piped output and `NO_COLOR` get plain lines.
 
 - **MPD** is read through its own protocol: exact elapsed time, and changes (play, pause, seek, next song) the
   moment they happen. Its address comes from `--mpd`, then `MPD_HOST`/`MPD_PORT`, then musicman, then
