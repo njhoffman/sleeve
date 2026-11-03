@@ -219,6 +219,9 @@ LRC by unless `--force`):
   it in the list are held and the file is deferred until the earlier one answers. A run while LRCLIB is
   overloaded therefore does not fill the library with NetEase's lyrics, which match less well; NetEase's are
   written once LRCLIB has answered that it has none. Lyrics from LRCLIB are written whatever NetEase does.
+  The wait has an end: once a file was first deferred a day ago and has been tried three times, the later
+  provider's lyrics (or instrumental) are taken, and the report says "lrclib failing since ...". Such a file
+  then holds synced lyrics, so a later answer from LRCLIB replaces them only with `--force`.
 
 Only the `USLT` frame changes: every other frame stays byte for byte, the tag keeps its version, and the file is
 replaced through a temporary file only if nothing else changed it meanwhile. That is what sleeve promises

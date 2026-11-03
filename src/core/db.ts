@@ -11,7 +11,7 @@ import type { TrackQuery } from './types.ts';
 //
 // Schema 1: answers. Schema 2: track_prefs. Schema 3: isrc and spotify_id on both. Schema 4: tag_retries.
 
-export const SCHEMA_VERSION = 4;
+export const SCHEMA_VERSION = 5;
 
 // A track is its normalized artist and title plus the duration asked with; rows match a query whose duration
 // is within DURATION_WINDOW_MS of theirs, or when both have none. When the query carries IDs, a row with the
@@ -156,6 +156,11 @@ const MIGRATIONS: Record<number, string> = {
       next_at INTEGER NOT NULL,
       error TEXT NOT NULL
     );
+  `,
+  // When each file was first deferred; files deferred before are counted from the upgrade
+  5: `
+    ALTER TABLE tag_retries ADD COLUMN first_at INTEGER NOT NULL DEFAULT 0;
+    UPDATE tag_retries SET first_at = unixepoch('now') * 1000;
   `
 };
 

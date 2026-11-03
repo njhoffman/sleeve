@@ -6,6 +6,17 @@ All notable changes to sleeve are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.17.0] - 2026-11-03
+
+### Changed
+
+- `sleeve tag` no longer waits forever for a provider that keeps failing. A file whose lyrics (or instrumental)
+  a later provider has, held while an earlier one fails, takes the later provider's answer once it was first
+  deferred a day ago and has been tried three times; the report says "lrclib failing since ...". Before, a file
+  LRCLIB kept refusing stayed deferred however long NetEase had its lyrics.
+- sleeve.db is upgraded to schema 5 (when each file was first deferred). Files deferred before the upgrade count
+  from the upgrade.
+
 ## [0.16.2] - 2026-11-03
 
 ### Fixed

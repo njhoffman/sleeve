@@ -3,7 +3,7 @@ import path from 'node:path';
 import { DEFAULT_PROVIDERS, fetchLyrics, queryForFile, type FetchOptions } from './fetchLyrics.ts';
 import { formatLrc, looksLikeLrc, plainText } from './lrc.ts';
 import { formatRef } from './prefs.ts';
-import type { TagRetries } from './retries.ts';
+import { gaveUp, type TagRetries } from './retries.ts';
 import { Id3Error } from './tags/id3.ts';
 import { FileChangedError, readLyricsTag, writeLyricsTag } from './tags/lyricsTag.ts';
 import { throttledFetch } from './throttle.ts';
@@ -21,7 +21,8 @@ import type { ScoredCandidate, TrackQuery } from './types.ts';
 
 // Lyrics that go into a file are held to more than a match on screen (see doubts below). The providers come in
 // the order of preference: when one fails, lyrics from one after it wait (the file is deferred) until it answers,
-// so a run while LRCLIB is overloaded does not fill the library with NetEase's lyrics.
+// so a run while LRCLIB is overloaded does not fill the library with NetEase's lyrics. A file that has waited a day
+// and three tries (gaveUp, src/core/retries.ts) takes the later provider's answer, and its report says so.
 
 // The gap between requests to one service, and the files looked up at once
 export const DEFAULT_DELAY_MS = 300;
@@ -220,7 +221,11 @@ async function tagFile(file: string, options: TagOptions & { fetch: typeof fetch
     chosen = best;
   }
   // A provider preferred to the one with the answer failed: wait for it
-  const waitFor = chosen ? failed.filter(error => order.indexOf(error.provider) < order.indexOf(chosen.provider)) : failed;
+  const earlier = chosen ? failed.filter(error => order.indexOf(error.provider) < order.indexOf(chosen.provider)) : failed;
+  // ...unless it has waited long enough for them, and the later provider has an answer
+  const waitedOut = chosen !== null && earlier.length > 0 && gaveUp(retry, now());
+  const waitFor = waitedOut ? [] : earlier;
+  const fellBack = waitedOut ? `; ${earlier.map(error => error.provider).join(', ')} failing since ${time(retry!.firstAt)}` : '';
   if (waitFor.length) {
     const deferred = retries?.defer(tag.file, waitFor.map(error => `${error.provider}: ${error.message}`).join('; '));
     const held = chosen ? `; ${chosen.provider} has ${chosen.lyrics.instrumental ? 'it as instrumental' : 'lyrics'}, held until then` : '';
@@ -228,7 +233,7 @@ async function tagFile(file: string, options: TagOptions & { fetch: typeof fetch
   }
   if (chosen?.lyrics.instrumental) {
     retries?.clear(tag.file);
-    return report('instrumental', formatRef(chosen));
+    return report('instrumental', `${formatRef(chosen)}${fellBack}`);
   }
   if (chosen && !chosen.lyrics.synced) text = plainText(chosen.lyrics);
   if (text === null || !chosen) {
@@ -238,7 +243,7 @@ async function tagFile(file: string, options: TagOptions & { fetch: typeof fetch
     return report('not found', best ? `only unsynced lyrics (${formatRef(best)}; --unsynced writes them)` : undefined);
   }
   const offsetMs = chosen === best ? result.offsetMs : 0;
-  const source = `${formatRef(chosen)}, ${chosen.lyrics.synced ? 'synced' : 'unsynced'}, ${chosen.lyrics.lines.length} lines${offsetMs ? `, offset ${offsetMs > 0 ? '+' : ''}${offsetMs}ms` : ''}${existing && !looksLikeLrc(existing) ? ', replacing unsynced lyrics' : ''}`;
+  const source = `${formatRef(chosen)}, ${chosen.lyrics.synced ? 'synced' : 'unsynced'}, ${chosen.lyrics.lines.length} lines${offsetMs ? `, offset ${offsetMs > 0 ? '+' : ''}${offsetMs}ms` : ''}${existing && !looksLikeLrc(existing) ? ', replacing unsynced lyrics' : ''}${fellBack}`;
   if (tag.uslt?.text === text) {
     retries?.clear(tag.file);
     return report('unchanged', source);

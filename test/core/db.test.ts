@@ -6,6 +6,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { LyricsCache } from '../../src/core/cache.ts';
 import { SCHEMA_VERSION, SleeveDatabase } from '../../src/core/db.ts';
 import { TrackPrefs } from '../../src/core/prefs.ts';
+import { TagRetries } from '../../src/core/retries.ts';
 
 describe('SleeveDatabase', () => {
   let dir: string;
@@ -33,6 +34,23 @@ describe('SleeveDatabase', () => {
     const prefs = new TrackPrefs(database);
     prefs.setOffset(query, 100, { provider: 'lrclib', id: '1', track: { artist: 'Radiohead', title: 'Airbag' }, lyrics: { synced: true, instrumental: false, lines: [] } });
     expect(prefs.get(query)?.offset?.ms).to.equal(100);
+    database.close();
+  });
+
+  it('dates the deferred files of a schema 4 database from the upgrade', () => {
+    const file = path.join(dir, 'sleeve.db');
+    const old = new DatabaseSync(file);
+    old.exec(`
+      CREATE TABLE tag_retries (path TEXT PRIMARY KEY, attempts INTEGER NOT NULL, next_at INTEGER NOT NULL, error TEXT NOT NULL);
+      INSERT INTO tag_retries VALUES ('/a.mp3', 4, 5, 'lrclib: 503');
+      PRAGMA user_version = 4;
+    `);
+    old.close();
+    const before = Date.now() - 1000;
+    const database = new SleeveDatabase(file);
+    const retry = new TagRetries(database).get('/a.mp3')!;
+    expect(retry).to.include({ attempts: 4, nextAt: 5, error: 'lrclib: 503' });
+    expect(retry.firstAt).to.be.within(before, Date.now() + 1000);
     database.close();
   });
 

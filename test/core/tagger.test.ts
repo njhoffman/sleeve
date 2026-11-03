@@ -5,7 +5,7 @@ import path from 'node:path';
 import { SleeveDatabase } from '../../src/core/db.ts';
 import { TrackPrefs } from '../../src/core/prefs.ts';
 import type { Provider } from '../../src/core/providers/provider.ts';
-import { RETRY_BACKOFF_MS, TagRetries } from '../../src/core/retries.ts';
+import { FALLBACK_AFTER_MS, FALLBACK_ATTEMPTS, gaveUp, RETRY_BACKOFF_MS, TagRetries } from '../../src/core/retries.ts';
 import { listMp3s, tagFiles, type TagReport } from '../../src/core/tagger.ts';
 import { parseId3 } from '../../src/core/tags/id3.ts';
 import { FileChangedError, readLyricsTag, writeLyricsTag } from '../../src/core/tags/lyricsTag.ts';
@@ -97,13 +97,21 @@ describe('sleeve tag', () => {
       let clock = 1000;
       const retries = new TagRetries(database, { now: () => clock });
       expect(retries.defer('/a.mp3', 'lrclib: 503').nextAt).to.equal(1000 + RETRY_BACKOFF_MS[0]);
-      expect(retries.defer('/a.mp3', 'lrclib: 503')).to.deep.equal({ attempts: 2, nextAt: 1000 + RETRY_BACKOFF_MS[1], error: 'lrclib: 503' });
+      clock = 2000;
+      expect(retries.defer('/a.mp3', 'lrclib: 503')).to.deep.equal({ attempts: 2, nextAt: 2000 + RETRY_BACKOFF_MS[1], error: 'lrclib: 503', firstAt: 1000 });
       for (let count = 0; count < 5; count++) retries.defer('/a.mp3', 'x');
-      clock = 0;
-      expect(retries.get('/a.mp3')!.nextAt).to.equal(1000 + RETRY_BACKOFF_MS.at(-1)!);
+      expect(retries.get('/a.mp3')!.nextAt).to.equal(2000 + RETRY_BACKOFF_MS.at(-1)!);
       retries.clear('/a.mp3');
       expect(retries.get('/a.mp3')).to.equal(null);
       expect(retries.count()).to.equal(0);
+    });
+
+    it('gives up waiting after a day and three failures, both', () => {
+      const retry = (attempts: number, firstAt: number) => ({ attempts, nextAt: 0, error: 'x', firstAt });
+      expect(gaveUp(null, FALLBACK_AFTER_MS)).to.equal(false);
+      expect(gaveUp(retry(FALLBACK_ATTEMPTS, 0), FALLBACK_AFTER_MS)).to.equal(true);
+      expect(gaveUp(retry(FALLBACK_ATTEMPTS - 1, 0), FALLBACK_AFTER_MS * 2)).to.equal(false);
+      expect(gaveUp(retry(10, 1), FALLBACK_AFTER_MS)).to.equal(false);
     });
   });
 
@@ -248,6 +256,27 @@ describe('sleeve tag', () => {
       const held = await run([files[0]], { providers: [first, third], retryNow: true, retries });
       expect(held.status).to.deep.equal(['a.mp3: deferred']);
       expect(held.reports[0].detail).to.match(/third has it as instrumental, held until then/);
+    });
+
+    it('takes a later provider\'s lyrics once the file has waited a day and three tries for an earlier one', async () => {
+      let clock = 0;
+      const now = () => clock;
+      const retries = new TagRetries(database, { now });
+      const file = await mp3('a.mp3');
+      const first = online('first', () => new Error('busy'));
+      const second = online('second', () => [{ ...candidate(synced), provider: 'second' }]);
+      const nobody = online('second', () => []);
+      const options = { retries, now, retryNow: true, write: true };
+      for (let attempt = 1; attempt <= FALLBACK_ATTEMPTS; attempt++) {
+        expect((await run([file], { providers: [first, second], ...options })).status).to.deep.equal(['a.mp3: deferred']);
+        clock += FALLBACK_AFTER_MS / 2;
+      }
+      // Nothing to take: still waiting for the first
+      expect((await run([file], { providers: [first, nobody], ...options })).status).to.deep.equal(['a.mp3: deferred']);
+      const result = await run([file], { providers: [first, second], ...options });
+      expect(result.status).to.deep.equal(['a.mp3: written']);
+      expect(result.reports[0].detail).to.match(/^second:1, synced, 2 lines; first failing since /);
+      expect(retries.count()).to.equal(0);
     });
 
     it('spaces requests to a service, not files, stops at the limit, and skips what it cannot tag', async () => {

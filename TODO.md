@@ -211,7 +211,11 @@ build items that depend on it, listed in the later projects.
       A second dry run (`--retry-now`) was stopped at 1809 files: 1317 deferred, LRCLIB answering 429 "Too many
       requests from this IP" (its limit is about 90 a minute; 0.15.0 sent up to 200, two at a time). Fixed in
       0.16.1 (provider `rateLimit`, serial hosts in the throttle).
-      Next: a new dry run once the allowance has recovered, then `--write`, then repeat runs for the deferred files.
+      Fourth dry run, 2026-11-03 (0.16.2, 7363 files, 1 h 54 min): 2884 would write (1689 LRCLIB, 1195 NetEase;
+      1881 replacing unsynced lyrics), 3838 deferred (about 3650 LRCLIB 503s, 180 429s, 5 502s; 1910 with NetEase
+      lyrics held, 157 with a NetEase instrumental), 225 instrumental, 180 not found, 172 has lyrics, 64 doubtful.
+      `--write` run the same night. 0.17.0 takes the later provider's answer after a day and three tries.
+      Next: repeat runs for the deferred files over the following days.
 - [x] **Honor LRCLIB's `Retry-After`.** (p1) [fix] Its docs say clients must: on a 429 (and a 503, usually 1 s)
       wait at least that many seconds, with up to 30% jitter, or risk a temporary ban. sleeve ignores it: the
       daemon's retry waits a fixed second, and `sleeve tag` goes on with the next file. The throttle could hold
@@ -220,9 +224,14 @@ build items that depend on it, listed in the later projects.
       until Retry-After plus up to 30% jitter, during which requests fail at once (`LrclibHeldError`) unsent.
       0.16.2: a hold ending within 5 s is waited out; the third dry run showed 1 s holds after 503s deferring
       416 of the first 1000 files unasked.
-- [ ] **Register sleeve with LRCLIB.** (p3) [chore] An app in https://lrclib.net/developers gets an `Lrclib-App-Id`
+- [ ] **Register sleeve with LRCLIB.** (p2) [chore] An app in https://lrclib.net/developers gets an `Lrclib-App-Id`
       (public, safe to ship) and about 180 requests a minute instead of 90, and a way for them to reach us.
-      sleeve would send the header when one is configured.
+      sleeve would send the header when one is configured. LRCLIB still answered 429 about 180 times in the
+      fourth dry run at about 85 requests a minute, below the 90 its docs give; the registered allowance would
+      cover that.
+- [ ] **Waited-out fallbacks.** (p3) [feature] Files written from NetEase after LRCLIB failed for a day (0.17.0) keep
+      those lyrics even once LRCLIB answers. Could record them (their report says "failing since") and offer a
+      run that asks LRCLIB again for just those, replacing the lyrics when LRCLIB's fit.
 - [ ] **LRCLIB's refusals in library runs.** (p3) [perf] About half the less-known tracks get a 503 from LRCLIB on
       first ask and are deferred when NetEase has nothing synced; with the 10 min / 1 h / 6 h / 24 h backoff a
       library run needs several passes. Watch how many stay deferred after a full run before tuning the backoff
