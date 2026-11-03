@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import {
   backdropRunning, backdropStatePath, chooseMonitor, chooseOverlay, formatGeometry, overlayColors, overlayGeometry, parseMonitors,
-  parseShellArgs, readBackdropState, rendererUrl, type BackdropMonitor, type BackdropState, type Geometry, type ShellOptions
+  parseShellArgs, readBackdropState, rendererUrl, waitForBackdrop, type BackdropMonitor, type BackdropState, type Geometry, type ShellOptions
 } from '../src/shell/layout.ts';
 import { compositorRunning, markOverlay, stackSelf } from './x11.ts';
 
@@ -136,7 +136,11 @@ async function overlayWindow(bounds: Geometry, mark: ShellOptions['position'] | 
 
 async function openOverlay(options: ShellOptions): Promise<BrowserWindow> {
   const statePath = backdropStatePath();
-  const state = readBackdropState(statePath);
+  let state = readBackdropState(statePath);
+  if (!backdropRunning(state) && options.stack !== 'self' && options.waitBackdropS > 0) {
+    log(`waiting up to ${options.waitBackdropS} s for backdrop`);
+    state = await waitForBackdrop(() => readBackdropState(statePath), options.waitBackdropS * 1000) ?? state;
+  }
   const backdrop = backdropRunning(state);
   const compositor = backdrop && options.stack !== 'self' ? true : await compositorRunning().catch(error => {
     log(`cannot tell whether a compositor runs: ${error instanceof Error ? error.message : String(error)}`);

@@ -295,9 +295,13 @@ build items that depend on it, listed in the later projects.
       code profile globs its path, so moves and reinstalls keep it; `just shell` explains instead of letting
       Electron abort when namespaces are restricted and neither the profile nor a root SUID chrome-sandbox exists.
       The profile still takes one sudo; defaulting to --no-sandbox was turned down.
-- [ ] **Start the overlay with the session.** (p3) [feature] Today it is `exec just -f .../justfile shell` in the i3
+- [x] **Start the overlay with the session.** (p3) [feature] Today it is `exec just -f .../justfile shell` in the i3
       config. A systemd user unit bound to graphical-session.target would restart it and order it after
       sleeved and backdrop.
+      Done in 0.22.0: `just install-shell-service` (sleeve-shell.service: PartOf and WantedBy
+      graphical-session.target, after and wanting sleeved, Restart=on-failure). backdrop is started by i3, not
+      systemd, so the unit cannot be ordered after it: the shell's `--wait-backdrop 20` waits for backdrop's
+      state.json to name a live pid before stacking the overlay itself. A backdrop unit would be cleaner.
 - [x] **Word-by-word highlight.** (p2) [feature] Lines carry `words` (enhanced LRC, later LRCLIB's lyricsfile and
       Musixmatch richsync); the renderer shows whole lines only. Fill each word as it comes due, from the same
       per-frame position.

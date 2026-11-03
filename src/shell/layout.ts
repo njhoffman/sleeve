@@ -30,6 +30,9 @@ export interface ShellOptions {
   // Under backdrop: below or above its visualizer. Stacked by sleeve: just above the root, or over every window
   position: OverlayPosition;
   stack: OverlayStack;
+  // In auto mode, how long to wait for backdrop to come up before stacking the overlay itself (seconds): at login
+  // the overlay may start before backdrop does
+  waitBackdropS: number;
   // Fill lines without word times word by word, estimated (the page's ?words=estimate)
   estimateWords: boolean;
 }
@@ -92,6 +95,7 @@ export function parseShellArgs(argv: string[]): ShellOptions {
       monitor: { type: 'string' },
       position: { type: 'string' },
       stack: { type: 'string' },
+      'wait-backdrop': { type: 'string' },
       'estimate-words': { type: 'boolean' }
     }
   });
@@ -102,6 +106,9 @@ export function parseShellArgs(argv: string[]): ShellOptions {
   if (position !== 'below' && position !== 'above') throw new Error(`Invalid --position: ${position} (below or above)`);
   const stack = text('stack') ?? 'auto';
   if (stack !== 'auto' && stack !== 'backdrop' && stack !== 'self') throw new Error(`Invalid --stack: ${stack} (auto, backdrop or self)`);
+  const waitText = text('wait-backdrop') ?? '0';
+  const waitBackdropS = Number(waitText);
+  if (!/^\d+(\.\d+)?$/.test(waitText) || !Number.isFinite(waitBackdropS)) throw new Error(`Invalid --wait-backdrop: ${waitText} (seconds)`);
   const geometryText = text('geometry');
   const geometry = geometryText === undefined ? null : parseGeometry(geometryText);
   if (geometryText !== undefined && !geometry) throw new Error(`Invalid --geometry: ${geometryText} (WIDTHxHEIGHT+X+Y)`);
@@ -111,7 +118,7 @@ export function parseShellArgs(argv: string[]): ShellOptions {
   } catch {
     throw new Error(`Invalid --url: ${url}`);
   }
-  return { mode, url, geometry, monitor: text('monitor') ?? null, position, stack, estimateWords: values['estimate-words'] === true };
+  return { mode, url, geometry, monitor: text('monitor') ?? null, position, stack, waitBackdropS, estimateWords: values['estimate-words'] === true };
 }
 
 // backdrop's state, or null when it has none or it cannot be read
@@ -147,6 +154,20 @@ export function chooseMonitor(monitors: BackdropMonitor[], name: string | null):
     return named;
   }
   return monitors.find(monitor => monitor.primary) ?? monitors[0] ?? null;
+}
+
+// backdrop's state once its daemon runs, checking every intervalMs for up to timeoutMs; null if it never does
+export async function waitForBackdrop(
+  read: () => BackdropState | null, timeoutMs: number,
+  { intervalMs = 500, now = Date.now, sleep = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms)), isAlive = alive } = {}
+): Promise<BackdropState | null> {
+  const end = now() + timeoutMs;
+  for (;;) {
+    const state = read();
+    if (backdropRunning(state, isAlive)) return state;
+    if (now() >= end) return null;
+    await sleep(Math.min(intervalMs, end - now()));
+  }
 }
 
 // How the overlay is shown: stacked by backdrop or by sleeve, or as a window when neither can, with why

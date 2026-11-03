@@ -156,6 +156,12 @@ takes a click. The text keeps its shadow, since nobody samples the wallpaper. `-
 even when backdrop runs, and `--stack backdrop` refuses to start without backdrop. With no compositor either, it
 opens as a window.
 
+`just install-shell-service` starts the overlay with every graphical session: a systemd user unit
+(`sleeve-shell`) that runs after sleeved and waits up to 20 seconds for backdrop (`--wait-backdrop`), since i3
+may start backdrop after it; its extra arguments go to the shell (`just install-shell-service --position above`).
+Enable it with `systemctl --user enable --now sleeve-shell`. It needs the sandbox profile first (`just
+shell-sandbox`), or `--no-sandbox`.
+
 `just shell --window` opens a borderless window that the window manager moves and sizes, and that remembers
 where it was. Its class is `sleeve`, for rules such as i3's `for_window [class="sleeve"] floating enable`.
 

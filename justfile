@@ -86,6 +86,41 @@ shell *args:
     fi
     exec shell/node_modules/.bin/electron shell "$@"
 
+# A systemd user unit bound to the graphical session, after sleeved, waiting up to 20 s for backdrop (which i3
+# starts); extra arguments go to the shell, e.g. just install-shell-service --position above
+# The overlay at every login (systemd user unit sleeve-shell)
+install-shell-service *args:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    binary="$PWD/shell/node_modules/electron/dist/electron"
+    [ -x "$binary" ] || { echo "Run just shell-install first" >&2; exit 1; }
+    sandbox="shell/node_modules/electron/dist/chrome-sandbox"
+    if [[ " {{args}} " != *" --no-sandbox "* ]] && [ "$(cat /proc/sys/kernel/apparmor_restrict_unprivileged_userns 2>/dev/null)" = 1 ] \
+      && [ ! -e /etc/apparmor.d/sleeve-electron ] && ! { [ "$(stat -c %u "$sandbox" 2>/dev/null)" = 0 ] && [ -u "$sandbox" ]; }; then
+      echo "AppArmor blocks Electron's sandbox here: run 'just shell-sandbox' once (sudo) first, or pass --no-sandbox" >&2
+      exit 1
+    fi
+    unit="${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user/sleeve-shell.service"
+    mkdir -p "$(dirname "$unit")"
+    printf '%s\n' \
+      '[Unit]' \
+      'Description=sleeve overlay (Electron shell)' \
+      'PartOf=graphical-session.target' \
+      'After=graphical-session.target sleeved.service' \
+      'Wants=sleeved.service' \
+      '' \
+      '[Service]' \
+      "WorkingDirectory=$PWD" \
+      "ExecStart=$binary shell --wait-backdrop 20 {{args}}" \
+      'Restart=on-failure' \
+      'RestartSec=5' \
+      '' \
+      '[Install]' \
+      'WantedBy=graphical-session.target' > "$unit"
+    systemctl --user daemon-reload
+    echo "Wrote $unit"
+    echo "Start it now and with every session: systemctl --user enable --now sleeve-shell"
+
 # Typecheck the shell, when it is installed
 shell-typecheck:
     @if [ -d shell/node_modules/electron ]; then npx tsc --noEmit -p shell; else echo "shell not installed; skipping its typecheck"; fi

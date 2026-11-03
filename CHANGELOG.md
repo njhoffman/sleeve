@@ -6,6 +6,15 @@ All notable changes to sleeve are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.22.0] - 2026-11-03
+
+### Added
+
+- `just install-shell-service` starts the overlay with every graphical session, as the systemd user unit
+  `sleeve-shell`, after sleeved.
+- `just shell --wait-backdrop SECONDS` waits that long for backdrop to come up before stacking the overlay itself;
+  the unit waits 20 seconds, since i3 may start backdrop after it.
+
 ## [0.21.0] - 2026-11-03
 
 ### Added

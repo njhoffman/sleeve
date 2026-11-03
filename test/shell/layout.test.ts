@@ -3,7 +3,7 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import {
-  backdropRunning, backdropStatePath, chooseMonitor, chooseOverlay, parseMonitors, DEFAULT_URL, formatGeometry, overlayColors, overlayGeometry, parseGeometry, parseShellArgs,
+  backdropRunning, backdropStatePath, chooseMonitor, chooseOverlay, parseMonitors, waitForBackdrop, DEFAULT_URL, formatGeometry, overlayColors, overlayGeometry, parseGeometry, parseShellArgs,
   readBackdropState, rendererUrl, type BackdropMonitor
 } from '../../src/shell/layout.ts';
 
@@ -19,7 +19,7 @@ describe('shell layout', () => {
   });
 
   it('takes its own options and lets Chromium\'s through', () => {
-    expect(parseShellArgs([])).to.deep.equal({ mode: 'overlay', url: DEFAULT_URL, geometry: null, monitor: null, position: 'below', stack: 'auto', estimateWords: false });
+    expect(parseShellArgs([])).to.deep.equal({ mode: 'overlay', url: DEFAULT_URL, geometry: null, monitor: null, position: 'below', stack: 'auto', waitBackdropS: 0, estimateWords: false });
     expect(parseShellArgs(['--no-sandbox', '--window', '--url', 'http://127.0.0.1:7000/'])).to.deep.include({ mode: 'window', url: 'http://127.0.0.1:7000/' });
     expect(parseShellArgs(['--estimate-words']).estimateWords).to.equal(true);
     expect(parseShellArgs(['--mode=overlay', '--geometry', '800x400+10+20', '--monitor', 'HDMI-1', '--position', 'above']))
@@ -27,6 +27,8 @@ describe('shell layout', () => {
     expect(() => parseShellArgs(['--mode', 'fullscreen'])).to.throw('Invalid --mode: fullscreen (overlay or window)');
     expect(() => parseShellArgs(['--position', 'middle'])).to.throw('Invalid --position: middle (below or above)');
     expect(parseShellArgs(['--stack', 'self']).stack).to.equal('self');
+    expect(parseShellArgs(['--wait-backdrop', '20']).waitBackdropS).to.equal(20);
+    expect(() => parseShellArgs(['--wait-backdrop', 'soon'])).to.throw('Invalid --wait-backdrop: soon (seconds)');
     expect(() => parseShellArgs(['--stack', 'i3'])).to.throw('Invalid --stack: i3 (auto, backdrop or self)');
     expect(() => parseShellArgs(['--geometry', 'big'])).to.throw('Invalid --geometry: big (WIDTHxHEIGHT+X+Y)');
     expect(() => parseShellArgs(['--url', 'nope'])).to.throw('Invalid --url: nope');
@@ -59,6 +61,22 @@ describe('shell layout', () => {
     expect((chooseOverlay('self', { backdrop: true, compositor: false }) as { reason: string }).reason).to.match(/^no compositor runs/);
     expect(chooseOverlay('backdrop', both)).to.deep.equal({ kind: 'backdrop' });
     expect(() => chooseOverlay('backdrop', neither)).to.throw('--stack backdrop, but backdrop is not running');
+  });
+
+  it('waits for backdrop to come up, as long as it is given', async () => {
+    let clock = 0;
+    const slept: number[] = [];
+    const clocks = { intervalMs: 500, now: () => clock, sleep: async (ms: number) => { slept.push(ms); clock += ms; }, isAlive: () => true };
+    const up = { pid: 42, monitors: [dp3] };
+    // Up at the third look
+    let looks = 0;
+    expect(await waitForBackdrop(() => (++looks >= 3 ? up : null), 5000, clocks)).to.equal(up);
+    expect(slept).to.deep.equal([500, 500]);
+    // Never up: gives up at the timeout, its last wait cut short
+    slept.length = 0;
+    clock = 0;
+    expect(await waitForBackdrop(() => null, 1200, clocks)).to.equal(null);
+    expect(slept).to.deep.equal([500, 500, 200]);
   });
 
   it('reads the monitors xrandr lists, the primary one marked', () => {
