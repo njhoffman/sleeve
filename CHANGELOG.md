@@ -6,6 +6,16 @@ All notable changes to sleeve are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.19.1] - 2026-11-03
+
+### Changed
+
+- `just install-service` writes a unit that finds `node` at each start (`/usr/bin/env node`), so upgrading Node
+  or switching Node managers no longer breaks sleeved; run it again once to get the new unit.
+- `just shell-sandbox` installs a profile for any sleeve checkout's Electron under your home, so moving the
+  checkout or reinstalling Electron no longer needs it again; run it once more to replace the old profile.
+- `just shell` says how to fix a blocked sandbox instead of Electron aborting with a `chrome-sandbox` trace.
+
 ## [0.19.0] - 2026-11-03
 
 ### Changed

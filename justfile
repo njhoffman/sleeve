@@ -45,7 +45,6 @@ daemon *args:
 install-service:
     #!/usr/bin/env bash
     set -euo pipefail
-    node=$(command -v node)
     unit="${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user/sleeved.service"
     mkdir -p "$(dirname "$unit")"
     printf '%s\n' \
@@ -54,14 +53,19 @@ install-service:
       'After=mpd.service' \
       '' \
       '[Service]' \
-      "ExecStart=$node $PWD/src/cli/index.ts daemon" \
+      "ExecStart=/usr/bin/env node $PWD/src/cli/index.ts daemon" \
       'Restart=on-failure' \
       'RestartSec=5' \
       '' \
       '[Install]' \
       'WantedBy=default.target' > "$unit"
     systemctl --user daemon-reload
-    echo "Wrote $unit (node: $node)"
+    # node is looked up in the user manager's PATH at each start, so a new node or node manager needs nothing here;
+    # a moved checkout does: run this again
+    found=none
+    IFS=: read -ra dirs <<< "$(systemctl --user show-environment | sed -n 's/^PATH=//p')"
+    for dir in "${dirs[@]}"; do [ -x "$dir/node" ] && { found="$dir/node"; break; }; done
+    echo "Wrote $unit (node from systemd's PATH: $found)"
     echo "Start it now and at login: systemctl --user enable --now sleeved"
 
 # Install the Electron shell (shell/, ~100 MB; the daemon and CLI never need it)
@@ -70,7 +74,17 @@ shell-install:
 
 # The lyrics window: an overlay (stacked by backdrop, else by sleeve), or --window; e.g. just shell --position above
 shell *args:
-    shell/node_modules/.bin/electron shell "$@"
+    #!/usr/bin/env bash
+    set -euo pipefail
+    # Ubuntu's AppArmor blocks the user namespaces Electron's sandbox needs; say what to do rather than let Electron
+    # abort with a chrome-sandbox trace
+    sandbox="shell/node_modules/electron/dist/chrome-sandbox"
+    if [[ " $* " != *" --no-sandbox "* ]] && [ "$(cat /proc/sys/kernel/apparmor_restrict_unprivileged_userns 2>/dev/null)" = 1 ] \
+      && [ ! -e /etc/apparmor.d/sleeve-electron ] && ! { [ "$(stat -c %u "$sandbox" 2>/dev/null)" = 0 ] && [ -u "$sandbox" ]; }; then
+      echo "AppArmor blocks Electron's sandbox here: run 'just shell-sandbox' once (sudo), or 'just shell --no-sandbox'" >&2
+      exit 1
+    fi
+    exec shell/node_modules/.bin/electron shell "$@"
 
 # Typecheck the shell, when it is installed
 shell-typecheck:
@@ -80,13 +94,15 @@ shell-typecheck:
 shell-sandbox:
     #!/usr/bin/env bash
     set -euo pipefail
-    binary="$PWD/shell/node_modules/electron/dist/electron"
-    [ -x "$binary" ] || { echo "Run just shell-install first" >&2; exit 1; }
+    [ -x shell/node_modules/electron/dist/electron ] || { echo "Run just shell-install first" >&2; exit 1; }
+    # Any sleeve checkout's Electron under your home, so a moved checkout or a reinstall keeps working, as Ubuntu's
+    # own profiles for Electron apps do (code, slack): unconfined, with the user namespaces the sandbox needs
     printf '%s\n' 'abi <abi/4.0>,' 'include <tunables/global>' '' \
-      "profile sleeve-electron $binary flags=(unconfined) {" '  userns,' '  include if exists <local/sleeve-electron>' '}' \
+      'profile sleeve-electron @{HOME}/**/shell/node_modules/electron/dist/electron flags=(unconfined) {' '  userns,' \
+      '  include if exists <local/sleeve-electron>' '}' \
       | sudo tee /etc/apparmor.d/sleeve-electron >/dev/null
     sudo apparmor_parser -r /etc/apparmor.d/sleeve-electron
-    echo "Installed /etc/apparmor.d/sleeve-electron for $binary"
+    echo "Installed /etc/apparmor.d/sleeve-electron for every sleeve checkout's Electron under your home"
 
 # sleeved's log
 logs:

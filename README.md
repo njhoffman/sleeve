@@ -155,9 +155,10 @@ opens as a window.
 `just shell --window` opens a borderless window that the window manager moves and sizes, and that remembers
 where it was. Its class is `sleeve`, for rules such as i3's `for_window [class="sleeve"] floating enable`.
 
-Ubuntu's AppArmor blocks the user namespaces Electron's sandbox needs, so Electron stops at once with a
-`chrome-sandbox` error. `just shell-sandbox` installs a profile that allows them for this checkout's Electron
-(it asks for sudo); `just shell --no-sandbox` runs without the sandbox instead.
+Ubuntu's AppArmor blocks the user namespaces Electron's sandbox needs, so `just shell` stops and says so.
+`just shell-sandbox` installs a profile that allows them for a sleeve checkout's Electron anywhere under your
+home, so it survives moving the checkout and reinstalling Electron (it asks for sudo, once); `just shell
+--no-sandbox` runs without the sandbox instead.
 
 The overlay takes no keys, since clicks and keys go to the windows under it. `sleeve ctl` sends sleeved one
 command and prints the outcome, for i3 bindings:
@@ -177,8 +178,8 @@ terminal moves the lyrics in every display. Any player, provider or store option
 `--no-cache`, ...) or `--no-daemon` makes `sleeve now` run its own session; `--daemon` fails rather than run
 one.
 
-`just install-service` writes a systemd user unit for this checkout and the `node` on your PATH (run it
-again after moving either); `systemctl --user enable --now sleeved` starts it, `just logs` follows its log.
+`just install-service` writes a systemd user unit for this checkout, which finds `node` on the systemd user
+manager's PATH at each start, so a new Node needs nothing (run it again after moving the checkout); `systemctl --user enable --now sleeved` starts it, `just logs` follows its log.
 The WebSocket refuses pages from other sites (`403`), since they could otherwise nudge and pick for you;
 `--allow-origin` lets one in.
 

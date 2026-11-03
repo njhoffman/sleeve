@@ -248,9 +248,12 @@ build items that depend on it, listed in the later projects.
       pick). Decide the protocol messages and how the daemon is started (systemd user unit like musicman's).
       Done in 0.6.0: `src/daemon/` (own RFC 6455 server on `node:http`, NDJSON Unix socket), protocol in
       `src/protocol/` and `docs/protocol.md`, `just install-service`; `sleeve now` is a client when it runs.
-- [ ] **Unit's node path goes stale.** (p3) [chore] `just install-service` writes the absolute path of the
+- [x] **Unit's node path goes stale.** (p3) [chore] `just install-service` writes the absolute path of the
       `node` on PATH (pnpm's) into the unit, as musicman's does; a node upgrade or a moved checkout breaks
       the service until it is run again. A wrapper that finds node at start would avoid it.
+      Done in 0.19.1: `ExecStart=/usr/bin/env node ...`, node from the user manager's PATH (imported at login,
+      pnpm's included). Without that import the default PATH has no pnpm; add a wrapper if that ever happens.
+      A moved checkout still needs `just install-service` again.
 - [ ] **`sleeve line` for status bars.** (p3) [feature] Print the current line each time it changes, from a
       `subscribe` on the daemon's socket, so polybar/i3blocks need no socat and jq (docs/protocol.md shows
       that pipeline today).
@@ -284,10 +287,14 @@ build items that depend on it, listed in the later projects.
       Done in 0.10.0: `shell/` (its own package, Electron 45, main process in TypeScript); the overlay is made
       override-redirect before it maps (`shell/x11.ts`), so i3 never manages it, and backdrop restacks it on
       map and on every daemon restart (watching `state.json`). `sleeve ctl` gives i3 bindings the keys.
-- [ ] **Sandbox without a profile.** (p3) [chore] On Ubuntu 25.10 AppArmor blocks the user namespaces Chromium's
+- [x] **Sandbox without a profile.** (p3) [chore] On Ubuntu 25.10 AppArmor blocks the user namespaces Chromium's
       sandbox needs, so the shell runs only after `just shell-sandbox` (a profile, sudo) or with
       `--no-sandbox`. The profile names the binary's path, so it breaks when the checkout moves; Ubuntu's
       own Electron apps ship one per app. Revisit if Electron or Ubuntu change this.
+      Done in 0.19.1: the profile globs `@{HOME}/**/shell/node_modules/electron/dist/electron`, as Ubuntu's
+      code profile globs its path, so moves and reinstalls keep it; `just shell` explains instead of letting
+      Electron abort when namespaces are restricted and neither the profile nor a root SUID chrome-sandbox exists.
+      The profile still takes one sudo; defaulting to --no-sandbox was turned down.
 - [ ] **Start the overlay with the session.** (p3) [feature] Today it is `exec just -f .../justfile shell` in the i3
       config. A systemd user unit bound to graphical-session.target would restart it and order it after
       sleeved and backdrop.
@@ -319,7 +326,8 @@ build items that depend on it, listed in the later projects.
       wallpaper window (xwinwrap, GLava without backdrop) that does not lower itself covers the overlay.
 - [ ] **Album-art background without the GPU cost.** (p2) [perf] Sunamu rotates two 200vmax pseudo-elements with
       `blur(180px)` all the time (`Background.css`). Draw a downscaled cover in WebGL or canvas instead,
-      where blur is nearly free.
+      where blur is nearly free. Take the cover's palette from the same canvas, in the renderer: no sharp or
+      node-vibrant (Sunamu's needed a rebuild hack), and nothing to install.
 - [ ] **Live, seamless animation parameters.** (p2) [feature] Changing CSS keyframes restarts the animation.
       Drive the animation from a clock with parameters pushed over the socket and interpolated, so edits
       from the config or a dev panel apply without a jump. The renderer's scroll already works this way
@@ -329,5 +337,3 @@ build items that depend on it, listed in the later projects.
       against the wallpaper region (from backdrop) or the cover, with a shadow as fallback.
       The overlay half is done in 0.11.0 (`src/renderer/contrast.ts`); the cover half waits on an album-art
       background in window mode (see Album-art background without the GPU cost).
-- [ ] **Palette extraction without sharp.** (p3) [chore] Sunamu's sharp + node-vibrant needed a rebuild hack
-      (`build:prepare:sharp`). Extract in the renderer from a canvas, or with ffmpeg as backdrop does.
