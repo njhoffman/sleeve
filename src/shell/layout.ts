@@ -5,7 +5,11 @@ import { DEFAULT_HOST, DEFAULT_PORT } from '../daemon/paths.ts';
 import { validColors, type OverlayColors } from '../renderer/contrast.ts';
 
 // What the Electron shell (shell/main.ts) decides before it opens a window: its options, whether backdrop runs,
-// and where the overlay goes. Free of Electron, so it is tested and typechecked with the rest.
+// who stacks the overlay, and where it goes. Free of Electron, so it is tested and typechecked with the rest.
+//
+// Three modes: an overlay stacked by backdrop (when it runs), an overlay sleeve stacks itself (no backdrop, but a
+// compositor to make it transparent: just above the root, or with --position above over every window), and a
+// plain window.
 //
 // backdrop's contract (Overlays in its docs/specs/visualizer.md): sleeve marks its window _BACKDROP_OVERLAY
 // below|above and runs `backdrop restack` when the window maps and whenever backdrop's daemon pid in state.json
@@ -13,6 +17,8 @@ import { validColors, type OverlayColors } from '../renderer/contrast.ts';
 
 export type ShellMode = 'overlay' | 'window';
 export type OverlayPosition = 'below' | 'above';
+// Who stacks the overlay: backdrop, sleeve itself, or whichever can (backdrop first)
+export type OverlayStack = 'auto' | 'backdrop' | 'self';
 
 export interface ShellOptions {
   mode: ShellMode;
@@ -21,7 +27,9 @@ export interface ShellOptions {
   geometry: Geometry | null;
   // The monitor the overlay goes on, by name (backdrop's, as xrandr names it); otherwise the primary one
   monitor: string | null;
+  // Under backdrop: below or above its visualizer. Stacked by sleeve: just above the root, or over every window
   position: OverlayPosition;
+  stack: OverlayStack;
   // Fill lines without word times word by word, estimated (the page's ?words=estimate)
   estimateWords: boolean;
 }
@@ -83,6 +91,7 @@ export function parseShellArgs(argv: string[]): ShellOptions {
       geometry: { type: 'string' },
       monitor: { type: 'string' },
       position: { type: 'string' },
+      stack: { type: 'string' },
       'estimate-words': { type: 'boolean' }
     }
   });
@@ -91,6 +100,8 @@ export function parseShellArgs(argv: string[]): ShellOptions {
   if (mode !== 'overlay' && mode !== 'window') throw new Error(`Invalid --mode: ${mode} (overlay or window)`);
   const position = text('position') ?? 'below';
   if (position !== 'below' && position !== 'above') throw new Error(`Invalid --position: ${position} (below or above)`);
+  const stack = text('stack') ?? 'auto';
+  if (stack !== 'auto' && stack !== 'backdrop' && stack !== 'self') throw new Error(`Invalid --stack: ${stack} (auto, backdrop or self)`);
   const geometryText = text('geometry');
   const geometry = geometryText === undefined ? null : parseGeometry(geometryText);
   if (geometryText !== undefined && !geometry) throw new Error(`Invalid --geometry: ${geometryText} (WIDTHxHEIGHT+X+Y)`);
@@ -100,7 +111,7 @@ export function parseShellArgs(argv: string[]): ShellOptions {
   } catch {
     throw new Error(`Invalid --url: ${url}`);
   }
-  return { mode, url, geometry, monitor: text('monitor') ?? null, position, estimateWords: values['estimate-words'] === true };
+  return { mode, url, geometry, monitor: text('monitor') ?? null, position, stack, estimateWords: values['estimate-words'] === true };
 }
 
 // backdrop's state, or null when it has none or it cannot be read
@@ -132,10 +143,36 @@ export function backdropRunning(state: BackdropState | null, isAlive: (pid: numb
 export function chooseMonitor(monitors: BackdropMonitor[], name: string | null): BackdropMonitor | null {
   if (name) {
     const named = monitors.find(monitor => monitor.name === name);
-    if (!named) throw new Error(`No monitor ${name} in backdrop's state (${monitors.map(monitor => monitor.name).join(', ') || 'none'})`);
+    if (!named) throw new Error(`No monitor ${name} (${monitors.map(monitor => monitor.name).join(', ') || 'none'})`);
     return named;
   }
   return monitors.find(monitor => monitor.primary) ?? monitors[0] ?? null;
+}
+
+// How the overlay is shown: stacked by backdrop or by sleeve, or as a window when neither can, with why
+export type OverlayChoice = { kind: 'backdrop' | 'self' } | { kind: 'window'; reason: string };
+
+export function chooseOverlay(stack: OverlayStack, { backdrop, compositor }: { backdrop: boolean; compositor: boolean }): OverlayChoice {
+  if (stack === 'backdrop' && !backdrop) throw new Error('--stack backdrop, but backdrop is not running');
+  if (backdrop && stack !== 'self') return { kind: 'backdrop' };
+  if (compositor) return { kind: 'self' };
+  return {
+    kind: 'window',
+    reason: `${stack === 'self' ? '' : 'backdrop is not running and '}no compositor runs (picom or the like), so an overlay could not be transparent; opening a window instead`
+  };
+}
+
+// The monitors `xrandr --listactivemonitors` lists, as backdrop names them:
+//  0: +*DP-3 1920/522x1080/294+0+0  DP-3
+export function parseMonitors(text: string): BackdropMonitor[] {
+  const monitors: BackdropMonitor[] = [];
+  for (const line of text.split('\n')) {
+    const match = /^\s*\d+:\s+\+?(\*?)(\S+)\s+(\d+)\/\d+x(\d+)\/\d+([+-]\d+)([+-]\d+)/.exec(line);
+    if (!match) continue;
+    const [, star, name, width, height, x, y] = match;
+    monitors.push({ name, x: Number(x), y: Number(y), width: Number(width), height: Number(height), ...(star ? { primary: true } : {}) });
+  }
+  return monitors;
 }
 
 // The default overlay: the monitor's full width, from 15% down to just above its visualizer (or to 85% of the

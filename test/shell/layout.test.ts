@@ -3,7 +3,7 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import {
-  backdropRunning, backdropStatePath, chooseMonitor, DEFAULT_URL, formatGeometry, overlayColors, overlayGeometry, parseGeometry, parseShellArgs,
+  backdropRunning, backdropStatePath, chooseMonitor, chooseOverlay, parseMonitors, DEFAULT_URL, formatGeometry, overlayColors, overlayGeometry, parseGeometry, parseShellArgs,
   readBackdropState, rendererUrl, type BackdropMonitor
 } from '../../src/shell/layout.ts';
 
@@ -19,13 +19,15 @@ describe('shell layout', () => {
   });
 
   it('takes its own options and lets Chromium\'s through', () => {
-    expect(parseShellArgs([])).to.deep.equal({ mode: 'overlay', url: DEFAULT_URL, geometry: null, monitor: null, position: 'below', estimateWords: false });
+    expect(parseShellArgs([])).to.deep.equal({ mode: 'overlay', url: DEFAULT_URL, geometry: null, monitor: null, position: 'below', stack: 'auto', estimateWords: false });
     expect(parseShellArgs(['--no-sandbox', '--window', '--url', 'http://127.0.0.1:7000/'])).to.deep.include({ mode: 'window', url: 'http://127.0.0.1:7000/' });
     expect(parseShellArgs(['--estimate-words']).estimateWords).to.equal(true);
     expect(parseShellArgs(['--mode=overlay', '--geometry', '800x400+10+20', '--monitor', 'HDMI-1', '--position', 'above']))
       .to.deep.include({ geometry: { x: 10, y: 20, width: 800, height: 400 }, monitor: 'HDMI-1', position: 'above' });
     expect(() => parseShellArgs(['--mode', 'fullscreen'])).to.throw('Invalid --mode: fullscreen (overlay or window)');
     expect(() => parseShellArgs(['--position', 'middle'])).to.throw('Invalid --position: middle (below or above)');
+    expect(parseShellArgs(['--stack', 'self']).stack).to.equal('self');
+    expect(() => parseShellArgs(['--stack', 'i3'])).to.throw('Invalid --stack: i3 (auto, backdrop or self)');
     expect(() => parseShellArgs(['--geometry', 'big'])).to.throw('Invalid --geometry: big (WIDTHxHEIGHT+X+Y)');
     expect(() => parseShellArgs(['--url', 'nope'])).to.throw('Invalid --url: nope');
   });
@@ -42,7 +44,30 @@ describe('shell layout', () => {
     expect(chooseMonitor([hdmi], null)).to.equal(hdmi);
     expect(chooseMonitor([], null)).to.equal(null);
     expect(chooseMonitor([hdmi, dp3], 'HDMI-1')).to.equal(hdmi);
-    expect(() => chooseMonitor([dp3], 'DP-1')).to.throw('No monitor DP-1 in backdrop\'s state (DP-3)');
+    expect(() => chooseMonitor([dp3], 'DP-1')).to.throw('No monitor DP-1 (DP-3)');
+  });
+
+  it('lets backdrop stack the overlay when it runs, else stacks it itself if a compositor runs, else opens a window', () => {
+    const both = { backdrop: true, compositor: true };
+    const neither = { backdrop: false, compositor: false };
+    expect(chooseOverlay('auto', both)).to.deep.equal({ kind: 'backdrop' });
+    expect(chooseOverlay('auto', { backdrop: false, compositor: true })).to.deep.equal({ kind: 'self' });
+    expect(chooseOverlay('auto', neither)).to.deep.include({ kind: 'window' });
+    expect((chooseOverlay('auto', neither) as { reason: string }).reason).to.match(/^backdrop is not running and no compositor runs/);
+    // Forced: sleeve stacks it even when backdrop runs; backdrop only when it runs
+    expect(chooseOverlay('self', both)).to.deep.equal({ kind: 'self' });
+    expect((chooseOverlay('self', { backdrop: true, compositor: false }) as { reason: string }).reason).to.match(/^no compositor runs/);
+    expect(chooseOverlay('backdrop', both)).to.deep.equal({ kind: 'backdrop' });
+    expect(() => chooseOverlay('backdrop', neither)).to.throw('--stack backdrop, but backdrop is not running');
+  });
+
+  it('reads the monitors xrandr lists, the primary one marked', () => {
+    const text = 'Monitors: 2\n 0: +*DP-3 1920/522x1080/294+0+0  DP-3\n 1: +HDMI-1 2560/597x1440/336+1920-120  HDMI-1\n';
+    expect(parseMonitors(text)).to.deep.equal([
+      { name: 'DP-3', x: 0, y: 0, width: 1920, height: 1080, primary: true },
+      { name: 'HDMI-1', x: 1920, y: -120, width: 2560, height: 1440 }
+    ]);
+    expect(parseMonitors('')).to.deep.equal([]);
   });
 
   it('reads backdrop\'s state and tells whether its daemon runs', async () => {

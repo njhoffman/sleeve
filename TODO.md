@@ -299,7 +299,7 @@ build items that depend on it, listed in the later projects.
 - [ ] **Mouse in the renderer.** (p3) [feature] Click a candidate in the pick panel, scroll back through the
       lyrics by wheel (returning to the current line after a few seconds), click a line to seek (needs a seek
       command and player support).
-- [ ] **Three window modes.** (p2) [feature] `overlay` under backdrop: backdrop places and stacks the window like a
+- [x] **Three window modes.** (p2) [feature] `overlay` under backdrop: backdrop places and stacks the window like a
       GLava instance. `overlay` without backdrop: sleeve stacks its own transparent, click-through,
       desktop-type window above the root. `window`: borderless, focusable, resizable, remembers its
       geometry; backdrop ignores it. Needs a way to detect backdrop (its daemon socket or `status --json`).
@@ -307,6 +307,12 @@ build items that depend on it, listed in the later projects.
       Without backdrop the overlay falls back to a window: i3 has no desktop layer, and an unmanaged window
       would need something to keep it at the bottom as backdrop does (a small restack of our own on map and
       on every new top-level window).
+      Done in 0.18.0: without backdrop, and with a compositor (`_NET_WM_CM_S0` owned), the override-redirect
+      overlay is lowered to the bottom once it maps (`shell/x11.ts`); later windows map over it, so nothing more is
+      needed. `--position above` raises it over every window, again on each MapNotify or ConfigureNotify of a
+      managed window; override-redirect windows (menus, notifications) stay over it. `--stack auto|backdrop|self`;
+      monitors from `xrandr --listactivemonitors`. Window mode is borderless, class `sleeve`. Not handled: a
+      wallpaper window (xwinwrap, GLava without backdrop) that does not lower itself covers the overlay.
 - [ ] **Album-art background without the GPU cost.** (p2) [perf] Sunamu rotates two 200vmax pseudo-elements with
       `blur(180px)` all the time (`Background.css`). Draw a downscaled cover in WebGL or canvas instead,
       where blur is nearly free.

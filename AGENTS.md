@@ -17,6 +17,7 @@ Related projects (keep them in mind before designing player, tagging or window f
 - **backdrop** (`~/git/backdrop`) places sleeve's overlay when it runs: the window is marked
   `_BACKDROP_OVERLAY` (`below`/`above`) and sleeve runs `backdrop restack`; backdrop writes the wallpaper
   colors behind the overlay into its `state.json`. Contract: Overlays in `docs/specs/visualizer.md` there.
+  Without backdrop, sleeve stacks the overlay itself (`stackSelf` in `shell/x11.ts`) and leaves it unmarked.
 - **musicman** (`~/git/musicman`) manages the library, MPD and Spotify, and writes ID3 tags, including
   custom `TXXX:sp_*` fields. sleeve must never clobber them when it writes lyrics. sleeve reads only what
   musicman's `docs/09-contract.md` promises (`paths.json`, the `spotify_track_files` view, read-only); never
@@ -61,7 +62,7 @@ just install-service     # the systemd user unit for sleeved
 - The WebSocket server is our own (`src/daemon/websocket.ts`, on `node:http`); do not add ws. Playback goes on
   the wire stamped with the wall clock (`Date.now()`), never `performance.now()`, which differs per process.
 - The shell (`shell/`) is a separate package so the root install stays light: Electron and x11 are its
-  dependencies only. Its decisions (options, backdrop's state, geometry) live in `src/shell/layout.ts`, Electron
+  dependencies only. Its decisions (options, backdrop's state, who stacks the overlay, monitors, geometry) live in `src/shell/layout.ts`, Electron
   free and tested with the rest; `shell/main.ts` is the Electron glue and `shell/x11.ts` the only X11 code.
   The page gets nothing from the shell but the wallpaper colors behind the overlay (`shell/preload.cjs`, one
   way); everything else goes over sleeved's WebSocket, so the page works the same in a browser.

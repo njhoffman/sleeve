@@ -6,6 +6,19 @@ All notable changes to sleeve are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.18.0] - 2026-11-03
+
+### Added
+
+- The overlay works without backdrop: when a compositor runs, sleeve stacks it itself at the bottom, just above
+  the wallpaper, or with `--position above` over every window (click-through, menus and notifications still on
+  top). Before, it opened as a window whenever backdrop was not running.
+- `just shell --stack auto|backdrop|self` chooses who stacks the overlay.
+
+### Changed
+
+- Window mode is borderless, and every sleeve window has the class `sleeve` for window manager rules.
+
 ## [0.17.0] - 2026-11-03
 
 ### Changed

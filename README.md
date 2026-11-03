@@ -140,8 +140,18 @@ every workspace and under every window, as the visualizer is. backdrop stacks it
 restarts. Options: `--position above` (over the visualizer), `--geometry 1200x500+360+200`, `--monitor
 HDMI-1`, `--url`, `--estimate-words` (the page's `?words=estimate`). The text color follows the wallpaper: backdrop samples the colors behind the overlay, and the
 lyrics turn light or dark by contrast against every part that covers a tenth of it, with a stronger shadow when
-no color reads well over all of it (a picture half dark, half bright). Without backdrop running it opens as a plain window instead; `just shell --window` always
-does, and remembers where it was.
+no color reads well over all of it (a picture half dark, half bright).
+
+Without backdrop, sleeve stacks the overlay itself, as long as a compositor (picom or the like) runs to make it
+transparent: at the bottom, just above the root window's wallpaper, from 15% to 85% of the monitor (as `xrandr
+--listactivemonitors` names it). There `--position above` puts it over every window instead, raised again
+whenever a window maps or is restacked over it; menus, launchers and notifications stay over it, and it never
+takes a click. The text keeps its shadow, since nobody samples the wallpaper. `--stack self` stacks it this way
+even when backdrop runs, and `--stack backdrop` refuses to start without backdrop. With no compositor either, it
+opens as a window.
+
+`just shell --window` opens a borderless window that the window manager moves and sizes, and that remembers
+where it was. Its class is `sleeve`, for rules such as i3's `for_window [class="sleeve"] floating enable`.
 
 Ubuntu's AppArmor blocks the user namespaces Electron's sandbox needs, so Electron stops at once with a
 `chrome-sandbox` error. `just shell-sandbox` installs a profile that allows them for this checkout's Electron

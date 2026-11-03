@@ -1,21 +1,25 @@
-import { app, BrowserWindow, ipcMain, type BrowserWindowConstructorOptions, type Rectangle } from 'electron';
+import { app, BrowserWindow, ipcMain, screen, type BrowserWindowConstructorOptions, type Rectangle } from 'electron';
 import { execFile } from 'node:child_process';
 import { mkdirSync, readFileSync, watch, writeFileSync, type FSWatcher } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import {
-  backdropRunning, backdropStatePath, chooseMonitor, formatGeometry, overlayColors, overlayGeometry, parseShellArgs,
-  readBackdropState, rendererUrl, type BackdropState, type ShellOptions
+  backdropRunning, backdropStatePath, chooseMonitor, chooseOverlay, formatGeometry, overlayColors, overlayGeometry, parseMonitors,
+  parseShellArgs, readBackdropState, rendererUrl, type BackdropMonitor, type BackdropState, type Geometry, type ShellOptions
 } from '../src/shell/layout.ts';
-import { markOverlay } from './x11.ts';
+import { compositorRunning, markOverlay, stackSelf } from './x11.ts';
 
 // sleeve's window: the renderer sleeved serves, either as an overlay on the desktop (transparent, click-through,
-// unmanaged, stacked by backdrop just above the wallpaper) or as a plain window that remembers where it was.
+// unmanaged; stacked by backdrop just above the wallpaper, or by sleeve itself when backdrop does not run) or as a
+// borderless window that remembers where it was.
 // Everything else (lyrics, keys, picks) is the page's, over its WebSocket to sleeved. The one channel from the shell
 // to its page is one way and carries only the wallpaper colors behind the overlay (preload.cjs), which backdrop
 // gives the window's owner and nobody else knows.
 
 const log = (text: string) => process.stderr.write(`sleeve shell: ${text}\n`);
+// WM_CLASS "sleeve" (productName in package.json), for window manager rules (i3: for_window [class="sleeve"]
+// floating enable). Chromium's profile stays in sleeve-shell, out of the way of sleeve's own ~/.config/sleeve.
+app.setPath('userData', path.join(app.getPath('appData'), 'sleeve-shell'));
 const RETRY_MS = 2000;
 
 const webPreferences: BrowserWindowConstructorOptions['webPreferences'] = {
@@ -97,16 +101,20 @@ function forwardColors(window: BrowserWindow, id: number, initial: BackdropState
   };
 }
 
-async function openOverlay(options: ShellOptions): Promise<BrowserWindow> {
-  const statePath = backdropStatePath();
-  const state = readBackdropState(statePath);
-  if (!backdropRunning(state)) {
-    log('backdrop is not running, so an overlay cannot be stacked under your windows; opening a window instead');
-    return openWindow(options);
-  }
-  const monitor = chooseMonitor(state!.monitors, options.monitor);
-  const bounds = options.geometry ?? (monitor ? overlayGeometry(monitor) : null);
-  if (!bounds) throw new Error('backdrop lists no monitors; give --geometry');
+// The monitors xrandr lists (as backdrop names them), else Electron's displays
+function monitors(): Promise<BackdropMonitor[]> {
+  return new Promise(resolve => {
+    execFile('xrandr', ['--listactivemonitors'], (error, stdout) => {
+      const listed = error ? [] : parseMonitors(stdout);
+      if (listed.length) return resolve(listed);
+      const primary = screen.getPrimaryDisplay().id;
+      resolve(screen.getAllDisplays().map(display => ({ name: display.label || String(display.id), ...display.bounds, primary: display.id === primary })));
+    });
+  });
+}
+
+// The transparent, click-through window both overlays use, unmanaged (and marked for backdrop when it stacks it)
+async function overlayWindow(bounds: Geometry, mark: ShellOptions['position'] | null): Promise<BrowserWindow> {
   const window = new BrowserWindow({
     ...bounds,
     show: false,
@@ -122,8 +130,31 @@ async function openOverlay(options: ShellOptions): Promise<BrowserWindow> {
     webPreferences: { ...webPreferences, preload: path.join(import.meta.dirname, 'preload.cjs') }
   });
   window.setIgnoreMouseEvents(true);
+  await markOverlay(windowId(window), mark);
+  return window;
+}
+
+async function openOverlay(options: ShellOptions): Promise<BrowserWindow> {
+  const statePath = backdropStatePath();
+  const state = readBackdropState(statePath);
+  const backdrop = backdropRunning(state);
+  const compositor = backdrop && options.stack !== 'self' ? true : await compositorRunning().catch(error => {
+    log(`cannot tell whether a compositor runs: ${error instanceof Error ? error.message : String(error)}`);
+    return false;
+  });
+  const choice = chooseOverlay(options.stack, { backdrop, compositor });
+  if (choice.kind === 'window') {
+    log(choice.reason);
+    return openWindow(options);
+  }
+  const monitor = chooseMonitor(choice.kind === 'backdrop' ? state!.monitors : await monitors(), options.monitor);
+  const bounds = options.geometry ?? (monitor ? overlayGeometry(monitor) : null);
+  if (!bounds) throw new Error('no monitors found; give --geometry');
+  const where = `${formatGeometry(bounds)} on ${monitor?.name ?? 'the screen'}`;
+  if (choice.kind === 'self') return openSelfOverlay(options, bounds, where);
+
+  const window = await overlayWindow(bounds, options.position);
   const id = windowId(window);
-  await markOverlay(id, options.position);
   const onState = forwardColors(window, id, state!);
   load(window, rendererUrl(options.url, 'overlay', options.estimateWords));
   window.once('show', () => {
@@ -132,9 +163,25 @@ async function openOverlay(options: ShellOptions): Promise<BrowserWindow> {
     setTimeout(restack, 1000);
   });
   window.showInactive();
-  log(`overlay ${formatGeometry(bounds)} on ${monitor?.name ?? 'the screen'}, ${options.position} the visualizer`);
+  log(`overlay ${where}, ${options.position} the visualizer`);
   const watcher = followBackdrop(statePath!, state!.pid, onState);
   window.on('closed', () => watcher?.close());
+  return window;
+}
+
+// The overlay without backdrop: sleeve stacks it (shell/x11.ts), and the page has no wallpaper colors, so it
+// keeps its shadowed text
+async function openSelfOverlay(options: ShellOptions, bounds: Geometry, where: string): Promise<BrowserWindow> {
+  const window = await overlayWindow(bounds, null);
+  load(window, rendererUrl(options.url, 'overlay', options.estimateWords));
+  window.once('show', () => {
+    stackSelf(windowId(window), options.position, log).then(stacking => {
+      setTimeout(() => stacking.restack(), 1000);
+      window.on('closed', () => void stacking.close());
+    }, error => log(`cannot stack the overlay: ${error instanceof Error ? error.message : String(error)}`));
+  });
+  window.showInactive();
+  log(`overlay ${where}, stacked by sleeve ${options.position === 'above' ? 'over every window' : 'above the desktop'} (backdrop not used)`);
   return window;
 }
 
@@ -157,6 +204,8 @@ function openWindow(options: ShellOptions): BrowserWindow {
   const window = new BrowserWindow({
     ...(savedBounds() ?? { width: 960, height: 720 }),
     title: 'sleeve',
+    // Borderless: the window manager moves and sizes it
+    frame: false,
     backgroundColor: '#0f1218',
     autoHideMenuBar: true,
     webPreferences

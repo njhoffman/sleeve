@@ -68,7 +68,7 @@ install-service:
 shell-install:
     cd shell && npm install --no-audit --no-fund
 
-# The lyrics window: an overlay under backdrop by default, or --window; e.g. just shell --position above
+# The lyrics window: an overlay (stacked by backdrop, else by sleeve), or --window; e.g. just shell --position above
 shell *args:
     shell/node_modules/.bin/electron shell "$@"
 

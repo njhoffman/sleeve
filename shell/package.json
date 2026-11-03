@@ -1,6 +1,7 @@
 {
   "name": "sleeve-shell",
   "version": "0.0.0",
+  "productName": "sleeve",
   "private": true,
   "description": "The Electron window for sleeve's renderer: an overlay under backdrop, or a plain window",
   "type": "module",
