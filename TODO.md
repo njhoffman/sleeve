@@ -208,7 +208,19 @@ build items that depend on it, listed in the later projects.
       cache: LRCLIB 203, none under 0.85; NetEase 630, about 50 under 0.85, 133 more than 2 s off, 36 ending early
       or late (remixes given the original's lyrics, a Korean song under Gorillaz' "Intro"). Fixed in
       0.16.0: version markers in match.ts, `doubtful` in the tagger, providers waited for in order.
-      Next: a new dry run with these, then `--write`, then repeat runs for the deferred files.
+      A second dry run (`--retry-now`) was stopped at 1809 files: 1317 deferred, LRCLIB answering 429 "Too many
+      requests from this IP" (its limit is about 90 a minute; 0.15.0 sent up to 200, two at a time). Fixed in
+      0.16.1 (provider `rateLimit`, serial hosts in the throttle).
+      Next: a new dry run once the allowance has recovered, then `--write`, then repeat runs for the deferred files.
+- [x] **Honor LRCLIB's `Retry-After`.** (p1) [fix] Its docs say clients must: on a 429 (and a 503, usually 1 s)
+      wait at least that many seconds, with up to 30% jitter, or risk a temporary ban. sleeve ignores it: the
+      daemon's retry waits a fixed second, and `sleeve tag` goes on with the next file. The throttle could hold
+      the host until it runs out; lrclib.ts's retry could wait for it.
+      Done in 0.16.1, in the provider rather than the throttle, so sleeved and `sleeve tag` share it: a hold
+      until Retry-After plus up to 30% jitter, during which requests fail at once (`LrclibHeldError`) unsent.
+- [ ] **Register sleeve with LRCLIB.** (p3) [chore] An app in https://lrclib.net/developers gets an `Lrclib-App-Id`
+      (public, safe to ship) and about 180 requests a minute instead of 90, and a way for them to reach us.
+      sleeve would send the header when one is configured.
 - [ ] **LRCLIB's refusals in library runs.** (p3) [perf] About half the less-known tracks get a 503 from LRCLIB on
       first ask and are deferred when NetEase has nothing synced; with the 10 min / 1 h / 6 h / 24 h backoff a
       library run needs several passes. Watch how many stay deferred after a full run before tuning the backoff

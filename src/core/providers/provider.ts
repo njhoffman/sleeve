@@ -19,6 +19,15 @@ export interface Provider {
   // Local providers are cheap and authoritative: they run first and need no network
   local: boolean;
   search(query: TrackQuery, context: ProviderContext): Promise<Candidate[]>;
+  // What the service asks of clients that send many requests (a library run): the least time between two
+  // requests to its host, and whether they go one at a time
+  rateLimit?: RateLimit;
+}
+
+export interface RateLimit {
+  host: string;
+  gapMs: number;
+  serial: boolean;
 }
 
 export class ProviderHttpError extends Error {

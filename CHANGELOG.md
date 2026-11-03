@@ -6,6 +6,17 @@ All notable changes to sleeve are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.16.1] - 2026-11-02
+
+### Fixed
+
+- `sleeve tag` keeps to LRCLIB's rate limit (about 90 requests a minute from one IP): its requests go one at a
+  time, at least 700 ms apart, whatever `--delay` and `--jobs` say. Before, a library run sent up to 200 a minute
+  and LRCLIB turned every lookup away ("429 Too many requests") until it slowed down.
+- sleeve honors LRCLIB's `Retry-After`: after a 429 or 503 that says how long to wait, nothing is sent to LRCLIB
+  until it has run out (with up to 30% jitter), by sleeved and `sleeve tag` alike, and a retry waits at least that
+  long. Before, sleeve retried after a second whatever LRCLIB asked, which its docs say may get a client banned.
+
 ## [0.16.0] - 2026-11-02
 
 ### Changed

@@ -16,7 +16,8 @@ import type { ScoredCandidate, TrackQuery } from './types.ts';
 // when only unsynced lyrics are found, so a second run only does what the first did not. The file's own lyrics are never the source (the embedded provider
 // is left out): writing them back changes nothing. Files a provider failed for go into TagRetries and wait their
 // turn. A few files are looked up at once (jobs); requests to each service are spaced delayMs apart across all of
-// them (src/core/throttle.ts), and reports come in the files' order.
+// them, or further and one at a time where the provider's rate limit asks (LRCLIB: 700 ms; src/core/throttle.ts),
+// and reports come in the files' order.
 
 // Lyrics that go into a file are held to more than a match on screen (see doubts below). The providers come in
 // the order of preference: when one fails, lyrics from one after it wait (the file is deferred) until it answers,
@@ -98,8 +99,9 @@ export async function tagFiles(files: string[], options: TagOptions = {}): Promi
   const now = options.now ?? Date.now;
   const providers = (options.providers ?? DEFAULT_PROVIDERS).filter(provider => provider.name !== 'embedded');
   const online = new Set(providers.filter(provider => !provider.local).map(provider => provider.name));
+  const limits = providers.flatMap(provider => provider.rateLimit ? [provider.rateLimit] : []);
   const fetch = throttledFetch(options.fetch ?? globalThis.fetch, {
-    gapMs: options.delayMs ?? DEFAULT_DELAY_MS, now, ...(options.sleep ? { sleep: options.sleep } : {})
+    gapMs: options.delayMs ?? DEFAULT_DELAY_MS, limits, now, ...(options.sleep ? { sleep: options.sleep } : {})
   });
   const jobs = Math.max(1, options.jobs ?? DEFAULT_JOBS);
   // Reports by file, held until the ones before them are in; null for a file not reported

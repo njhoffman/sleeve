@@ -128,7 +128,7 @@ export function buildProgram(io: Io, setExit: (code: number) => void): Command {
     .option('--force', 'replace lyrics a file has already')
     .option('--unsynced', 'write unsynced lyrics when no synced ones are found')
     .option('--retry-now', 'ask about files deferred for a failing provider now, not after their pause')
-    .option('--delay <ms>', 'least time between two requests to one service, in milliseconds', String(DEFAULT_DELAY_MS))
+    .option('--delay <ms>', 'least time between two requests to one service, in milliseconds (LRCLIB: never under 700, one at a time)', String(DEFAULT_DELAY_MS))
     .option('-j, --jobs <count>', 'files looked up at once', String(DEFAULT_JOBS))
     .option('--limit <count>', 'stop after this many files written (or that would be)')
     .option('-p, --providers <names>', 'comma-separated providers to ask, as for sleeve lyrics (the file\'s own lyrics never count)')

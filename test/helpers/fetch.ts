@@ -9,8 +9,10 @@ export interface Route {
   match: RegExp;
   status?: number;
   body?: unknown;
+  // Response headers besides Content-Type
+  headers?: Record<string, string>;
   // Answers in turn for repeated requests to the same route; the last one repeats
-  sequence?: Array<{ status: number; body?: unknown }>;
+  sequence?: Array<{ status: number; body?: unknown; headers?: Record<string, string> }>;
 }
 
 export interface FakeFetch {
@@ -33,9 +35,9 @@ export function fakeFetch(routes: Route[]): FakeFetch {
     if (!route) return new Response('{"message":"no route"}', { status: 404 });
     const count = counts.get(route) ?? 0;
     counts.set(route, count + 1);
-    const answer = route.sequence ? route.sequence[Math.min(count, route.sequence.length - 1)] : { status: route.status ?? 200, body: route.body };
+    const answer = route.sequence ? route.sequence[Math.min(count, route.sequence.length - 1)] : { status: route.status ?? 200, body: route.body, headers: route.headers };
     const body = answer.body === undefined ? null : typeof answer.body === 'string' ? answer.body : JSON.stringify(answer.body);
-    return new Response(body, { status: answer.status, headers: { 'Content-Type': 'application/json' } });
+    return new Response(body, { status: answer.status, headers: { 'Content-Type': 'application/json', ...answer.headers } });
   }) as typeof globalThis.fetch;
   return { fetch, calls };
 }

@@ -1,5 +1,5 @@
 import { expect } from 'chai';
-import { createLrclib, toCandidate, type LrclibRecord } from '../../src/core/providers/lrclib.ts';
+import { createLrclib, LrclibHeldError, retryAfterMs, toCandidate, type LrclibRecord } from '../../src/core/providers/lrclib.ts';
 import type { ProviderContext } from '../../src/core/providers/provider.ts';
 import { fakeFetch, fixture, type Route } from '../helpers/fetch.ts';
 
@@ -46,6 +46,50 @@ describe('LRCLIB provider', () => {
     const noDuration = context([{ match: /\/api\/search\?/, body: search }]);
     await provider.search({ artist: 'Radiohead', title: 'Everything In Its Right Place' }, noDuration.context);
     expect(noDuration.calls.map(call => new URL(call.url).pathname)).to.deep.equal(['/api/search']);
+  });
+
+  describe('Retry-After', () => {
+    // A clock the test moves; sleeping moves it too
+    const clocked = (retries: number) => {
+      let clock = 1_000_000;
+      const slept: number[] = [];
+      const lrclib = createLrclib({ retries, retryDelayMs: 1000, now: () => clock, random: () => 0.5, sleep: async ms => { slept.push(ms); clock += ms; } });
+      return { lrclib, slept, advance: (ms: number) => { clock += ms; } };
+    };
+    const limited = { message: 'Too many requests from this IP address.', name: 'RateLimitExceeded', statusCode: 429, scope: 'ip' };
+
+    it('sends nothing until it has run out, with jitter, after a 429 that says how long', async () => {
+      const { lrclib, advance } = clocked(0);
+      const busy = context([{ match: /\/api\/get\?/, sequence: [{ status: 429, body: limited, headers: { 'Retry-After': '20' } }, { status: 200, body: deathCab }] }]);
+      expect((await lrclib.search(query, busy.context).catch(caught => caught)).status).to.equal(429);
+      // 20 s and 15% of it (random 0.5 of the 30%): nothing is sent before 23 s
+      advance(22_900);
+      const held = await lrclib.search(query, busy.context).catch(caught => caught);
+      expect(held).to.be.instanceOf(LrclibHeldError);
+      expect(busy.calls).to.have.length(1);
+      advance(200);
+      expect(await lrclib.search(query, busy.context)).to.have.length(1);
+      expect(busy.calls).to.have.length(2);
+    });
+
+    it('retries no sooner than it says, and as before when it does not say', async () => {
+      const told = clocked(1);
+      const busy = context([{ match: /\/api\/get\?/, sequence: [{ status: 503, body: overloaded, headers: { 'Retry-After': '4' } }, { status: 200, body: deathCab }] }]);
+      expect(await told.lrclib.search(query, busy.context)).to.have.length(1);
+      expect(told.slept).to.deep.equal([4600]);
+
+      const untold = clocked(1);
+      const quiet = context([{ match: /\/api\/get\?/, sequence: [{ status: 503, body: overloaded }, { status: 200, body: deathCab }] }]);
+      expect(await untold.lrclib.search(query, quiet.context)).to.have.length(1);
+      expect(untold.slept).to.deep.equal([1000]);
+    });
+
+    it('reads seconds and HTTP dates', () => {
+      expect(retryAfterMs('30', 0)).to.equal(30_000);
+      expect(retryAfterMs(new Date(90_000).toUTCString(), 30_000)).to.equal(60_000);
+      expect(retryAfterMs('soon', 0)).to.equal(null);
+      expect(retryAfterMs(null, 0)).to.equal(null);
+    });
   });
 
   it('retries an overloaded service, then gives up with its message', async () => {

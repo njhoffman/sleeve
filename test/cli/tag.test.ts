@@ -19,4 +19,8 @@ describe('sleeve tag providers', () => {
     expect(error!.message).to.include('503');
     expect(fake.calls).to.have.length(1);
   });
+
+  it('keeps LRCLIB\'s rate limit on the batch provider: one request at a time, 700 ms apart', () => {
+    expect(forBatch(DEFAULT_PROVIDERS).find(provider => provider.name === 'lrclib')!.rateLimit).to.deep.equal({ host: 'lrclib.net', gapMs: 700, serial: true });
+  });
 });

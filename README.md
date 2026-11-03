@@ -188,7 +188,10 @@ live in the same database as the stored answers, match tracks the same way, and 
 `sleeve cache clear` leaves them alone.
 
 LRCLIB answers "server busy" (503) under load, mostly for lookups it has not cached, and stays busy for those
-for minutes; sleeve retries once after a second and then reports it (`sleeve tag` does not retry, see below),
+for minutes; sleeve retries once after a second and then reports it (`sleeve tag` does not retry, see below).
+When LRCLIB says how long to wait (`Retry-After`, on a 503 or a 429 "Too many requests"), sleeve sends it nothing
+until that has run out, plus up to 30% more, as LRCLIB's docs require of clients; a lookup in the meantime fails
+at once ("asked to wait until ...") and is asked again later,
 and NetEase usually has the song. NetEase's search ranks loosely (live versions and covers come first), so its
 results are scored by title, artist and length before any lyrics are fetched, and only the best two are
 fetched; credit lines at the top of its lyrics ("作词 : ...") are dropped, and lyrics that only say the song is
@@ -224,9 +227,15 @@ A run lists only the files that need attention (`-v`: every file) and ends with 
 what the first wrote, so stopping it (Ctrl-C finishes the files in hand) loses nothing. Files a provider failed for
 (LRCLIB is often overloaded, for about a quarter of a library's first run) are deferred: a later run asks about
 them again after 10 minutes, then 1, 6 and 24 hours (`--retry-now` at once), so a library takes a few runs.
-LRCLIB is asked once per file, with no retry, since a second ask a moment later hardly ever gets through. Two files are looked up at once (`-j`), and requests to each service are at least
-300 ms apart (`--delay`), about a second a file. More jobs gain little: LRCLIB then turns away more of the
-lookups it has not seen, and those files wait for a later run. `--limit` stops after that many files.
+LRCLIB is asked once per file, with no retry, since a second ask a moment later hardly ever gets through.
+
+Two files are looked up at once (`-j`), and requests to each service are at least 300 ms apart (`--delay`). A
+service's own rate limit comes first: LRCLIB allows about 90 requests a minute from one IP for a client that
+names itself, as sleeve does, and asks batch clients to send them one at a time
+([its docs](https://lrclib.net/docs), "Rate Limiting"), so its requests go one at a time, at least 700 ms apart
+(`--delay` can only make that longer). Going over it gets "429 Too many requests" for every lookup, and the files
+are deferred. Files LRCLIB has to be asked about take about a second each; those the cache answers go at once.
+More jobs gain little. `--limit` stops after that many files.
 
 ## Development
 
