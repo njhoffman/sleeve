@@ -6,11 +6,12 @@ import { ProviderHttpError, type Provider, type ProviderContext } from './provid
 // duration within about 2 seconds, and answers 404 when it has nothing; /api/search returns up to 20 records
 // by artist and title. A get hit is the best candidate, so search only runs when get misses or when no
 // duration is known (get needs one). The service answers 503 "ServerOverloaded" under load, mostly for
-// lookups it has not cached, so a 503 or 429 is retried after a pause.
+// lookups it has not cached, so a 503 or 429 is retried once after a short pause. Overloads often last minutes;
+// sleeved asks again later (src/now/session.ts) rather than holding the lookup up here.
 
 const BASE = 'https://lrclib.net/api';
-const RETRIES = 2;
-const RETRY_DELAY_MS = 1500;
+const RETRIES = 1;
+const RETRY_DELAY_MS = 1000;
 
 // One LRCLIB record, as /api/get and /api/search return it
 export interface LrclibRecord {

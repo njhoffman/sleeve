@@ -178,6 +178,8 @@ export class SleeveDaemon {
       if (!sameTrack) this.logTrack(state);
     }
     if (!state.loading && last.loading && sameTrack) this.logLookup(state);
+    // A provider that failed answering on a later try
+    else if (!state.loading && !last.loading && sameTrack && last.result && state.result?.best !== last.result.best) this.logLookup(state);
     const prefetch = this.session.prefetching?.() ?? null;
     if (prefetch !== this.lastPrefetch) {
       this.lastPrefetch = prefetch;

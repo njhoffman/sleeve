@@ -22,6 +22,9 @@ import type { Candidate, LyricsResult, ProviderError, ScoredCandidate, TrackQuer
 // one is read from its file again (an edited .lrc counts). With `all` every provider runs as usual and the
 // pick goes first. A pick that is no longer there (its file gone) is reported in errors and the ranking
 // stands. The offset for the candidate shown comes back as offsetMs; the lyrics themselves are not shifted.
+//
+// onPartial hears the result so far whenever an online provider answers while others are still out, once
+// something passes the threshold: a display can show it instead of waiting on a slow or retrying provider.
 
 export const DEFAULT_PROVIDERS: Provider[] = [sidecar, embedded, lrclib, netease];
 export const DEFAULT_TIMEOUT_MS = 10_000;
@@ -41,6 +44,8 @@ export interface FetchOptions {
   refresh?: boolean;
   // The user's picks and offsets
   prefs?: TrackPrefs;
+  // The result so far, each time an online provider answers before the last one (see above)
+  onPartial?: (result: LyricsResult) => void;
 }
 
 export const USER_AGENT = `sleeve/${pkg.version} (https://github.com/njhoffman/sleeve)`;
@@ -106,9 +111,23 @@ function finish(candidates: ScoredCandidate[], rejected: ScoredCandidate[], pinn
   return { best, candidates: ranked, rejected: rejected.filter(others), errors, pinned: Boolean(pinned), offsetMs: offset };
 }
 
-async function run(providers: Provider[], query: TrackQuery, options: RunOptions) {
+// Every provider in parallel; progress hears the candidates and errors so far after each one that answers
+// while others are still out
+type Progress = (candidates: ScoredCandidate[], errors: ProviderError[]) => void;
+
+async function run(providers: Provider[], query: TrackQuery, options: RunOptions, progress?: Progress) {
   const errors: ProviderError[] = [];
+  const answered: ScoredCandidate[] = [];
+  let pending = providers.length;
   const results = await Promise.all(providers.map(async provider => {
+    const candidates = await ask(provider);
+    answered.push(...candidates.map(candidate => scoreCandidate(query, candidate)));
+    if (--pending > 0) progress?.([...answered], [...errors]);
+    return candidates;
+  }));
+  return { candidates: results.flat().map(candidate => scoreCandidate(query, candidate)), errors };
+
+  async function ask(provider: Provider): Promise<Candidate[]> {
     const stored = cached(provider, query, options, errors);
     if (stored) return stored;
     const timeout = AbortSignal.timeout(options.timeoutMs);
@@ -126,8 +145,7 @@ async function run(providers: Provider[], query: TrackQuery, options: RunOptions
       errors.push({ provider: provider.name, message: message(error, signal) });
       return [];
     }
-  }));
-  return { candidates: results.flat().map(candidate => scoreCandidate(query, candidate)), errors };
+  }
 }
 
 export async function fetchLyrics(query: TrackQuery, options: FetchOptions = {}): Promise<LyricsResult> {
@@ -163,9 +181,18 @@ export async function fetchLyrics(query: TrackQuery, options: FetchOptions = {})
 
   const local = await run(providers.filter(provider => provider.local), query, settings);
   const haveSynced = local.candidates.some(candidate => candidate.score >= THRESHOLD && candidate.lyrics.synced);
+  const partial: Progress | undefined = options.onPartial && !options.all
+    ? (answered, answeredErrors) => {
+      const known = [...local.candidates, ...answered];
+      const passing = rankCandidates(known.filter(candidate => candidate.score >= THRESHOLD));
+      if (!passing.length) return;
+      options.onPartial!(finish(passing, rankCandidates(known.filter(candidate => candidate.score < THRESHOLD)), null, record,
+        [...errors, ...local.errors, ...answeredErrors]));
+    }
+    : undefined;
   const online = haveSynced && !options.all
     ? { candidates: [] as ScoredCandidate[], errors: [] as ProviderError[] }
-    : await run(providers.filter(provider => !provider.local), query, settings);
+    : await run(providers.filter(provider => !provider.local), query, settings, partial);
   const all = [...local.candidates, ...online.candidates];
   errors.push(...local.errors, ...online.errors);
   let pinned: ScoredCandidate | null = null;

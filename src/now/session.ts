@@ -1,5 +1,5 @@
 import { DURATION_WINDOW_MS } from '../core/db.ts';
-import { fetchLyrics, queryForFile, type FetchOptions } from '../core/fetchLyrics.ts';
+import { DEFAULT_PROVIDERS, fetchLyrics, queryForFile, type FetchOptions } from '../core/fetchLyrics.ts';
 import type { TagReader } from '../core/tags/reader.ts';
 import { formatRef, sameCandidate, type CandidateRef } from '../core/prefs.ts';
 import type { LyricsResult, ScoredCandidate, TrackQuery } from '../core/types.ts';
@@ -16,6 +16,16 @@ export type { NowState } from './state.ts';
 // Lyrics for whatever plays: follows the active playback, looks lyrics up once per track (the previous lookup
 // is abandoned when the track changes first), and says which line is current, the user's offset included.
 // What the daemon will serve; `sleeve now` prints it.
+//
+// The lyrics show as soon as one provider has them, without waiting on the others (onPartial), and a provider
+// that failed (LRCLIB answers 503 for minutes when it is overloaded) is asked again after RETRY_DELAYS_MS while
+// the track plays. A later answer replaces what is shown only as takeLater allows.
+
+export const RETRY_DELAYS_MS = [20_000, 60_000, 180_000, 600_000];
+// How far into a track a later answer may still replace synced lyrics shown: a share of its length, or a time
+// when the length is unknown
+const SWITCH_SHARE = 0.2;
+const SWITCH_MS = 30_000;
 
 
 export interface SessionOptions extends Pick<FetchOptions, 'providers' | 'timeoutMs' | 'fetch' | 'cache' | 'prefs' | 'userAgent'> {
@@ -24,6 +34,8 @@ export interface SessionOptions extends Pick<FetchOptions, 'providers' | 'timeou
   lookup?: typeof fetchLyrics;
   // Look up the track the player has queued next once the current one is settled (default true)
   prefetch?: boolean;
+  // When online providers failed, ask again after each of these pauses, while the track plays
+  retryDelaysMs?: number[];
 }
 
 interface Answer {
@@ -82,6 +94,21 @@ function listed(result: LyricsResult | null): ScoredCandidate[] {
   return [...(result.best ? [result.best] : []), ...result.candidates, ...result.rejected];
 }
 
+// The result to show when a later answer comes in for the track playing (another provider answering, a retry):
+// the later one, unless synced lyrics are shown and the track is past its first fifth (30 s without a length),
+// so lyrics never jump mid-song; then the lyrics shown stay, with the later candidates and errors. The offset
+// shown stays with the lyrics shown.
+export function takeLater(shown: LyricsResult | null, later: LyricsResult, positionMs: number, durationMs?: number): LyricsResult {
+  if (!shown?.best) return later;
+  if (shown.pinned) return shown;
+  const current = shown.best;
+  const keep = { ...later, best: current, offsetMs: shown.offsetMs };
+  if (!later.best) return keep;
+  if (later.best.provider === current.provider && later.best.id === current.id) return keep;
+  const early = positionMs < (durationMs ? durationMs * SWITCH_SHARE : SWITCH_MS);
+  return !current.lyrics.synced || early ? later : keep;
+}
+
 export class NowPlaying {
   private source: PlaybackSource;
   private options: SessionOptions;
@@ -94,6 +121,7 @@ export class NowPlaying {
   private listeners = new Listeners<NowState>();
   private unsubscribe: (() => void) | null = null;
   private prefetched: Prefetch | null = null;
+  private retryTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(source: PlaybackSource, options: SessionOptions = {}) {
     this.source = source;
@@ -144,6 +172,7 @@ export class NowPlaying {
     this.abort = null;
     if (!playback?.track) {
       this.generation++;
+      this.clearRetry();
       this.state = { playback, query: null, result: null, loading: false, error: null };
       this.listeners.emit(this.state);
       return;
@@ -162,6 +191,7 @@ export class NowPlaying {
   // reload of the same track (refresh, a pick) keeps showing what it had until the new answer is in.
   private async load(track: PlayingTrack, { fresh = false, refresh = false }: { fresh?: boolean; refresh?: boolean } = {}): Promise<void> {
     this.abort?.abort();
+    this.clearRetry();
     const adopted = fresh && this.prefetched?.key === this.key ? this.prefetched : null;
     if (adopted) this.prefetched = null;
     const abort = adopted?.abort ?? new AbortController();
@@ -185,9 +215,17 @@ export class NowPlaying {
         this.state = { ...this.state, query };
         if (query) {
           const { lookup, fetchOptions } = this.lookupOptions();
-          const result = await lookup(query, { ...fetchOptions, signal: abort.signal, ...(refresh ? { refresh } : {}) });
+          // What the first providers found shows while the rest are still out
+          let partial = false;
+          const onPartial = (result: LyricsResult) => {
+            if (stale()) return;
+            this.state = { ...this.state, result: partial ? this.later(result) : result };
+            partial = true;
+            this.listeners.emit(this.state);
+          };
+          const result = await lookup(query, { ...fetchOptions, signal: abort.signal, onPartial, ...(refresh ? { refresh } : {}) });
           if (stale()) return;
-          this.state = { ...this.state, result };
+          this.state = { ...this.state, result: partial ? this.later(result) : result };
         }
       }
     } catch (error) {
@@ -197,6 +235,59 @@ export class NowPlaying {
     this.state = { ...this.state, loading: false };
     this.prefetchNext();
     this.listeners.emit(this.state);
+    this.scheduleRetry(generation, 0);
+  }
+
+  private later(result: LyricsResult): LyricsResult {
+    return takeLater(this.state.result, result, this.position(), this.state.playback?.track?.durationMs);
+  }
+
+  // The online providers that failed in the lookup shown (local ones and the cache are not worth asking again)
+  private failedOnline(result: LyricsResult): string[] {
+    const online = new Set((this.options.providers ?? DEFAULT_PROVIDERS).filter(provider => !provider.local).map(provider => provider.name));
+    return result.errors.map(error => error.provider).filter(name => online.has(name));
+  }
+
+  private clearRetry(): void {
+    if (this.retryTimer) clearTimeout(this.retryTimer);
+    this.retryTimer = null;
+  }
+
+  // Asks again, after the attempt-th pause, when online providers failed and nothing picked is shown. A plain
+  // lookup does it: the providers that answered come from the cache, those that failed have nothing stored.
+  private scheduleRetry(generation: number, attempt: number): void {
+    this.clearRetry();
+    const { query, result } = this.state;
+    const delays = this.options.retryDelaysMs ?? RETRY_DELAYS_MS;
+    if (this.generation !== generation || !query || !result || result.pinned || attempt >= delays.length) return;
+    if (!this.failedOnline(result).length) return;
+    this.retryTimer = setTimeout(() => void this.retry(generation, attempt), delays[attempt]);
+    // Never what keeps a process (sleeve now --once) alive
+    (this.retryTimer as { unref?: () => void }).unref?.();
+  }
+
+  private async retry(generation: number, attempt: number): Promise<void> {
+    this.retryTimer = null;
+    const query = this.state.query;
+    if (this.generation !== generation || !query) return;
+    const abort = new AbortController();
+    this.abort = abort;
+    const { lookup, fetchOptions } = this.lookupOptions();
+    try {
+      const result = await lookup(query, { ...fetchOptions, signal: abort.signal });
+      if (this.generation !== generation) return;
+      this.state = { ...this.state, result: this.later(result) };
+      this.listeners.emit(this.state);
+    } catch {
+      // Asked again at the next pause
+      if (this.generation !== generation) return;
+    }
+    this.scheduleRetry(generation, attempt + 1);
+  }
+
+  // Whether a lookup is waiting to ask failed providers again
+  retrying(): boolean {
+    return this.retryTimer !== null;
   }
 
   // Starts the lookup for the track queued next, once the current one is settled; drops one for a track that is no
@@ -309,6 +400,7 @@ export class NowPlaying {
 
   close(): void {
     this.generation++;
+    this.clearRetry();
     this.unsubscribe?.();
     this.abort?.abort();
     this.prefetched?.abort.abort();

@@ -6,6 +6,21 @@ All notable changes to sleeve are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.13.0] - 2026-11-02
+
+### Added
+
+- When LRCLIB (or another online provider) fails, as it often does under load, sleeved asks it again while the
+  track plays: after 20 seconds, then 1, 3 and 10 minutes. Better lyrics that turn up replace the ones shown in
+  the first fifth of the track, or at any time when nothing synced is shown; later they wait for the next play,
+  already stored.
+
+### Changed
+
+- The lyrics show as soon as one provider has them, instead of waiting on the slowest: an overloaded LRCLIB no
+  longer holds NetEase's lyrics back for several seconds.
+- LRCLIB is retried once within a lookup, after a second, instead of twice over four and a half seconds.
+
 ## [0.12.0] - 2026-11-02
 
 ### Added

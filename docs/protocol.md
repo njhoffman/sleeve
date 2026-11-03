@@ -58,7 +58,7 @@ the greeting), then each change as it happens.
 | ---------- | ----------------------------------------------------------------------------------------- | -------------------------------------- |
 | `hello`    | `protocol` (1), `version` (sleeve's)                                                      | first                                  |
 | `playback` | `playback`: `{ player, state, track, positionMs, at, rate }` or `null`                    | on every playback change               |
-| `lyrics`   | `key`, `query`, `loading`, `error`, `result`                                              | track change, lookup start and end, pick, refresh |
+| `lyrics`   | `key`, `query`, `loading`, `error`, `result`                                              | track change, lookup start and end, pick, refresh, a provider answering late |
 | `offset`   | `offsetMs`                                                                                | after a nudge or offset: the rest of the last `lyrics` stands |
 | `players`  | `problems`: `[{ player, problem }]`, players that cannot be reached                       | when that list changes                 |
 | `line`     | `key`, `line`: `{ index, text, timeMs }` (`index` -1 before the first line)               | to subscribers, as the line changes    |
@@ -69,7 +69,10 @@ the greeting), then each change as it happens.
 (`src/core/types.ts`): `best` (the candidate shown, with `lyrics.lines[]` of `{ time, text, words? }`),
 `candidates`, `rejected`, `errors`, `pinned` and `offsetMs`. Lyrics are as the provider gave them; apply
 `offsetMs` (positive: later) when showing them. While a pick or refresh reloads, `lyrics` comes with
-`loading: true` and the old `result`, so a display keeps what it shows.
+`loading: true` and the old `result`, so a display keeps what it shows. A lookup sends what the first providers
+found while the others are still out (`loading: true` with a `result`), and sleeved asks a provider that failed
+again while the track plays (after 20 s, 1, 3 and 10 minutes): each answer that changes the result comes as
+another `lyrics`. Synced lyrics shown are replaced only in the first fifth of the track.
 
 ## Client to daemon
 

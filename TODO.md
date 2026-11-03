@@ -30,6 +30,8 @@ Reviewed: 2026-11-02
       immediate position and musicman's adapters are one-shot reads; musicman shares a contract
       (its docs/09-contract.md, 1.55.0): `paths.json` (MPD and the database) and the `spotify_track_files` view,
       so Spotify tracks get their library file. Tag writing is still open (see Batch-write lyrics).
+      Tag writing settled 2026-11-02 in the contract's "Lyrics in the library's tags" (musicman, unreleased):
+      sleeve writes `USLT`/`SYLT` itself, not through musicman, and musicman's node-id3 rewrites carry both over.
 - [ ] **Check license obligations.** (p3) [docs] Sunamu is MPL-2.0: any file copied or closely ported from it
       (LRC parser, Musixmatch client) stays MPL-2.0 with its notice. Pick sleeve's license with that in mind.
 
@@ -91,6 +93,12 @@ build items that depend on it, listed in the later projects.
       what other providers and the cache are for: port Musixmatch/NetEase next, cache found and not-found
       results, and in batch tagging back off and retry later instead of failing the file.
       Mitigated in 0.2.0 (cache) and 0.3.0 (NetEase covers the misses); still open for batch tagging.
+      Sampled again 2026-11-02: 8 of 12 uncached `/api/get` answered 503; some recover within seconds, some
+      stay 503 for minutes on `/api/search` too (1 of 3 back after two minutes). Done in 0.13.0 for playback:
+      the lookup shows the first provider's answer (`onPartial`), retries LRCLIB once, and sleeved asks failed
+      providers again after 20 s, 1, 3 and 10 min (`takeLater` in `src/now/session.ts` decides whether the
+      answer replaces what is shown). Left for batch tagging: a persisted retry queue in `sleeve.db` (track,
+      provider, next attempt) with a shared rate limit, so a run skips and comes back instead of failing files.
 - [ ] **A source of word timings.** (p2) [feature] Word-by-word highlight (0.12.0) needs `words`, and almost no
       lyrics have them: on 2026-11-02 none of the 27 cached answers did, nor any of 160 LRCLIB synced records for
       8 popular tracks (no enhanced LRC tags, `hasWordSync` false on all). Today only a word-timed `.lrc`
@@ -169,6 +177,13 @@ build items that depend on it, listed in the later projects.
       library (7338 mp3 files in `~/Music`). Decide USLT with LRC text (widely read) versus SYLT (proper
       but poorly supported), rate-limit provider calls, and never overwrite user lyrics without a flag.
       Must preserve musicman's custom ID3 fields; see the musicman integration item in Planning.
+      Rules from musicman's contract (docs/09-contract.md, "Lyrics in the library's tags"): change `USLT` and
+      `SYLT` only, byte for byte nothing else and not the tag version (so a frame-level writer of our own, not
+      node-id3); exactly one `USLT`, replaced in place; a `USLT` with text only with `--force`; write through a
+      temporary file renamed over the original, only if mtime and size are unchanged since the read; leave the
+      new mtime. The library on 2026-11-02 (musicman's db, 7107 songs): 3957 have a `USLT`, 3878 of them empty
+      (language `XXX`), 79 plain lyrics from beets' lyrics plugin, none LRC. `beet write`/`beet modify` would
+      write beets' own lyrics back over ours; musicman never runs them.
 
 ## 5. Players
 

@@ -57,8 +57,8 @@ describe('LRCLIB provider', () => {
     const error = await provider.search(query, down.context).catch(caught => caught);
     expect(error.message).to.equal('LRCLIB answered 503: The server is busy, please retry in a moment');
     expect(error.status).to.equal(503);
-    // The first try and two retries
-    expect(down.calls).to.have.length(3);
+    // The first try and one retry
+    expect(down.calls).to.have.length(2);
   });
 
   it('does not retry other errors, and reports a body that is not JSON', async () => {

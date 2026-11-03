@@ -4,7 +4,8 @@ import { fetchLyrics, queryForFile } from '../../src/core/fetchLyrics.ts';
 import { TrackPrefs } from '../../src/core/prefs.ts';
 import type { Provider } from '../../src/core/providers/provider.ts';
 import type { FileTags, TagReader } from '../../src/core/tags/reader.ts';
-import type { Candidate, Lyrics } from '../../src/core/types.ts';
+import type { Candidate, Lyrics, LyricsResult } from '../../src/core/types.ts';
+import { until } from '../helpers/fakeMpd.ts';
 
 const synced: Lyrics = { synced: true, instrumental: false, lines: [{ time: 1000, text: 'synced' }] };
 const unsynced: Lyrics = { synced: false, instrumental: false, lines: [{ time: null, text: 'plain' }] };
@@ -40,6 +41,34 @@ describe('fetchLyrics', () => {
       provider('online', false, async () => [answer('online', synced)])
     ] });
     expect(result.candidates.map(item => item.provider)).to.deep.equal(['online', 'embedded']);
+  });
+
+  it('reports the result so far while slower providers are still out', async () => {
+    let release: () => void = () => {};
+    const slow = provider('slow', false, async () => {
+      await new Promise<void>(resolve => { release = resolve; });
+      return [answer('slow', synced, { id: 's' })];
+    });
+    const partials: LyricsResult[] = [];
+    const pending = fetchLyrics(query, { onPartial: result => partials.push(result), providers: [
+      slow,
+      provider('fast', false, async () => [answer('fast', unsynced, { id: 'f' })]),
+      provider('broken', false, async () => { throw new Error('503'); })
+    ] });
+    await until(() => partials.length === 2);
+    expect(partials.map(result => result.best?.provider)).to.deep.equal(['fast', 'fast']);
+    expect(partials[1].errors).to.deep.equal([{ provider: 'broken', message: '503' }]);
+    release();
+    const result = await pending;
+    expect(result.best?.provider).to.equal('slow');
+    expect(partials).to.have.length(2);
+
+    // Nothing passing yet, or every candidate asked for: nothing early
+    const none: LyricsResult[] = [];
+    const empty = provider('empty', false, async () => []);
+    await fetchLyrics(query, { onPartial: result => none.push(result), providers: [empty, provider('other', false, async () => [answer('other', synced)])] });
+    await fetchLyrics(query, { all: true, onPartial: result => none.push(result), providers: [provider('a', false, async () => [answer('a', synced)]), empty] });
+    expect(none).to.deep.equal([]);
   });
 
   it('keeps going when a provider fails or hangs, reporting each', async () => {

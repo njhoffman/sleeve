@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { TrackPrefs } from '../../src/core/prefs.ts';
 import type { LyricsResult, ScoredCandidate, TrackQuery } from '../../src/core/types.ts';
-import { lineAt, NowPlaying, queryForPlayback, type NowState } from '../../src/now/session.ts';
+import { lineAt, NowPlaying, queryForPlayback, takeLater, type NowState } from '../../src/now/session.ts';
 import { PlayerHub } from '../../src/players/hub.ts';
 import type { MusicmanLibrary } from '../../src/players/musicman.ts';
 import type { Playback, PlayingTrack } from '../../src/players/types.ts';
@@ -323,5 +323,112 @@ describe('NowPlaying prefetch', () => {
     expect(repeat.asked).to.deep.equal(['First']);
     expect(looping.prefetching()).to.equal(null);
     looping.close();
+  });
+});
+
+describe('takeLater', () => {
+  const other: ScoredCandidate = { ...best, provider: 'netease', id: '9' };
+  const plain: ScoredCandidate = { ...other, lyrics: { synced: false, instrumental: false, lines: [{ time: null, text: 'one' }] } };
+  const shown = (candidate: ScoredCandidate, extra: Partial<LyricsResult> = {}): LyricsResult =>
+    ({ best: candidate, candidates: [candidate], rejected: [], errors: [], pinned: false, offsetMs: 0, ...extra });
+  const later = shown(best, { errors: [{ provider: 'x', message: 'down' }] });
+
+  it('takes the later answer when nothing is shown, or only unsynced lyrics', () => {
+    expect(takeLater(null, later, 0)).to.equal(later);
+    expect(takeLater(shown(plain), later, 190_000, 200_000)).to.equal(later);
+  });
+
+  it('replaces synced lyrics only in the first fifth of the track, or its first 30 s without a length', () => {
+    expect(takeLater(shown(other), later, 39_000, 200_000)).to.equal(later);
+    expect(takeLater(shown(other), later, 29_000)).to.equal(later);
+    const kept = takeLater(shown(other, { offsetMs: 300 }), later, 41_000, 200_000);
+    expect(kept).to.deep.include({ best: other, offsetMs: 300, errors: later.errors, candidates: later.candidates });
+    expect(takeLater(shown(other), later, 31_000).best).to.equal(other);
+  });
+
+  it('keeps the lyrics and offset shown when the later answer has the same or none, and always a pick', () => {
+    expect(takeLater(shown(best, { offsetMs: -200 }), later, 0)).to.deep.include({ best, offsetMs: -200, errors: later.errors });
+    expect(takeLater(shown(other), { ...later, best: null }, 0).best).to.equal(other);
+    const picked = shown(other, { pinned: true });
+    expect(takeLater(picked, later, 0)).to.equal(picked);
+  });
+});
+
+describe('NowPlaying retries', () => {
+  const track: PlayingTrack = { key: 'r', artist: 'A', title: 'Retry', durationMs: 200_000 };
+  const paused = (positionMs: number): Playback => ({ player: 'mpd', state: 'paused', track, positionMs, at: 0, rate: 1, changedAt: 0 });
+  const other: ScoredCandidate = { ...best, provider: 'netease', id: '9' };
+  const failing: LyricsResult = { best: other, candidates: [other], rejected: [], errors: [{ provider: 'lrclib', message: 'LRCLIB answered 503' }], pinned: false, offsetMs: 0 };
+  const start = (player: ReturnType<typeof fakePlayer>, lookup: unknown, extra: object = {}) => {
+    const hub = new PlayerHub([player]);
+    hub.start();
+    const session = new NowPlaying(hub, { lookup: lookup as never, retryDelaysMs: [5, 5, 5], prefetch: false, ...extra });
+    session.start();
+    return session;
+  };
+
+  it('asks again while an online provider fails, and switches early in the track', async () => {
+    const answers = [failing, failing, result()];
+    let asked = 0;
+    const session = start(fakePlayer('mpd', { playback: paused(1000) }), async () => answers[Math.min(asked++, answers.length - 1)]);
+    await session.settled();
+    expect(session.current().result?.best?.provider).to.equal('netease');
+    expect(session.retrying()).to.equal(true);
+    await until(() => asked === 3);
+    await until(() => !session.retrying());
+    expect(session.current().result).to.deep.include({ best, errors: [] });
+    await new Promise(resolve => setTimeout(resolve, 20));
+    expect(asked).to.equal(3);
+    session.close();
+  });
+
+  it('keeps the synced lyrics shown late in the track, gives up after the last pause, and stops on a new track', async () => {
+    let asked = 0;
+    const late = start(fakePlayer('mpd', { playback: paused(150_000) }), async () => {
+      asked++;
+      return asked === 1 ? failing : { ...result(), errors: failing.errors };
+    });
+    await late.settled();
+    await until(() => asked === 4 && !late.retrying());
+    expect(late.current().result?.best?.provider).to.equal('netease');
+    late.close();
+
+    let more = 0;
+    const player = fakePlayer('mpd', { playback: paused(0) });
+    const moving = start(player, async () => { more++; return failing; }, { retryDelaysMs: [30] });
+    await moving.settled();
+    player.set(null);
+    expect(moving.retrying()).to.equal(false);
+    await new Promise(resolve => setTimeout(resolve, 50));
+    expect(more).to.equal(1);
+    moving.close();
+  });
+
+  it('does not ask again for a pick, a local provider or the cache failing', async () => {
+    for (const answer of [
+      { ...failing, pinned: true },
+      { ...failing, errors: [{ provider: 'sidecar', message: 'EACCES' }, { provider: 'cache', message: 'locked' }] }
+    ]) {
+      const session = start(fakePlayer('mpd', { playback: paused(0) }), async () => answer);
+      await session.settled();
+      expect(session.retrying()).to.equal(false);
+      session.close();
+    }
+  });
+
+  it('shows what the first providers found while the rest are still out', async () => {
+    let release: () => void = () => {};
+    const session = start(fakePlayer('mpd', { playback: paused(0) }), async (_query: TrackQuery, options: { onPartial?: (result: LyricsResult) => void }) => {
+      options.onPartial?.({ ...failing, errors: [] });
+      await new Promise<void>(resolve => { release = resolve; });
+      return result();
+    });
+    await until(() => session.current().result?.best?.provider === 'netease');
+    expect(session.current().loading).to.equal(true);
+    release();
+    await session.settled();
+    expect(session.current()).to.deep.include({ loading: false });
+    expect(session.current().result?.best).to.equal(best);
+    session.close();
   });
 });
