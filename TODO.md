@@ -125,17 +125,17 @@ build items that depend on it, listed in the later projects.
       `lyricsfile` (YAML: lines with `start_ms`/`end_ms`, words when word-synced). Parse it when
       `hasWordSync` is true for karaoke timing; needs a YAML parser and a recorded word-synced fixture.
       Sampled 2026-11-02: no word-synced record among 160, so wait until some exist to record a fixture.
-- [ ] **Queries without a duration cannot tell versions apart.** (p3) [feature] `sleeve lyrics -a -t` without `-d`
+- [x] **Queries without a duration cannot tell versions apart.** (p3) [feature] `sleeve lyrics -a -t` without `-d`
       scores live and album versions alike (all 1.0 for "Everything In Its Right Place"). Prefer the record
       whose album matches, or the most common duration among candidates, when no duration is given.
+      Done in 0.19.0: `typicalDuration` (match.ts), the length at least two passing candidates share with no
+      rival as common; candidates are scored against it without the veto. The album already counts (weight 0.05).
 - [x] **Port the NetEase provider.** (p1) [feature] Decided 2026-11-02: NetEase next, to cover LRCLIB's misses.
       Done in 0.3.0: `src/core/providers/netease.ts`; search results scored before fetching the
       best two lyrics, credit lines dropped. A 10-file library sample found synced lyrics for all 10, NetEase
       covering the 3 LRCLIB "server busy" answers.
 - [ ] **Port the Genius provider.** (p3) [feature] Unsynced lyrics only, as the last fallback; Sunamu scrapes its
       pages (`src/main/lyricproviders/genius.ts` there). Check whether its API gives lyrics without scraping.
-- [ ] **NetEase translations.** (p3) [feature] NetEase returns a translation (`tlyric`, Chinese) with the same
-      timestamps; attach it as `LyricLine.translation` if translated lyrics become a display option.
 - [ ] **Look into Musixmatch again.** (p3) [feature] Wanted for word-level richsync and lookups by ISRC and
       Spotify id. Blocked 2026-11-02: `token.get` now gives anonymous clients a placeholder token of zeros,
       so Sunamu's approach no longer works, and getting past that by imitating the desktop app is out.
@@ -215,6 +215,10 @@ build items that depend on it, listed in the later projects.
       1881 replacing unsynced lyrics), 3838 deferred (about 3650 LRCLIB 503s, 180 429s, 5 502s; 1910 with NetEase
       lyrics held, 157 with a NetEase instrumental), 225 instrumental, 180 not found, 172 has lyrics, 64 doubtful.
       `--write` run the same night. 0.17.0 takes the later provider's answer after a day and three tries.
+      Written 2026-11-03: 3456 overnight, 586 more at 10:03. 110 of the 4042 held non-Latin letters (NetEase
+      credits and notes in Chinese, Cyrillic look-alikes, 4 songs wrong outright); after 0.19.0 104 were
+      rewritten and 6 had their USLT emptied (no lyrics in Latin script; Talking Heads' "Animals" and Cypress
+      Hill's "Bitter" have unsynced English ones on LRCLIB).
       Next: repeat runs for the deferred files over the following days.
 - [x] **Honor LRCLIB's `Retry-After`.** (p1) [fix] Its docs say clients must: on a 429 (and a 503, usually 1 s)
       wait at least that many seconds, with up to 30% jitter, or risk a temporary ban. sleeve ignores it: the

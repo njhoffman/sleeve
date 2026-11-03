@@ -6,6 +6,17 @@ All notable changes to sleeve are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.19.0] - 2026-11-03
+
+### Changed
+
+- Lyrics are shown and written in Latin script only. Lines in another alphabet are dropped (NetEase's uploader
+  credits, album notes and translated titles in Chinese), look-alike Cyrillic and Greek letters inside Latin
+  words are made Latin, and lyrics mostly in another alphabet, or a track named in one, are left out as not
+  found. This applies to stored answers and picks too.
+- A lookup without a duration (`sleeve lyrics -a ARTIST -t TITLE`) ranks first the lyrics for the length most
+  candidates share, so the album version comes before live ones; other lengths are still offered.
+
 ## [0.18.0] - 2026-11-03
 
 ### Added

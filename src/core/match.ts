@@ -93,12 +93,15 @@ const WEIGHTS = { title: 0.4, artist: 0.3, album: 0.05, duration: 0.25 };
 // 0 to 1. Missing album or duration leave their weight out rather than counting as a mismatch. A duration
 // 10 or more seconds off, a title or artist that barely matches, or titles that disagree on the version (one a
 // remix or live, the other not) cap the score under the threshold whatever the rest says. Exact matches (found by identifier or from the file) score 1.
-export function scoreCandidate(query: TrackQuery, candidate: Candidate): ScoredCandidate {
+//
+// A query without a duration may be scored against typical, the duration most candidates share
+// (typicalDuration): it ranks other lengths lower, but never vetoes them, since the user asked for no length.
+export function scoreCandidate(query: TrackQuery, candidate: Candidate, typical?: number): ScoredCandidate {
   const detail: ScoreDetail = {
     title: similarity(normalizeTitle(query.title), normalizeTitle(candidate.track.title)),
     artist: similarity(normalizeArtist(query.artist), normalizeArtist(candidate.track.artist)),
     album: query.album && candidate.track.album ? similarity(normalizeTitle(query.album), normalizeTitle(candidate.track.album)) : null,
-    duration: durationScore(query.durationMs, candidate.track.durationMs)
+    duration: durationScore(query.durationMs ?? typical, candidate.track.durationMs)
   };
   if (candidate.exact) return { ...candidate, score: 1, detail };
   let weighted = WEIGHTS.title * detail.title + WEIGHTS.artist * detail.artist;
@@ -112,9 +115,30 @@ export function scoreCandidate(query: TrackQuery, candidate: Candidate): ScoredC
     weights += WEIGHTS.duration;
   }
   let score = weighted / weights;
-  const vetoed = detail.duration === 0 || detail.title < 0.5 || detail.artist < 0.5 || !sameVersion(query.title, candidate.track.title);
+  const vetoed = (detail.duration === 0 && Boolean(query.durationMs)) || detail.title < 0.5 || detail.artist < 0.5 || !sameVersion(query.title, candidate.track.title);
   if (vetoed) score = Math.min(score, THRESHOLD - 0.01);
   return { ...candidate, score: Math.round(score * 1000) / 1000, detail };
+}
+
+// The duration most of the passing candidates share (within 2 seconds of each other), for a query without one:
+// live and other versions under the same name are usually the few. Undefined unless at least two agree and no
+// other length has as many.
+export function typicalDuration(candidates: ScoredCandidate[]): number | undefined {
+  const durations = candidates.filter(candidate => candidate.score >= THRESHOLD && candidate.track.durationMs)
+    .map(candidate => candidate.track.durationMs!).sort((a, b) => a - b);
+  let best: number[] = [];
+  let tied = false;
+  for (const duration of durations) {
+    const near = durations.filter(other => Math.abs(other - duration) <= 2000);
+    if (near.length > best.length) {
+      // A group overlapping the best one so far is the same length, not a rival
+      tied = false;
+      best = near;
+    } else if (near.length === best.length && !near.some(other => best.includes(other))) {
+      tied = true;
+    }
+  }
+  return best.length >= 2 && !tied ? best[Math.floor(best.length / 2)] : undefined;
 }
 
 // Best first among accepted candidates: synced over unsynced (the threshold already keeps out wrong songs, and

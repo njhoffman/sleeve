@@ -1,9 +1,10 @@
 import pkg from '../../package.json' with { type: 'json' };
 import type { LyricsCache } from './cache.ts';
-import { rankCandidates, scoreCandidate, THRESHOLD } from './match.ts';
+import { rankCandidates, scoreCandidate, THRESHOLD, typicalDuration } from './match.ts';
 import { lrclib } from './providers/lrclib.ts';
 import { embedded, sidecar } from './providers/local.ts';
 import { netease } from './providers/netease.ts';
+import { latinCandidate, latinCandidates } from './script.ts';
 import { formatRef, sameCandidate, type CandidateRef, type TrackPrefs, type TrackPrefsRecord } from './prefs.ts';
 import type { Provider, ProviderContext } from './providers/provider.ts';
 import { musicMetadataReader } from './tags/musicMetadata.ts';
@@ -25,6 +26,10 @@ import type { Candidate, LyricsResult, ProviderError, ScoredCandidate, TrackQuer
 //
 // onPartial hears the result so far whenever an online provider answers while others are still out, once
 // something passes the threshold: a display can show it instead of waiting on a slow or retrying provider.
+//
+// Every candidate, a pick included, is held to Latin script before it is scored (src/core/script.ts): lines in
+// another alphabet are dropped, and lyrics or tracks mostly in one are left out. The cache keeps what the
+// provider said, so the rule applies to answers stored before it too.
 
 export const DEFAULT_PROVIDERS: Provider[] = [sidecar, embedded, lrclib, netease];
 export const DEFAULT_TIMEOUT_MS = 10_000;
@@ -101,6 +106,13 @@ function readPrefs(prefs: TrackPrefs | undefined, query: TrackQuery, errors: Pro
   }
 }
 
+// Without a duration in the query, the candidates scored again against the one most of them share
+function byTypicalDuration(query: TrackQuery, candidates: ScoredCandidate[]): ScoredCandidate[] {
+  if (query.durationMs) return candidates;
+  const typical = typicalDuration(candidates);
+  return typical === undefined ? candidates : candidates.map(candidate => scoreCandidate(query, candidate, typical));
+}
+
 // The candidates with the pinned one first, wherever the ranking put it, and the offset for whichever is shown
 function finish(candidates: ScoredCandidate[], rejected: ScoredCandidate[], pinned: ScoredCandidate | null, record: TrackPrefsRecord | null, errors: ProviderError[]): LyricsResult {
   const ref = pinned ? { provider: pinned.provider, id: pinned.id ?? '' } : null;
@@ -129,7 +141,7 @@ async function run(providers: Provider[], query: TrackQuery, options: RunOptions
 
   async function ask(provider: Provider): Promise<Candidate[]> {
     const stored = cached(provider, query, options, errors);
-    if (stored) return stored;
+    if (stored) return latinCandidates(stored);
     const timeout = AbortSignal.timeout(options.timeoutMs);
     const signal = options.signal ? AbortSignal.any([timeout, options.signal]) : timeout;
     const context: ProviderContext = { fetch: options.fetch, signal, userAgent: options.userAgent, tags: options.tags };
@@ -140,7 +152,7 @@ async function run(providers: Provider[], query: TrackQuery, options: RunOptions
         new Promise<never>((resolve, reject) => signal.addEventListener('abort', () => reject(signal.reason), { once: true }))
       ]);
       store(provider, query, candidates, options, errors);
-      return candidates;
+      return latinCandidates(candidates);
     } catch (error) {
       errors.push({ provider: provider.name, message: message(error, signal) });
       return [];
@@ -161,7 +173,9 @@ export async function fetchLyrics(query: TrackQuery, options: FetchOptions = {})
   };
   const errors: ProviderError[] = [];
   const record = readPrefs(options.prefs, query, errors);
-  const pick = record?.pick ?? null;
+  const stored = record?.pick ?? null;
+  // A pick in another alphabet is no pick
+  const pick = stored ? latinCandidate(stored) : null;
   const pickedProvider = pick ? providers.find(provider => provider.name === pick.provider) : undefined;
   const ref: CandidateRef | null = pick && pickedProvider ? { provider: pick.provider, id: pick.id ?? '' } : null;
   const gone = () => errors.push({ provider: 'prefs', message: `picked ${formatRef(pick!)} is no longer there; ranking as usual` });
@@ -183,7 +197,7 @@ export async function fetchLyrics(query: TrackQuery, options: FetchOptions = {})
   const haveSynced = local.candidates.some(candidate => candidate.score >= THRESHOLD && candidate.lyrics.synced);
   const partial: Progress | undefined = options.onPartial && !options.all
     ? (answered, answeredErrors) => {
-      const known = [...local.candidates, ...answered];
+      const known = byTypicalDuration(query, [...local.candidates, ...answered]);
       const passing = rankCandidates(known.filter(candidate => candidate.score >= THRESHOLD));
       if (!passing.length) return;
       options.onPartial!(finish(passing, rankCandidates(known.filter(candidate => candidate.score < THRESHOLD)), null, record,
@@ -193,7 +207,7 @@ export async function fetchLyrics(query: TrackQuery, options: FetchOptions = {})
   const online = haveSynced && !options.all
     ? { candidates: [] as ScoredCandidate[], errors: [] as ProviderError[] }
     : await run(providers.filter(provider => !provider.local), query, settings, partial);
-  const all = [...local.candidates, ...online.candidates];
+  const all = byTypicalDuration(query, [...local.candidates, ...online.candidates]);
   errors.push(...local.errors, ...online.errors);
   let pinned: ScoredCandidate | null = null;
   if (ref && options.all) {

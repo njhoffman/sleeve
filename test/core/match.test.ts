@@ -1,5 +1,5 @@
 import { expect } from 'chai';
-import { durationScore, normalizeArtist, normalizeTitle, rankCandidates, scoreCandidate, similarity, THRESHOLD, versionMarkers } from '../../src/core/match.ts';
+import { durationScore, normalizeArtist, normalizeTitle, rankCandidates, scoreCandidate, similarity, THRESHOLD, versionMarkers, typicalDuration } from '../../src/core/match.ts';
 import type { Candidate, Lyrics, ScoredCandidate } from '../../src/core/types.ts';
 
 const synced: Lyrics = { synced: true, instrumental: false, lines: [{ time: 1000, text: 'a' }] };
@@ -89,5 +89,27 @@ describe('matching', () => {
     const words: Lyrics = { synced: true, instrumental: false, lines: [{ time: 0, text: 'a', words: [{ time: 0, text: 'a' }] }] };
     const ranked = rankCandidates([scored(1, unsynced, 'plain'), scored(0.8, synced, 'low'), scored(0.9, synced, 'high'), scored(0.9, words, 'words')]);
     expect(ranked.map(item => item.provider)).to.deep.equal(['words', 'high', 'low', 'plain']);
+  });
+
+  describe('without a duration', () => {
+    const scored = (...durations: Array<number | undefined>) => durations.map((durationMs, index) =>
+      scoreCandidate({ artist: 'Radiohead', title: 'Airbag' }, { provider: 'p', id: String(index), track: { artist: 'Radiohead', title: 'Airbag', ...(durationMs ? { durationMs } : {}) }, lyrics: { synced: true, instrumental: false, lines: [] } }));
+
+    it('finds the length most candidates share, and none when two lengths are as common or only one says', () => {
+      expect(typicalDuration(scored(251_000, 252_500, 328_000, 429_000))).to.be.within(251_000, 252_500);
+      expect(typicalDuration(scored(251_000, 251_000, 328_000, 328_000))).to.equal(undefined);
+      expect(typicalDuration(scored(251_000, 328_000))).to.equal(undefined);
+      expect(typicalDuration(scored(251_000, undefined, undefined))).to.equal(undefined);
+    });
+
+    it('ranks other lengths lower against it, without vetoing them', () => {
+      const query = { artist: 'Radiohead', title: 'Airbag' };
+      const [studio, live] = scored(251_000, 328_000).map(candidate => scoreCandidate(query, candidate, 251_000));
+      expect(studio.score).to.equal(1);
+      expect(live.detail.duration).to.equal(0);
+      expect(live.score).to.be.above(THRESHOLD).and.below(1);
+      // A duration the user gave still vetoes
+      expect(scoreCandidate({ ...query, durationMs: 251_000 }, live).score).to.be.below(THRESHOLD);
+    });
   });
 });

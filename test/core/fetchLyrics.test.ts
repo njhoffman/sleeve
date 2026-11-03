@@ -81,6 +81,14 @@ describe('fetchLyrics', () => {
     expect(result.errors).to.deep.equal([{ provider: 'broken', message: 'connection refused' }, { provider: 'stuck', message: 'timed out' }]);
   });
 
+  it('ranks the length most candidates share first when the query has none', async () => {
+    const at = (id: string, durationMs: number): Candidate => ({ ...answer('p', synced), id, track: { artist: 'Artist', title: 'Song', durationMs } });
+    // The live one has more lines, which used to decide among equal scores
+    const live = { ...at('live', 328_000), lyrics: { ...synced, lines: [...synced.lines, { time: 2000, text: 'more' }] } };
+    const result = await fetchLyrics({ artist: 'Artist', title: 'Song' }, { providers: [provider('p', false, async () => [live, at('a', 251_000), at('b', 251_500)])] });
+    expect(result.candidates.map(candidate => candidate.id)).to.deep.equal(['a', 'b', 'live']);
+  });
+
   it('rejects candidates under the threshold but returns them', async () => {
     const result = await fetchLyrics(query, { providers: [
       provider('online', false, async () => [answer('online', synced, { track: { artist: 'Artist', title: 'Song', durationMs: 260_000 } })])
@@ -115,6 +123,19 @@ describe('fetchLyrics', () => {
       expect(asked).to.deep.equal(['found', 'empty']);
       expect(again.best?.provider).to.equal('found');
       expect(again.best?.cachedAt).to.be.a('number');
+    });
+
+    it('holds answers to Latin script, stored ones included, and keeps what the provider said in the cache', async () => {
+      const chinese: Lyrics = { synced: true, instrumental: false, lines: [{ time: 0, text: '你好' }] };
+      const mixed: Lyrics = { synced: true, instrumental: false, lines: [1, 2, 3, 4, 5].map(n => ({ time: n * 1000, text: `line ${n}` })).concat({ time: 9000, text: '作词 : Someone' }) };
+      const providers = [online('mixed', async () => [answer('mixed', mixed)]), online('chinese', async () => [answer('chinese', chinese)])];
+      const first = await fetchLyrics(query, { providers, cache });
+      const again = await fetchLyrics(query, { providers, cache });
+      for (const result of [first, again]) {
+        expect(result.candidates.map(item => item.provider)).to.deep.equal(['mixed']);
+        expect(result.best!.lyrics.lines).to.have.length(5);
+      }
+      expect(cache.get('chinese', query)!.candidates[0].lyrics.lines[0].text).to.equal('你好');
     });
 
     it('asks again with refresh and replaces the stored answer', async () => {
@@ -176,6 +197,15 @@ describe('fetchLyrics with prefs', () => {
     expect(result.candidates.map(item => item.provider)).to.deep.equal(['off', 'good']);
     expect(result.rejected).to.deep.equal([]);
     expect(result.pinned).to.equal(true);
+  });
+
+  it('ignores a pick in another alphabet', async () => {
+    const prefs = new TrackPrefs(':memory:');
+    prefs.setPick(query, answer('far', { synced: true, instrumental: false, lines: [{ time: 0, text: '你好' }] }, { id: '9' }));
+    const result = await fetchLyrics(query, { providers: [provider('far', false, async () => [answer('far', synced, { id: '1' })])], prefs });
+    expect(result.pinned).to.equal(false);
+    expect(result.best?.id).to.equal('1');
+    prefs.close();
   });
 
   it('ignores a pick whose provider is not asked', async () => {

@@ -73,6 +73,8 @@ another version of the song: titles must agree on what their bracketed or dashed
 live, acoustic, unplugged, stripped, edit, demo, instrumental, karaoke, cover, rework, bootleg, dub, VIP), so
 "Hey Now (SBMRGE Remix)" does not get the original's lyrics, while "Live Forever" and "Strobe (Original Mix)"
 count as no version at all. Of the candidates that pass, synced lyrics come first, then the higher score.
+Without a duration (`sleeve lyrics` with only `-a` and `-t`), candidates are scored against the length most of
+them share, so the album version comes before live ones; another length lowers a score but never vetoes it.
 
 A file's duration is measured from its audio, since synced lyrics are timed against what plays; musicman's
 `sp_duration_ms` is the fallback. The file's ISRC and Spotify id (`TSRC`, `TXXX:sp_isrc`,
@@ -207,6 +209,12 @@ and NetEase usually has the song. NetEase's search ranks loosely (live versions 
 results are scored by title, artist and length before any lyrics are fetched, and only the best two are
 fetched; credit lines at the top of its lyrics ("作词 : ...") are dropped, and lyrics that only say the song is
 instrumental ("纯音乐，请欣赏", pure music, please enjoy) make it an instrumental.
+
+sleeve shows and writes Latin script only, from every provider and from the file itself. Letters that only look
+Latin (a Cyrillic "е" in "hеre") are made Latin; a line with any other non-Latin letter is dropped (NetEase's
+lyrics often carry uploaders' credits, album notes or a translated title in Chinese); and lyrics with more than a
+fifth of their lines dropped, or a track named in another alphabet, are left out, as if the provider had not
+found them. Accented letters are Latin. The cache keeps what providers said, so the rule covers it too.
 
 ## Lyrics in the files
 
