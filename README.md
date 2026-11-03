@@ -202,10 +202,11 @@ replaced through a temporary file only if nothing else changed it meanwhile. Tha
 [musicman](https://github.com/njhoffman/musicman) (its `docs/09-contract.md`), whose tags share the files.
 
 A run lists only the files that need attention (`-v`: every file) and ends with counts; a second run passes by
-what the first wrote, so stopping it (Ctrl-C finishes the file in hand) loses nothing. Files a provider failed for
+what the first wrote, so stopping it (Ctrl-C finishes the files in hand) loses nothing. Files a provider failed for
 (LRCLIB is often overloaded) are deferred: a later run asks about them again after 10 minutes, then 1, 6 and 24
-hours (`--retry-now` at once). `--delay` spaces out the files that go online (1000 ms), `--limit` stops after
-that many files.
+hours (`--retry-now` at once). Two files are looked up at once (`-j`), and requests to each service are at least
+300 ms apart (`--delay`), about a second a file. More jobs gain little: LRCLIB then turns away more of the
+lookups it has not seen, and those files wait for a later run. `--limit` stops after that many files.
 
 ## Development
 

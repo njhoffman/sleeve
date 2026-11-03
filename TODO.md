@@ -190,14 +190,22 @@ build items that depend on it, listed in the later projects.
       write beets' own lyrics back over ours; musicman never runs them.
       Done in 0.14.0: `sleeve tag PATH... [--write] [--force] [--unsynced]` (src/core/tagger.ts, the frame writer
       in src/core/tags/id3.ts and lyricsTag.ts, deferred files in `tag_retries`, schema 4). Changed on the user's
-      word (contract updated in musicman, unreleased): synced lyrics replace beets' plain ones without `--force`; LRC
+      word (contract updated, musicman 1.56.1): synced lyrics replace beets' plain ones without `--force`; LRC
       already there stays. Checked against musicman's node-id3 on a copy of a library file: it reads the lyrics,
       keeps them through an update, and the audio and the other frames are unchanged. A preview of one album with
-      beets lyrics: 9 of 9 would get synced lyrics.
-- [ ] **Faster library runs.** (p2) [perf] `sleeve tag` took 73 s for 9 uncached files (about 8 s each: the
-      1 s pause, LRCLIB's retry and slow answers), so the whole library (about 7400 files without synced lyrics)
-      would take some 16 hours. Look up two or three files at once with a shared limit on requests per provider,
-      and shorten LRCLIB's timeout for batch runs, where a deferred file costs nothing.
+      beets lyrics: 9 of 9 would get synced lyrics. Written 2026-11-02 (La Roux, Trouble In Paradise): 9 of 9 in
+      23 s, audio and every other frame identical to a backup, node-id3 reads the LRC, a second run passes them by.
+- [x] **Faster library runs.** (p2) [perf] `sleeve tag` took 73 s for 9 uncached files. Measured 2026-11-02:
+      answers are fast (LRCLIB 180 ms, NetEase 650 ms for search and two lyrics); the cost was the 1 s pause
+      per file and LRCLIB's retry, and LRCLIB's 503 for lookups it has not cached (half of a random sample)
+      lasts minutes, so the retry a second later almost never helped. Done in 0.15.0: `--jobs` (2) files at once,
+      requests to each host 300 ms apart across them (src/core/throttle.ts, `--delay`), reports in file order,
+      `--limit` never overshot, LRCLIB without its retry in batch runs. 24 random files, no cache: 70-91 s before,
+      22-33 s after; `-j 3` gave 19 s but 7 deferred instead of 3-4, so 2 stays the default.
+- [ ] **LRCLIB's refusals in library runs.** (p3) [perf] About half the less-known tracks get a 503 from LRCLIB on
+      first ask and are deferred when NetEase has nothing synced; with the 10 min / 1 h / 6 h / 24 h backoff a
+      library run needs several passes. Watch how many stay deferred after a full run before tuning the backoff
+      or adding a `--until-done` that loops over deferred files.
 
 ## 5. Players
 

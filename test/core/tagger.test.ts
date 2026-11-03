@@ -193,21 +193,24 @@ describe('sleeve tag', () => {
       expect((await run([other], { providers: [provider], retries, now, write: true, retryNow: true })).status).to.deep.equal(['b.mp3: written']);
     });
 
-    it('pauses only after files that went online, stops at the limit, and skips what it cannot tag', async () => {
-      const files = await Promise.all(['a', 'b', 'c'].map(name => mp3(`${name}.mp3`, { title: name })));
+    it('spaces requests to a service, not files, stops at the limit, and skips what it cannot tag', async () => {
+      const files = await Promise.all(['a', 'b', 'c', 'd'].map(name => mp3(`${name}.mp3`, { title: name })));
       const pauses: number[] = [];
+      const asked: string[] = [];
       const provider: Provider = {
         name: 'fake', local: false,
         async search(query, context) {
+          asked.push(query.title);
           if (query.title !== 'b') await context.fetch('https://example.invalid/');
           return [{ ...candidate(synced), track: { artist: 'Artist', title: query.title } }];
         }
       };
       const fetch = (async () => new Response('')) as typeof globalThis.fetch;
-      const result = await run(files, { providers: [provider], fetch, delayMs: 7, sleep: async ms => { pauses.push(ms); }, limit: 2 });
-      expect(result.status).to.deep.equal(['a.mp3: would write', 'b.mp3: would write']);
-      // After a (online), none after b (no request), and the limit ends the run before c
+      const result = await run(files, { providers: [provider], fetch, delayMs: 7, now: () => 0, sleep: async ms => { pauses.push(ms); }, limit: 3 });
+      expect(result.status).to.deep.equal(['a.mp3: would write', 'b.mp3: would write', 'c.mp3: would write']);
+      // a or c goes at once and the other waits its gap, b sends nothing; the limit leaves d unasked
       expect(pauses).to.deep.equal([7]);
+      expect(asked).to.have.members(['a', 'b', 'c']);
 
       const text = path.join(dir, 'notes.txt');
       await writeFile(text, 'x');
@@ -217,6 +220,86 @@ describe('sleeve tag', () => {
       const skipped = await run([text, damaged, untitled], { providers: [provider], fetch });
       expect(skipped.status).to.deep.equal(['notes.txt: skipped', 'damaged.mp3: skipped', 'untitled.mp3: skipped']);
       expect(skipped.reports[1].detail).to.equal('unsynchronised tag');
+    });
+
+    describe('with several files at once', () => {
+      // A provider each lookup of which waits until the test lets it answer
+      const held = () => {
+        const waiting = new Map<string, () => void>();
+        let underWay = 0;
+        let most = 0;
+        const provider: Provider & { release: (title: string) => void; most: () => number; waiting: () => string[] } = {
+          name: 'fake', local: false,
+          async search(query) {
+            most = Math.max(most, ++underWay);
+            await new Promise<void>(resolve => waiting.set(query.title, resolve));
+            underWay--;
+            return [{ ...candidate(synced), track: { artist: 'Artist', title: query.title } }];
+          },
+          release: title => { waiting.get(title)!(); waiting.delete(title); },
+          most: () => most,
+          waiting: () => [...waiting.keys()]
+        };
+        return provider;
+      };
+      // Until the lookups waiting are these (a moment more, to see that nothing else starts)
+      const until = async (provider: ReturnType<typeof held>, titles: string[]) => {
+        for (let tries = 0; tries < 200 && [...provider.waiting()].sort().join() !== [...titles].sort().join(); tries++) {
+          await new Promise(resolve => setTimeout(resolve, 5));
+        }
+        await new Promise(resolve => setTimeout(resolve, 20));
+        expect(provider.waiting()).to.have.members(titles);
+      };
+
+      it('looks up as many files as jobs at once and reports them in the files\' order', async () => {
+        const files = await Promise.all(['a', 'b', 'c', 'd'].map(name => mp3(`${name}.mp3`, { title: name })));
+        const provider = held();
+        const reports: string[] = [];
+        const running = tagFiles(files, { providers: [provider], jobs: 3, sleep: async () => {}, onFile: report => reports.push(path.basename(report.file)) });
+        await until(provider, ['a', 'b', 'c']);
+        provider.release('c');
+        provider.release('b');
+        await until(provider, ['a', 'd']);
+        // b and c are done, but wait for a
+        expect(reports).to.deep.equal([]);
+        provider.release('a');
+        while (reports.length < 3) await new Promise(resolve => setTimeout(resolve, 5));
+        expect(reports).to.deep.equal(['a.mp3', 'b.mp3', 'c.mp3']);
+        provider.release('d');
+        const counts = await running;
+        expect(reports).to.deep.equal(['a.mp3', 'b.mp3', 'c.mp3', 'd.mp3']);
+        expect(counts['would write']).to.equal(4);
+        expect(provider.most()).to.equal(3);
+      });
+
+      it('never goes over the limit, counting the files under way', async () => {
+        const files = await Promise.all(['a', 'b', 'c'].map(name => mp3(`${name}.mp3`, { title: name })));
+        const provider = held();
+        const running = tagFiles(files, { providers: [provider], jobs: 3, limit: 2, sleep: async () => {} });
+        await until(provider, ['a', 'b']);
+        provider.release('a');
+        provider.release('b');
+        expect((await running)['would write']).to.equal(2);
+      });
+
+      it('starts nothing once stopped, and leaves out the lookups it cut short', async () => {
+        const files = await Promise.all(['a', 'b', 'c'].map(name => mp3(`${name}.mp3`, { title: name })));
+        const provider = held();
+        const controller = new AbortController();
+        const reports: TagReport[] = [];
+        const running = tagFiles(files, { providers: [provider], jobs: 2, signal: controller.signal, write: true, sleep: async () => {}, onFile: report => reports.push(report) });
+        await until(provider, ['a', 'b']);
+        provider.release('a');
+        await until(provider, ['b', 'c']);
+        controller.abort();
+        provider.release('b');
+        provider.release('c');
+        const counts = await running;
+        // a was written before the stop; b and c are cut short (the run's signal ends their lookups)
+        expect(reports.map(report => `${path.basename(report.file)}: ${report.status}`)).to.deep.equal(['a.mp3: written']);
+        expect(counts.written).to.equal(1);
+        expect((await readLyricsTag(files[1])).uslt).to.equal(null);
+      });
     });
 
     it('lists mp3s under directories in name order, without hidden files', async () => {

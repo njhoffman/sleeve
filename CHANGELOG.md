@@ -6,6 +6,15 @@ All notable changes to sleeve are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.15.0] - 2026-11-02
+
+### Changed
+
+- `sleeve tag` is about three times faster: two files are looked up at once (`-j, --jobs`), `--delay` is now the
+  least time between two requests to one service (300 ms) instead of a pause after every file, and LRCLIB is not
+  asked a second time within a lookup when it is overloaded (it stays so for minutes; the file is deferred to a
+  later run instead). Lyrics shown by `sleeve now` and sleeved still retry as before.
+
 ## [0.14.0] - 2026-11-02
 
 ### Added

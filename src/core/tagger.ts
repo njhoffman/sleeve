@@ -6,6 +6,7 @@ import { formatRef } from './prefs.ts';
 import type { TagRetries } from './retries.ts';
 import { Id3Error } from './tags/id3.ts';
 import { FileChangedError, readLyricsTag, writeLyricsTag } from './tags/lyricsTag.ts';
+import { throttledFetch } from './throttle.ts';
 import { shiftLyrics } from './timing.ts';
 
 // `sleeve tag`: lyrics written into mp3 files' USLT frame as LRC text, the user's offset applied, word times left
@@ -13,9 +14,12 @@ import { shiftLyrics } from './timing.ts';
 // fills it with plain text on import); a USLT already holding LRC is left alone unless forced, and so is any text
 // when only unsynced lyrics are found, so a second run only does what the first did not. The file's own lyrics are never the source (the embedded provider
 // is left out): writing them back changes nothing. Files a provider failed for go into TagRetries and wait their
-// turn; online lookups are spaced by delayMs.
+// turn. A few files are looked up at once (jobs); requests to each service are spaced delayMs apart across all of
+// them (src/core/throttle.ts), and reports come in the files' order.
 
-export const DEFAULT_DELAY_MS = 1000;
+// The gap between requests to one service, and the files looked up at once
+export const DEFAULT_DELAY_MS = 300;
+export const DEFAULT_JOBS = 2;
 
 export type TagStatus =
   | 'written' // the lyrics are in the file
@@ -47,17 +51,18 @@ export interface TagOptions extends Pick<FetchOptions, 'providers' | 'timeoutMs'
   retries?: TagRetries;
   // Ask about deferred files now, whatever their pause
   retryNow?: boolean;
-  // The pause after a file that went online
+  // The gap between requests to one service
   delayMs?: number;
-  // Stop after this many files written (or that would be)
+  // Files looked up at once
+  jobs?: number;
+  // Stop after this many files written (or that would be); never more, so near it fewer files are looked up at once
   limit?: number;
+  // Ends the run: no file is started after it, those under way finish (an interrupted lookup is not reported)
   signal?: AbortSignal;
   now?: () => number;
-  sleep?: (ms: number) => Promise<void>;
+  sleep?: (ms: number, signal?: AbortSignal) => Promise<void>;
   onFile?: (report: TagReport) => void;
 }
-
-const wait = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms));
 
 // The mp3 files under each path (a file stands for itself), in name order, without sleeve's temporary files
 export async function listMp3s(paths: string[]): Promise<string[]> {
@@ -82,24 +87,54 @@ const time = (ms: number) => new Date(ms).toLocaleString(undefined, { dateStyle:
 export async function tagFiles(files: string[], options: TagOptions = {}): Promise<Record<TagStatus, number>> {
   const counts = Object.fromEntries(TAG_STATUSES.map(status => [status, 0])) as Record<TagStatus, number>;
   const now = options.now ?? Date.now;
-  const sleep = options.sleep ?? wait;
   const providers = (options.providers ?? DEFAULT_PROVIDERS).filter(provider => provider.name !== 'embedded');
   const online = new Set(providers.filter(provider => !provider.local).map(provider => provider.name));
+  const fetch = throttledFetch(options.fetch ?? globalThis.fetch, {
+    gapMs: options.delayMs ?? DEFAULT_DELAY_MS, now, ...(options.sleep ? { sleep: options.sleep } : {})
+  });
+  const jobs = Math.max(1, options.jobs ?? DEFAULT_JOBS);
+  // Reports by file, held until the ones before them are in; null for a file not reported
+  const done: Array<TagReport | null> = [];
+  let reported = 0;
+  let started = 0;
+  let underWay = 0;
   let written = 0;
-  let pause = false;
-  for (const file of files) {
-    if (options.signal?.aborted || (options.limit !== undefined && written >= options.limit)) break;
-    if (pause) await sleep(options.delayMs ?? DEFAULT_DELAY_MS);
-    pause = false;
-    // Online providers are asked through this fetch, so a lookup the cache answered needs no pause after it
-    const baseFetch = options.fetch ?? globalThis.fetch;
-    const fetch: typeof globalThis.fetch = (...args) => { pause = true; return baseFetch(...args); };
-    const report = await tagFile(file, { ...options, providers, fetch }, online, now);
-    if (options.signal?.aborted && report.status !== 'written') break;
-    counts[report.status]++;
-    if (report.status === 'written' || report.status === 'would write') written++;
-    options.onFile?.(report);
-  }
+  let failure: { error: unknown } | null = null;
+  const flush = () => {
+    for (; reported < started && done[reported] !== undefined; reported++) {
+      const report = done[reported];
+      if (!report) continue;
+      counts[report.status]++;
+      options.onFile?.(report);
+    }
+  };
+  const more = () => started < files.length && !options.signal?.aborted && !failure
+    && (options.limit === undefined || written + underWay < options.limit);
+  const worker = async () => {
+    while (more()) {
+      const index = started++;
+      underWay++;
+      try {
+        const report = await tagFile(files[index], { ...options, providers, fetch }, online, now);
+        // Interrupted: only a file written counts, the rest is looked at again on the next run
+        const counted = !options.signal?.aborted || report.status === 'written';
+        done[index] = counted ? report : null;
+        if (counted && (report.status === 'written' || report.status === 'would write')) written++;
+      } catch (error) {
+        done[index] = null;
+        failure ??= { error };
+      } finally {
+        underWay--;
+      }
+      try {
+        flush();
+      } catch (error) {
+        failure ??= { error };
+      }
+    }
+  };
+  await Promise.all(Array.from({ length: jobs }, worker));
+  if (failure) throw (failure as { error: unknown }).error;
   return counts;
 }
 
