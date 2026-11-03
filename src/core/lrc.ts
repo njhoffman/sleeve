@@ -83,11 +83,12 @@ function stamp(ms: number): string {
   return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}.${String(hundredths).padStart(2, '0')}`;
 }
 
-// LRC text for lyrics: timed lines with enhanced word times when known, or the plain text when unsynced
-export function formatLrc(lyrics: Lyrics): string {
+// LRC text for lyrics: timed lines with enhanced word times when known (unless words is false, for players that
+// would show the word tags as text), or the plain text when unsynced
+export function formatLrc(lyrics: Lyrics, { words = true }: { words?: boolean } = {}): string {
   return lyrics.lines.map(line => {
     if (line.time === null) return line.text;
-    const body = line.words?.length ? line.words.map(word => `<${stamp(word.time)}>${word.text}`).join('') : line.text;
+    const body = words && line.words?.length ? line.words.map(word => `<${stamp(word.time)}>${word.text}`).join('') : line.text;
     return `[${stamp(line.time)}]${body}`;
   }).join('\n');
 }

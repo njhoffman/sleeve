@@ -6,6 +6,18 @@ All notable changes to sleeve are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.14.0] - 2026-11-02
+
+### Added
+
+- `sleeve tag PATH...` writes synced lyrics into mp3 files' `USLT` frame as LRC text, with your offset applied:
+  it only says what it would write until `--write`. Synced lyrics replace the plain lyrics beets writes and fill
+  empty frames; LRC a file has already stays unless `--force`, `--unsynced` writes plain lyrics where nothing is.
+  Only that frame changes (every other one stays byte for byte, as musicman's contract asks), through a temporary
+  file, and never over a file that changed meanwhile. Files a provider failed for are asked about again on later
+  runs, after 10 minutes, then 1, 6 and 24 hours; `--delay`, `--limit`, `--retry-now` and `-v` tune a run.
+  The database is upgraded in place (schema 4).
+
 ## [0.13.0] - 2026-11-02
 
 ### Added

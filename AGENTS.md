@@ -46,7 +46,9 @@ just install-service     # the systemd user unit for sleeved
   `TrackPrefs` (picks, offsets) share it. A schema change is a new entry in `MIGRATIONS` and a bump of
   `SCHEMA_VERSION`.
 - Local file tags go through the `TagReader` interface (`src/core/tags/reader.ts`); only
-  `src/core/tags/musicMetadata.ts` imports music-metadata.
+  `src/core/tags/musicMetadata.ts` imports music-metadata. Lyrics are written only by `src/core/tags/lyricsTag.ts`
+  (the `USLT` frame, through `src/core/tags/id3.ts`, every other byte of the tag kept), as musicman's contract
+  (its `docs/09-contract.md`, "Lyrics in the library's tags") allows; a change to what sleeve writes goes there first.
 - Players implement `Player` (`src/players/types.ts`) and push a `Playback` on every change; position runs on
   between changes (`positionAt`). Only `src/players/mprisDbus.ts` imports the D-Bus library; tests use a fake
   `MprisBus` and the fake MPD server in `test/helpers/fakeMpd.ts`.

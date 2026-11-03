@@ -43,6 +43,8 @@ sleeve now --once --json                       # the same with the lyrics, for s
 sleeved                                        # the daemon: serve what plays to displays (sleeve daemon)
 sleeve cache                                   # how many answers are stored, by provider (also --json)
 sleeve cache clear --not-found                 # forget "no lyrics" answers so those tracks are asked again
+sleeve tag ~/Music/Sorted/Some/Album           # what synced lyrics would go into these mp3s (nothing written)
+sleeve tag --write ~/Music/Sorted              # write them into the library's tags
 ```
 
 The lyrics go to stdout and a line naming their source to stderr, so `sleeve lyrics song.mp3 > song.lrc`
@@ -186,6 +188,24 @@ LRCLIB answers "server busy" (503) under load, mostly for lookups it has not cac
 and then reports it, and NetEase usually has the song. NetEase's search ranks loosely (live versions and
 covers come first), so its results are scored by title, artist and length before any lyrics are fetched,
 and only the best two are fetched; credit lines at the top of its lyrics ("作词 : ...") are dropped.
+
+## Lyrics in the files
+
+`sleeve tag PATH...` looks up synced lyrics for mp3 files (directories are gone through) and says what it would
+write; `--write` writes them into each file's `USLT` frame as LRC text, with your offset applied and without
+word times. Most players and taggers read lyrics there. Synced lyrics replace plain ones (beets' lyrics plugin
+writes those on import) and fill an empty frame; lyrics a file already has in LRC stay unless `--force`, and
+plain lyrics are written only with `--unsynced`, never over others. Instrumentals are left alone.
+
+Only the `USLT` frame changes: every other frame stays byte for byte, the tag keeps its version, and the file is
+replaced through a temporary file only if nothing else changed it meanwhile. That is what sleeve promises
+[musicman](https://github.com/njhoffman/musicman) (its `docs/09-contract.md`), whose tags share the files.
+
+A run lists only the files that need attention (`-v`: every file) and ends with counts; a second run passes by
+what the first wrote, so stopping it (Ctrl-C finishes the file in hand) loses nothing. Files a provider failed for
+(LRCLIB is often overloaded) are deferred: a later run asks about them again after 10 minutes, then 1, 6 and 24
+hours (`--retry-now` at once). `--delay` spaces out the files that go online (1000 ms), `--limit` stops after
+that many files.
 
 ## Development
 

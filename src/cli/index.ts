@@ -5,12 +5,14 @@ import { Command, CommanderError } from 'commander';
 import pkg from '../../package.json' with { type: 'json' };
 import { cacheClearCommand, cacheStatsCommand, type CacheOptions, type ClearCommandOptions } from './cache.ts';
 import { DEFAULT_PROVIDERS } from '../core/fetchLyrics.ts';
+import { DEFAULT_DELAY_MS } from '../core/tagger.ts';
 import { DEFAULT_HOST, DEFAULT_PORT } from '../daemon/paths.ts';
 import { ctlCommand, type CtlOptions } from './ctl.ts';
 import { daemonCommand, type DaemonCommandOptions } from './daemon.ts';
 import { FORMATS, lyricsCommand, type Io, type LyricsOptions } from './lyrics.ts';
 import { nowCommand, type NowOptions } from './now.ts';
 import { offsetCommand, pickCommand, type TrackCommandOptions } from './prefs.ts';
+import { tagCommand, type TagCommandOptions } from './tag.ts';
 
 const stdio: Io = {
   out: text => process.stdout.write(`${text}\n`),
@@ -117,6 +119,24 @@ export function buildProgram(io: Io, setExit: (code: number) => void): Command {
     .option('--reset', 'remove the offset')
     .action(async (args: string[], options: TrackCommandOptions) => {
       setExit(await offsetCommand(args, options, io));
+    });
+
+  program.command('tag')
+    .description('Write synced lyrics into mp3 files (their USLT frame, as LRC text), leaving lyrics that are there alone; only says what it would write without --write')
+    .argument('<paths...>', 'mp3 files, or directories to go through')
+    .option('--write', 'write the lyrics (otherwise only say what would be written)')
+    .option('--force', 'replace lyrics a file has already')
+    .option('--unsynced', 'write unsynced lyrics when no synced ones are found')
+    .option('--retry-now', 'ask about files deferred for a failing provider now, not after their pause')
+    .option('--delay <ms>', 'pause after each file that went online', String(DEFAULT_DELAY_MS))
+    .option('--limit <count>', 'stop after this many files written (or that would be)')
+    .option('-p, --providers <names>', 'comma-separated providers to ask, as for sleeve lyrics (the file\'s own lyrics never count)')
+    .option('--timeout <seconds>', 'per-provider timeout in seconds', '10')
+    .option('--no-cache', 'neither read nor store online answers')
+    .option('--no-prefs', 'ignore your picks and offsets')
+    .option('-v, --verbose', 'a line for every file, also those passed by')
+    .action(async (paths: string[], options: TagCommandOptions) => {
+      setExit(await tagCommand(paths, options, io));
     });
 
   const cache = program.command('cache')

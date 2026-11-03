@@ -30,7 +30,7 @@ Reviewed: 2026-11-02
       immediate position and musicman's adapters are one-shot reads; musicman shares a contract
       (its docs/09-contract.md, 1.55.0): `paths.json` (MPD and the database) and the `spotify_track_files` view,
       so Spotify tracks get their library file. Tag writing is still open (see Batch-write lyrics).
-      Tag writing settled 2026-11-02 in the contract's "Lyrics in the library's tags" (musicman, unreleased):
+      Tag writing settled 2026-11-02 in the contract's "Lyrics in the library's tags" (musicman 1.55.1):
       sleeve writes `USLT`/`SYLT` itself, not through musicman, and musicman's node-id3 rewrites carry both over.
 - [ ] **Check license obligations.** (p3) [docs] Sunamu is MPL-2.0: any file copied or closely ported from it
       (LRC parser, Musixmatch client) stays MPL-2.0 with its notice. Pick sleeve's license with that in mind.
@@ -63,9 +63,13 @@ build items that depend on it, listed in the later projects.
       player and MPRIS for Spotify and the rest.
       Confirmed in 0.5.0: MPD directly, MPRIS for Spotify (any other player by name); mpd's MPRIS bridge and
       playerctld are refused so MPD is not seen twice.
-- [ ] **ID3 lyrics frame: USLT or SYLT.** (p2) [chore] USLT with LRC text is read by most players but is
+- [x] **ID3 lyrics frame: USLT or SYLT.** (p2) [chore] USLT with LRC text is read by most players but is
       officially unsynced; SYLT is synced but poorly supported. Proposed default: USLT with LRC text,
       SYLT as an option. Check what mpd, ncmpcpp and the phone player read.
+      Decided 2026-11-02: USLT with LRC text (0.14.0). MPD serves no lyrics and ncmpcpp fetches its own; the phone
+      (Android) plays Spotify so far, not the library. SYLT stays a possible option (see Write SYLT too).
+- [ ] **Write SYLT too.** (p3) [feature] `sleeve tag --sylt`: a SYLT frame next to the USLT, for players that read
+      only synced frames. musicman's contract already allows it (node-id3 keeps several). Wait for a player that needs it.
 - [ ] **MPL-2.0 obligations from Sunamu.** (p3) [docs] Files ported closely from Sunamu stay MPL-2.0 with their
       notice. Decide sleeve's license and mark ported files.
 
@@ -88,17 +92,17 @@ build items that depend on it, listed in the later projects.
       each a fallback for the others. Query in parallel with a per-provider timeout, rank candidates
       by score (synced beats unsynced), and isolate failures so one dead provider never blocks the rest.
       Done in 0.1.0 for sidecar, embedded and LRCLIB: `src/core/fetchLyrics.ts`; more providers plug in.
-- [ ] **LRCLIB is overloaded for uncached lookups.** (p2) [bug] In a 10-file sample of the library on 2026-11-02,
+- [x] **LRCLIB is overloaded for uncached lookups.** (p2) [bug] In a 10-file sample of the library on 2026-11-02,
       2 lookups failed with 503 "ServerOverloaded" after both retries; cached ones answer at once. Misses are
       what other providers and the cache are for: port Musixmatch/NetEase next, cache found and not-found
       results, and in batch tagging back off and retry later instead of failing the file.
-      Mitigated in 0.2.0 (cache) and 0.3.0 (NetEase covers the misses); still open for batch tagging.
+      Mitigated in 0.2.0 (cache) and 0.3.0 (NetEase covers the misses); batch tagging defers files (0.14.0).
       Sampled again 2026-11-02: 8 of 12 uncached `/api/get` answered 503; some recover within seconds, some
       stay 503 for minutes on `/api/search` too (1 of 3 back after two minutes). Done in 0.13.0 for playback:
       the lookup shows the first provider's answer (`onPartial`), retries LRCLIB once, and sleeved asks failed
       providers again after 20 s, 1, 3 and 10 min (`takeLater` in `src/now/session.ts` decides whether the
-      answer replaces what is shown). Left for batch tagging: a persisted retry queue in `sleeve.db` (track,
-      provider, next attempt) with a shared rate limit, so a run skips and comes back instead of failing files.
+      answer replaces what is shown). Batch tagging (0.14.0) defers such files in `tag_retries` (path,
+      attempts, next attempt) and spaces online lookups with `--delay`, so a run skips and comes back.
 - [ ] **A source of word timings.** (p2) [feature] Word-by-word highlight (0.12.0) needs `words`, and almost no
       lyrics have them: on 2026-11-02 none of the 27 cached answers did, nor any of 160 LRCLIB synced records for
       8 popular tracks (no enhanced LRC tags, `hasWordSync` false on all). Today only a word-timed `.lrc`
@@ -173,7 +177,7 @@ build items that depend on it, listed in the later projects.
       Done in 0.1.0: `sleeve lyrics [file]` with --artist/--title/--duration, --format, --all, --json, --providers.
 ## 4. Tag writing
 
-- [ ] **Batch-write lyrics into ID3 tags.** (p2) [feature] `sleeve tag DIR [--missing-only] [--dry-run]` over the
+- [x] **Batch-write lyrics into ID3 tags.** (p2) [feature] `sleeve tag DIR [--missing-only] [--dry-run]` over the
       library (7338 mp3 files in `~/Music`). Decide USLT with LRC text (widely read) versus SYLT (proper
       but poorly supported), rate-limit provider calls, and never overwrite user lyrics without a flag.
       Must preserve musicman's custom ID3 fields; see the musicman integration item in Planning.
@@ -184,6 +188,16 @@ build items that depend on it, listed in the later projects.
       new mtime. The library on 2026-11-02 (musicman's db, 7107 songs): 3957 have a `USLT`, 3878 of them empty
       (language `XXX`), 79 plain lyrics from beets' lyrics plugin, none LRC. `beet write`/`beet modify` would
       write beets' own lyrics back over ours; musicman never runs them.
+      Done in 0.14.0: `sleeve tag PATH... [--write] [--force] [--unsynced]` (src/core/tagger.ts, the frame writer
+      in src/core/tags/id3.ts and lyricsTag.ts, deferred files in `tag_retries`, schema 4). Changed on the user's
+      word (contract updated in musicman, unreleased): synced lyrics replace beets' plain ones without `--force`; LRC
+      already there stays. Checked against musicman's node-id3 on a copy of a library file: it reads the lyrics,
+      keeps them through an update, and the audio and the other frames are unchanged. A preview of one album with
+      beets lyrics: 9 of 9 would get synced lyrics.
+- [ ] **Faster library runs.** (p2) [perf] `sleeve tag` took 73 s for 9 uncached files (about 8 s each: the
+      1 s pause, LRCLIB's retry and slow answers), so the whole library (about 7400 files without synced lyrics)
+      would take some 16 hours. Look up two or three files at once with a shared limit on requests per provider,
+      and shorten LRCLIB's timeout for batch runs, where a deferred file costs nothing.
 
 ## 5. Players
 
