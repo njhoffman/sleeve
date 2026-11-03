@@ -7,7 +7,8 @@ import { ProviderHttpError, type Provider, type ProviderContext } from './provid
 // covers and other songs of the artist come first), so the search results, which carry each song's length,
 // are scored against the query before any lyrics are fetched, and lyrics are fetched only for the best few
 // that could pass. Its lyrics often open with credit lines ("作词 : Thom Yorke", lyricist; "作曲", composer),
-// which are dropped. The Chinese translation (tlyric) is not used.
+// which are dropped. For instrumentals it often has a single line saying so ("纯音乐，请欣赏", pure music, please
+// enjoy) in place of lyrics, which makes the song instrumental. The Chinese translation (tlyric) is not used.
 
 const BASE = 'https://music.163.com/api';
 // Search results asked for, and how many of the best-scored get their lyrics fetched
@@ -35,6 +36,15 @@ const CREDIT = /^(作词|作曲|编曲|制作人|制作|监制|混音|母带|录
 
 export function stripCredits(lyrics: Lyrics): Lyrics {
   return { ...lyrics, lines: lyrics.lines.filter(line => !CREDIT.test(line.text.trim())) };
+}
+
+// "纯音乐", "纯音乐，请欣赏", "此歌曲为没有填词的纯音乐，请您欣赏" and the like
+const PURE_MUSIC = /^(此歌曲为没有填词的)?纯音乐(\s*[，,。.]?\s*请(您)?欣赏)?\s*[。.!！~～]*$/;
+
+// Lyrics that only say the song is instrumental
+export function isPureMusic(lyrics: Lyrics): boolean {
+  const said = lyrics.lines.map(line => line.text.trim()).filter(Boolean);
+  return said.length > 0 && said.every(text => PURE_MUSIC.test(text));
 }
 
 export function trackOf(song: NeteaseSong): MatchedTrack {
@@ -75,6 +85,7 @@ async function lyricsFor(song: NeteaseSong, context: ProviderContext): Promise<C
   if (!text) return null;
   const lyrics = stripCredits(parseLrc(text));
   if (!lyrics.lines.length) return null;
+  if (isPureMusic(lyrics)) return { provider: 'netease', id: String(song.id), track: trackOf(song), lyrics: { synced: false, instrumental: true, lines: [] } };
   return { provider: 'netease', id: String(song.id), track: trackOf(song), lyrics };
 }
 

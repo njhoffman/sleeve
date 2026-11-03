@@ -6,6 +6,26 @@ All notable changes to sleeve are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.16.0] - 2026-11-02
+
+### Changed
+
+- Another version of a song no longer matches: titles must agree on what their suffix calls them (remix, live,
+  acoustic, stripped, edit, demo and the like), so a remix does not get the original's lyrics. This applies
+  everywhere lyrics are found, the overlay included.
+- `sleeve tag` writes only lyrics that fit the file: within about 4 seconds of its length, the last line between
+  15% and 105% of the way through. Others are reported `doubtful` and left out, and the next candidate that
+  fits is taken. Your picks are written as they are.
+- `sleeve tag` waits for providers in order: while LRCLIB fails for a file, NetEase's lyrics for it are held and
+  the file is deferred, so an overloaded LRCLIB does not leave the library with NetEase's lyrics.
+
+### Fixed
+
+- NetEase's stand-in for instrumentals ("纯音乐，请欣赏", pure music, please enjoy) counts as an instrumental, not
+  as one line of lyrics: `sleeve tag` leaves those files alone, and the overlay shows nothing for them.
+- `sleeve tag` on a directory leaves hidden directories out, among them musicman's trash and downloads under
+  the library's `.musicman`.
+
 ## [0.15.0] - 2026-11-02
 
 ### Changed

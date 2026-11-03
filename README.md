@@ -66,10 +66,13 @@ provider anyway). Online providers run in parallel, each with its own timeout (`
 one that fails is reported without stopping the others.
 
 Each candidate is scored from 0 to 1 against the track: title and artist after normalizing (accents, case,
-punctuation, "feat." credits and same-recording suffixes such as "2009 Remaster" are ignored; "Live" or
-"Acoustic" are not), the album when both sides have one, and the duration (full marks within 2 seconds,
-none at 10 seconds apart). A wrong duration, title or artist keeps a candidate under the 0.6 threshold,
-whatever the rest says. Of the candidates that pass, synced lyrics come first, then the higher score.
+punctuation, "feat." credits and same-recording suffixes such as "2009 Remaster" are ignored), the album when
+both sides have one, and the duration (full marks within 2 seconds, none at 10 seconds apart). A wrong
+duration, title or artist keeps a candidate under the 0.6 threshold, whatever the rest says, and so does
+another version of the song: titles must agree on what their bracketed or dashed suffix calls it (remix or mix,
+live, acoustic, unplugged, stripped, edit, demo, instrumental, karaoke, cover, rework, bootleg, dub, VIP), so
+"Hey Now (SBMRGE Remix)" does not get the original's lyrics, while "Live Forever" and "Strobe (Original Mix)"
+count as no version at all. Of the candidates that pass, synced lyrics come first, then the higher score.
 
 A file's duration is measured from its audio, since synced lyrics are timed against what plays; musicman's
 `sp_duration_ms` is the fallback. The file's ISRC and Spotify id (`TSRC`, `TXXX:sp_isrc`,
@@ -184,10 +187,12 @@ shifted LRC and says `pinned` / `offset -250ms` on stderr; `--json` gives the ly
 live in the same database as the stored answers, match tracks the same way, and are kept until reset;
 `sleeve cache clear` leaves them alone.
 
-LRCLIB answers "server busy" (503) under load, mostly for lookups it has not cached; sleeve retries twice
-and then reports it, and NetEase usually has the song. NetEase's search ranks loosely (live versions and
-covers come first), so its results are scored by title, artist and length before any lyrics are fetched,
-and only the best two are fetched; credit lines at the top of its lyrics ("作词 : ...") are dropped.
+LRCLIB answers "server busy" (503) under load, mostly for lookups it has not cached, and stays busy for those
+for minutes; sleeve retries once after a second and then reports it (`sleeve tag` does not retry, see below),
+and NetEase usually has the song. NetEase's search ranks loosely (live versions and covers come first), so its
+results are scored by title, artist and length before any lyrics are fetched, and only the best two are
+fetched; credit lines at the top of its lyrics ("作词 : ...") are dropped, and lyrics that only say the song is
+instrumental ("纯音乐，请欣赏", pure music, please enjoy) make it an instrumental.
 
 ## Lyrics in the files
 
@@ -195,7 +200,21 @@ and only the best two are fetched; credit lines at the top of its lyrics ("作�
 write; `--write` writes them into each file's `USLT` frame as LRC text, with your offset applied and without
 word times. Most players and taggers read lyrics there. Synced lyrics replace plain ones (beets' lyrics plugin
 writes those on import) and fill an empty frame; lyrics a file already has in LRC stay unless `--force`, and
-plain lyrics are written only with `--unsynced`, never over others. Instrumentals are left alone.
+plain lyrics are written only with `--unsynced`, never over others. Instrumentals are left alone. Hidden
+directories are not gone through (musicman keeps its trash and downloads under the library's `.musicman`)
+unless named on the command line.
+
+What goes into a file is held to more than what is shown on screen, since it stays there (a second run passes
+LRC by unless `--force`):
+
+- **It must fit the audio.** Synced lyrics whose track is more than about 4 seconds longer or shorter than the
+  file, or whose last line comes before 15% of the way through or after the end, are `doubtful` and not written;
+  the next candidate that fits is taken instead. These catch other versions with the same name, and lyrics a
+  provider files under the wrong song. A pick you made (`sleeve pick`) is written as it is.
+- **Providers are waited for in order.** When a provider fails, lyrics (or an instrumental) from a provider after
+  it in the list are held and the file is deferred until the earlier one answers. A run while LRCLIB is
+  overloaded therefore does not fill the library with NetEase's lyrics, which match less well; NetEase's are
+  written once LRCLIB has answered that it has none. Lyrics from LRCLIB are written whatever NetEase does.
 
 Only the `USLT` frame changes: every other frame stays byte for byte, the tag keeps its version, and the file is
 replaced through a temporary file only if nothing else changed it meanwhile. That is what sleeve promises
@@ -203,8 +222,9 @@ replaced through a temporary file only if nothing else changed it meanwhile. Tha
 
 A run lists only the files that need attention (`-v`: every file) and ends with counts; a second run passes by
 what the first wrote, so stopping it (Ctrl-C finishes the files in hand) loses nothing. Files a provider failed for
-(LRCLIB is often overloaded) are deferred: a later run asks about them again after 10 minutes, then 1, 6 and 24
-hours (`--retry-now` at once). Two files are looked up at once (`-j`), and requests to each service are at least
+(LRCLIB is often overloaded, for about a quarter of a library's first run) are deferred: a later run asks about
+them again after 10 minutes, then 1, 6 and 24 hours (`--retry-now` at once), so a library takes a few runs.
+LRCLIB is asked once per file, with no retry, since a second ask a moment later hardly ever gets through. Two files are looked up at once (`-j`), and requests to each service are at least
 300 ms apart (`--delay`), about a second a file. More jobs gain little: LRCLIB then turns away more of the
 lookups it has not seen, and those files wait for a later run. `--limit` stops after that many files.
 

@@ -202,6 +202,13 @@ build items that depend on it, listed in the later projects.
       requests to each host 300 ms apart across them (src/core/throttle.ts, `--delay`), reports in file order,
       `--limit` never overshot, LRCLIB without its retry in batch runs. 24 random files, no cache: 70-91 s before,
       22-33 s after; `-j 3` gave 19 s but 7 deferred instead of 3-4, so 2 stays the default.
+- [ ] **Library dry run, 2026-11-02.** (p1) [chore] 7551 files (188 of them in `.musicman`, now left out): 5512
+      would write, 1762 deferred (all LRCLIB), 118 not found, 101 has lyrics, 58 instrumental; 410 NetEase answers
+      were "纯音乐" stand-ins (provider fixed, cache rows deleted). An audit of the first 833 written from the
+      cache: LRCLIB 203, none under 0.85; NetEase 630, about 50 under 0.85, 133 more than 2 s off, 36 ending early
+      or late (remixes given the original's lyrics, a Korean song under Gorillaz' "Intro"). Fixed in
+      0.16.0: version markers in match.ts, `doubtful` in the tagger, providers waited for in order.
+      Next: a new dry run with these, then `--write`, then repeat runs for the deferred files.
 - [ ] **LRCLIB's refusals in library runs.** (p3) [perf] About half the less-known tracks get a 503 from LRCLIB on
       first ask and are deferred when NetEase has nothing synced; with the 10 min / 1 h / 6 h / 24 h backoff a
       library run needs several passes. Watch how many stay deferred after a full run before tuning the backoff

@@ -1,5 +1,5 @@
 import { expect } from 'chai';
-import { durationScore, normalizeArtist, normalizeTitle, rankCandidates, scoreCandidate, similarity, THRESHOLD } from '../../src/core/match.ts';
+import { durationScore, normalizeArtist, normalizeTitle, rankCandidates, scoreCandidate, similarity, THRESHOLD, versionMarkers } from '../../src/core/match.ts';
 import type { Candidate, Lyrics, ScoredCandidate } from '../../src/core/types.ts';
 
 const synced: Lyrics = { synced: true, instrumental: false, lines: [{ time: 1000, text: 'a' }] };
@@ -53,6 +53,29 @@ describe('matching', () => {
     expect(scoreCandidate(query, candidate({ durationMs: 260000 })).score).to.be.below(THRESHOLD);
     expect(scoreCandidate(query, candidate({ title: 'Transatlanticism', durationMs: 220000 })).score).to.be.below(THRESHOLD);
     expect(scoreCandidate(query, candidate({ artist: 'The Postal Service', durationMs: 220000 })).score).to.be.below(THRESHOLD);
+  });
+
+  it('keeps another version of the song (a remix, live, stripped) under the threshold, whatever its length', () => {
+    const query = { artist: 'London Grammar', title: 'Hey Now (SBMRGE Remix)', durationMs: 220000 };
+    expect(scoreCandidate(query, candidate({ artist: 'London Grammar', title: 'Hey Now', durationMs: 220000 })).score).to.be.below(THRESHOLD);
+    const plain = { artist: 'The Naked and Famous', title: 'Punching in a Dream', durationMs: 220000 };
+    expect(scoreCandidate(plain, candidate({ artist: 'The Naked and Famous', title: 'Punching in a Dream (Stripped)', durationMs: 220000 })).score).to.be.below(THRESHOLD);
+    expect(scoreCandidate(plain, candidate({ artist: 'The Naked and Famous', title: 'Punching in a Dream - Live at Brixton', durationMs: 220000 })).score).to.be.below(THRESHOLD);
+    // The same version, however it is written, still matches
+    const live = { artist: 'Portishead', title: 'Mysterons (live)', durationMs: 220000 };
+    expect(scoreCandidate(live, candidate({ artist: 'Portishead', title: 'Mysterons [Live]', durationMs: 220000 })).score).to.be.above(0.9);
+    const remix = { artist: 'Meg Myers', title: 'Desire (Hucci remix)', durationMs: 220000 };
+    expect(scoreCandidate(remix, candidate({ artist: 'Meg Myers', title: 'Desire - Hucci Mix', durationMs: 220000 })).score).to.be.above(THRESHOLD);
+  });
+
+  it('reads versions only from suffixes, not from the song\'s name, credits or "original mix"', () => {
+    expect([...versionMarkers('Live Forever')]).to.deep.equal([]);
+    expect([...versionMarkers('Remix to Ignition')]).to.deep.equal([]);
+    expect([...versionMarkers('Three MCs (feat. Mix Master Mike)')]).to.deep.equal([]);
+    expect([...versionMarkers('Strobe (Original Mix)')]).to.deep.equal([]);
+    expect([...versionMarkers('Strobe (Radio Edit)')]).to.deep.equal(['edit']);
+    expect([...versionMarkers('Song - Acoustic Version')]).to.deep.equal(['acoustic']);
+    expect([...versionMarkers('Song (Live) [2011 Remaster]')]).to.deep.equal(['live']);
   });
 
   it('scores exact candidates 1 whatever their text', () => {

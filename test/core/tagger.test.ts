@@ -193,6 +193,63 @@ describe('sleeve tag', () => {
       expect((await run([other], { providers: [provider], retries, now, write: true, retryNow: true })).status).to.deep.equal(['b.mp3: written']);
     });
 
+    describe('lyrics that do not fit the file', () => {
+      // The test mp3 plays about 3 seconds
+      const at = (...times: number[]): Lyrics => ({ synced: true, instrumental: false, lines: times.map((time, index) => ({ time, text: `line ${index}` })) });
+      const fake = (candidates: Candidate[]) => online('fake', () => candidates);
+
+      it('are doubtful when their length is more than 4 seconds off, or they end too early or too late', async () => {
+        const files = await Promise.all(['long', 'early', 'late', 'close'].map(name => mp3(`${name}.mp3`)));
+        const answers: Record<string, Candidate> = {
+          long: { ...candidate(synced), track: { artist: 'Artist', title: 'Song', durationMs: 9000 } },
+          early: candidate(at(100, 200)),
+          late: candidate(at(1000, 3500)),
+          close: { ...candidate(synced), track: { artist: 'Artist', title: 'Song', durationMs: 6000 } }
+        };
+        const reports: string[] = [];
+        for (const file of files) {
+          const result = await run([file], { providers: [fake([answers[path.basename(file, '.mp3')]])] });
+          reports.push(`${result.status[0]} ${result.reports[0].detail ?? ''}`);
+        }
+        expect(reports).to.deep.equal([
+          'long.mp3: doubtful fake:1 is 6 s longer than the file',
+          'early.mp3: doubtful fake:1 ends 7% of the way through',
+          'late.mp3: doubtful fake:1 runs past the end of the file',
+          'close.mp3: would write fake:1, synced, 2 lines'
+        ]);
+      });
+
+      it('give way to the next lyrics that fit, and to the user\'s pick', async () => {
+        const file = await mp3('a.mp3');
+        // Ranked first (same score, more lines), but over in a fifth of a second
+        const short = candidate(at(100, 150, 200), 'short');
+        const provider = fake([short, candidate(synced, 'good')]);
+        const first = await run([file], { providers: [provider] });
+        expect(first.reports[0].detail).to.equal('fake:good, synced, 2 lines');
+        const prefs = new TrackPrefs(database);
+        prefs.setPick({ artist: 'Artist', title: 'Song', durationMs: 3056 }, short);
+        const picked = await run([file], { providers: [provider], prefs });
+        expect(picked.reports[0].detail).to.equal('fake:short, synced, 3 lines');
+      });
+    });
+
+    it('holds lyrics from a later provider while an earlier one fails, and writes an earlier one\'s whatever a later one says', async () => {
+      const retries = new TagRetries(database);
+      const files = await Promise.all(['a', 'b'].map(name => mp3(`${name}.mp3`, { title: name })));
+      const song = (title: string, provider: string): Candidate[] => [{ ...candidate(synced), provider, track: { artist: 'Artist', title } }];
+      const first = online('first', title => title === 'a' ? new Error('busy') : song(title, 'first'));
+      const second = online('second', title => title === 'b' ? new Error('busy') : song(title, 'second'));
+      const result = await run(files, { providers: [first, second], retries, jobs: 1 });
+      expect(result.status).to.deep.equal(['a.mp3: deferred', 'b.mp3: would write']);
+      expect(result.reports[0].detail).to.match(/^first failed; second has lyrics, held until then; again after /);
+      expect(result.reports[1].detail).to.equal('first:1, synced, 2 lines');
+      // Instrumental by a later provider's word waits too
+      const third = online('third', () => [{ ...candidate({ synced: false, instrumental: true, lines: [] }), provider: 'third', track: { artist: 'Artist', title: 'a' } }]);
+      const held = await run([files[0]], { providers: [first, third], retryNow: true, retries });
+      expect(held.status).to.deep.equal(['a.mp3: deferred']);
+      expect(held.reports[0].detail).to.match(/third has it as instrumental, held until then/);
+    });
+
     it('spaces requests to a service, not files, stops at the limit, and skips what it cannot tag', async () => {
       const files = await Promise.all(['a', 'b', 'c', 'd'].map(name => mp3(`${name}.mp3`, { title: name })));
       const pauses: number[] = [];
@@ -302,11 +359,14 @@ describe('sleeve tag', () => {
       });
     });
 
-    it('lists mp3s under directories in name order, without hidden files', async () => {
+    it('lists mp3s under directories in name order, without hidden files or directories', async () => {
       await mkdir(path.join(dir, 'sub'));
-      await Promise.all([mp3('b.mp3'), mp3('a.MP3'), mp3('sub/c.mp3'), mp3('.a.mp3.sleeve-1.tmp.mp3')]);
+      await mkdir(path.join(dir, '.musicman', 'trash'), { recursive: true });
+      await Promise.all([mp3('b.mp3'), mp3('a.MP3'), mp3('sub/c.mp3'), mp3('.a.mp3.sleeve-1.tmp.mp3'), mp3('.musicman/trash/d.mp3')]);
       await writeFile(path.join(dir, 'cover.jpg'), '');
       expect((await listMp3s([dir])).map(file => path.relative(dir, file))).to.deep.equal(['a.MP3', 'b.mp3', path.join('sub', 'c.mp3')]);
+      // Named outright, a hidden directory is gone through
+      expect((await listMp3s([path.join(dir, '.musicman')])).map(file => path.relative(dir, file))).to.deep.equal([path.join('.musicman', 'trash', 'd.mp3')]);
       expect((await stat(dir)).isDirectory()).to.equal(true);
     });
   });

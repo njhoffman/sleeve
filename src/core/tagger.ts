@@ -8,6 +8,7 @@ import { Id3Error } from './tags/id3.ts';
 import { FileChangedError, readLyricsTag, writeLyricsTag } from './tags/lyricsTag.ts';
 import { throttledFetch } from './throttle.ts';
 import { shiftLyrics } from './timing.ts';
+import type { ScoredCandidate, TrackQuery } from './types.ts';
 
 // `sleeve tag`: lyrics written into mp3 files' USLT frame as LRC text, the user's offset applied, word times left
 // out (most players would show them as text). Synced lyrics replace unsynced ones in the USLT (beets' lyrics plugin
@@ -16,6 +17,10 @@ import { shiftLyrics } from './timing.ts';
 // is left out): writing them back changes nothing. Files a provider failed for go into TagRetries and wait their
 // turn. A few files are looked up at once (jobs); requests to each service are spaced delayMs apart across all of
 // them (src/core/throttle.ts), and reports come in the files' order.
+
+// Lyrics that go into a file are held to more than a match on screen (see doubts below). The providers come in
+// the order of preference: when one fails, lyrics from one after it wait (the file is deferred) until it answers,
+// so a run while LRCLIB is overloaded does not fill the library with NetEase's lyrics.
 
 // The gap between requests to one service, and the files looked up at once
 export const DEFAULT_DELAY_MS = 300;
@@ -28,12 +33,13 @@ export type TagStatus =
   | 'has lyrics' // its USLT has synced lyrics, or unsynced ones and nothing synced was found; --force replaces them
   | 'instrumental'
   | 'not found' // every provider answered, none with lyrics to write
+  | 'doubtful' // synced lyrics found, none fitting the file well enough to write (see doubts)
   | 'deferred' // a provider failed; asked again after the retry pause
   | 'waiting' // deferred before, and its pause has not run out
   | 'skipped' // a file or tag sleeve does not write to
   | 'failed';
 
-export const TAG_STATUSES: TagStatus[] = ['written', 'would write', 'unchanged', 'has lyrics', 'instrumental', 'not found', 'deferred', 'waiting', 'skipped', 'failed'];
+export const TAG_STATUSES: TagStatus[] = ['written', 'would write', 'unchanged', 'has lyrics', 'instrumental', 'not found', 'doubtful', 'deferred', 'waiting', 'skipped', 'failed'];
 
 export interface TagReport {
   file: string;
@@ -64,15 +70,18 @@ export interface TagOptions extends Pick<FetchOptions, 'providers' | 'timeoutMs'
   onFile?: (report: TagReport) => void;
 }
 
-// The mp3 files under each path (a file stands for itself), in name order, without sleeve's temporary files
+// The mp3 files under each path (a file stands for itself), in name order, without hidden files or directories:
+// sleeve's temporary files, and musicman's trash and downloads under the library's .musicman (a path given as
+// an argument is gone through whatever its name)
 export async function listMp3s(paths: string[]): Promise<string[]> {
   const found: string[] = [];
   const walk = async (dir: string) => {
     const entries = (await readdir(dir, { withFileTypes: true })).sort((a, b) => a.name.localeCompare(b.name));
     for (const entry of entries) {
       const full = path.join(dir, entry.name);
+      if (entry.name.startsWith('.')) continue;
       if (entry.isDirectory()) await walk(full);
-      else if (/\.mp3$/i.test(entry.name) && !entry.name.startsWith('.')) found.push(full);
+      else if (/\.mp3$/i.test(entry.name)) found.push(full);
     }
   };
   for (const item of paths) {
@@ -138,6 +147,30 @@ export async function tagFiles(files: string[], options: TagOptions = {}): Promi
   return counts;
 }
 
+// Synced lyrics written to a file must fit its audio: a length within about 4 seconds (a duration score of 0.75;
+// on screen up to 10 seconds passes), and a last line between 15% and 105% of the way through (lyrics that end
+// at once or run past the end are another song's, or NetEase's stand-ins)
+export const MIN_DURATION_SCORE = 0.75;
+export const LYRICS_SPAN: [number, number] = [0.15, 1.05];
+
+// Why these synced lyrics should not go into the file, or null when they may
+export function doubts(query: TrackQuery, candidate: ScoredCandidate): string | null {
+  if (candidate.exact) return null;
+  const { durationMs } = query;
+  const found = candidate.track.durationMs;
+  if (candidate.detail.duration !== null && candidate.detail.duration < MIN_DURATION_SCORE && durationMs && found) {
+    const apart = Math.round(Math.abs(found - durationMs) / 1000);
+    return `${formatRef(candidate)} is ${apart} s ${found > durationMs ? 'longer' : 'shorter'} than the file`;
+  }
+  const last = candidate.lyrics.lines.reduce<number | null>((latest, line) => line.time !== null && (latest === null || line.time > latest) ? line.time : latest, null);
+  if (last !== null && durationMs) {
+    const share = last / durationMs;
+    if (share < LYRICS_SPAN[0]) return `${formatRef(candidate)} ends ${Math.round(share * 100)}% of the way through`;
+    if (share > LYRICS_SPAN[1]) return `${formatRef(candidate)} runs past the end of the file`;
+  }
+  return null;
+}
+
 async function tagFile(file: string, options: TagOptions & { fetch: typeof fetch }, online: Set<string>, now: () => number): Promise<TagReport> {
   const report = (status: TagStatus, detail?: string): TagReport => ({ file, status, ...(detail ? { detail } : {}) });
   if (!/\.mp3$/i.test(file)) return report('skipped', 'not an mp3');
@@ -171,24 +204,39 @@ async function tagFile(file: string, options: TagOptions & { fetch: typeof fetch
   // Interrupted: what the providers said is not an answer
   if (signal?.aborted) return report('failed', 'interrupted');
   const failed = result.errors.filter(error => online.has(error.provider));
+  const order = providers!.map(provider => provider.name);
   const best = result.best;
+  // The user's pick goes in as it is; otherwise the best synced lyrics that fit the file
+  const synced = result.candidates.filter(candidate => candidate.lyrics.synced);
+  const fitting = result.pinned ? synced.slice(0, best === synced[0] ? 1 : 0) : synced.filter(candidate => doubts(query, candidate) === null);
+  const doubt = !fitting.length && synced.length ? doubts(query, synced[0]) : null;
+  let chosen: ScoredCandidate | null = fitting[0] ?? null;
   let text: string | null = null;
-  if (best?.lyrics.instrumental) {
-    retries?.clear(tag.file);
-    return report('instrumental', formatRef(best));
+  if (chosen) {
+    text = formatLrc(shiftLyrics(chosen.lyrics, chosen === best ? result.offsetMs : 0), { words: false });
+  } else if (best?.lyrics.instrumental || (best && !best.lyrics.synced && options.unsynced && !keepsExisting)) {
+    chosen = best;
   }
-  if (best?.lyrics.synced) text = formatLrc(shiftLyrics(best.lyrics, result.offsetMs), { words: false });
-  else if (best && options.unsynced && !keepsExisting) text = plainText(best.lyrics);
-  if (text === null || !best) {
-    if (failed.length) {
-      const deferred = retries?.defer(tag.file, failed.map(error => `${error.provider}: ${error.message}`).join('; '));
-      return report('deferred', `${failed.map(error => error.provider).join(', ')} failed${deferred ? `; again after ${time(deferred.nextAt)}` : ''}`);
-    }
+  // A provider preferred to the one with the answer failed: wait for it
+  const waitFor = chosen ? failed.filter(error => order.indexOf(error.provider) < order.indexOf(chosen.provider)) : failed;
+  if (waitFor.length) {
+    const deferred = retries?.defer(tag.file, waitFor.map(error => `${error.provider}: ${error.message}`).join('; '));
+    const held = chosen ? `; ${chosen.provider} has ${chosen.lyrics.instrumental ? 'it as instrumental' : 'lyrics'}, held until then` : '';
+    return report('deferred', `${waitFor.map(error => error.provider).join(', ')} failed${held}${deferred ? `; again after ${time(deferred.nextAt)}` : ''}`);
+  }
+  if (chosen?.lyrics.instrumental) {
     retries?.clear(tag.file);
+    return report('instrumental', formatRef(chosen));
+  }
+  if (chosen && !chosen.lyrics.synced) text = plainText(chosen.lyrics);
+  if (text === null || !chosen) {
+    retries?.clear(tag.file);
+    if (doubt) return report('doubtful', doubt);
     if (keepsExisting) return report('has lyrics', 'unsynced; no synced lyrics found to replace them');
     return report('not found', best ? `only unsynced lyrics (${formatRef(best)}; --unsynced writes them)` : undefined);
   }
-  const source = `${formatRef(best)}, ${best.lyrics.synced ? 'synced' : 'unsynced'}, ${best.lyrics.lines.length} lines${result.offsetMs ? `, offset ${result.offsetMs > 0 ? '+' : ''}${result.offsetMs}ms` : ''}${existing && !looksLikeLrc(existing) ? ', replacing unsynced lyrics' : ''}`;
+  const offsetMs = chosen === best ? result.offsetMs : 0;
+  const source = `${formatRef(chosen)}, ${chosen.lyrics.synced ? 'synced' : 'unsynced'}, ${chosen.lyrics.lines.length} lines${offsetMs ? `, offset ${offsetMs > 0 ? '+' : ''}${offsetMs}ms` : ''}${existing && !looksLikeLrc(existing) ? ', replacing unsynced lyrics' : ''}`;
   if (tag.uslt?.text === text) {
     retries?.clear(tag.file);
     return report('unchanged', source);

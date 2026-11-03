@@ -1,5 +1,5 @@
 import { expect } from 'chai';
-import { bestSongs, netease, stripCredits, trackOf, type NeteaseSong } from '../../src/core/providers/netease.ts';
+import { bestSongs, isPureMusic, netease, stripCredits, trackOf, type NeteaseSong } from '../../src/core/providers/netease.ts';
 import type { ProviderContext } from '../../src/core/providers/provider.ts';
 import { fakeFetch, fixture, type Route } from '../helpers/fetch.ts';
 
@@ -69,6 +69,25 @@ describe('NetEase provider', () => {
     ]);
     const candidates = await netease.search({ artist: 'Radiohead', title: 'Everything In Its Right Place', durationMs: 251_000 }, ctx);
     expect(candidates.map(candidate => [candidate.id, candidate.lyrics.instrumental])).to.deep.equal([[String(song.id), true]]);
+  });
+
+  it('makes a song instrumental when its only lyrics say it is pure music', async () => {
+    const song = radioheadSearch.result.songs[0];
+    const { context: ctx } = context([
+      { match: /\/api\/search\/get\?/, body: { code: 200, result: { songs: [song] } } },
+      { match: /\/api\/song\/lyric\?/, body: { code: 200, lrc: { lyric: '[00:00.00] 作曲 : Thom Yorke\n[00:05.00]纯音乐，请欣赏\n' } } }
+    ]);
+    const candidates = await netease.search({ artist: 'Radiohead', title: 'Everything In Its Right Place', durationMs: 251_000 }, ctx);
+    expect(candidates.map(candidate => candidate.lyrics)).to.deep.equal([{ synced: false, instrumental: true, lines: [] }]);
+
+    const lines = (...texts: string[]) => ({ synced: true, instrumental: false, lines: texts.map((text, index) => ({ time: index * 1000, text })) });
+    expect(isPureMusic(lines('此歌曲为没有填词的纯音乐，请您欣赏'))).to.equal(true);
+    expect(isPureMusic(lines('纯音乐, 请欣赏', ''))).to.equal(true);
+    expect(isPureMusic({ synced: false, instrumental: false, lines: [{ time: null, text: '纯音乐' }] })).to.equal(true);
+    // Real lyrics that mention it, or nothing at all, are not
+    expect(isPureMusic(lines('纯音乐，请欣赏', 'Hello there'))).to.equal(false);
+    expect(isPureMusic(lines('我喜欢纯音乐'))).to.equal(false);
+    expect(isPureMusic(lines(''))).to.equal(false);
   });
 
   it('has nothing when the search finds nothing that could match', async () => {

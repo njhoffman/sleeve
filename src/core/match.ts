@@ -25,6 +25,31 @@ export function normalizeArtist(artist: string): string {
   return normalizeTitle(first).replace(/^the /, '');
 }
 
+// Words in a title's bracketed or dashed suffix that mark another version of the song: a remix, a live take, an
+// acoustic or stripped one, an edit. Synced lyrics from one do not fit the other, so titles must agree on them.
+// Only suffixes count, so a song named "Live Forever" is not taken for a live version; "original mix" is the original.
+const VERSION_MARKERS = ['remix', 'mix', 'rework', 'bootleg', 'vip', 'dub', 'live', 'acoustic', 'unplugged', 'stripped', 'edit', 'demo', 'instrumental', 'karaoke', 'cover'];
+
+export function versionMarkers(title: string): Set<string> {
+  const text = title.normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  // Bracketed credits ("(feat. Mix Master Mike)") are not versions
+  const suffixes = [...text.matchAll(/[([]([^)\]]*)[)\]]/g)].map(match => match[1]).filter(inner => !/^\s*(feat|ft|featuring|with)\b/.test(inner));
+  const dashed = /\s[-–—]\s(.*)$/.exec(text.replace(/[([][^)\]]*[)\]]/g, ' '));
+  if (dashed) suffixes.push(dashed[1]);
+  const found = new Set<string>();
+  for (const suffix of suffixes) {
+    const words = suffix.replace(/\boriginal mix\b/g, ' ').split(/[^\p{L}\p{N}]+/u);
+    for (const marker of VERSION_MARKERS) if (words.includes(marker)) found.add(marker === 'mix' ? 'remix' : marker);
+  }
+  return found;
+}
+
+function sameVersion(a: string, b: string): boolean {
+  const left = versionMarkers(a);
+  const right = versionMarkers(b);
+  return left.size === right.size && [...left].every(marker => right.has(marker));
+}
+
 function bigrams(text: string): Map<string, number> {
   const grams = new Map<string, number>();
   const padded = ` ${text} `;
@@ -66,8 +91,8 @@ export const THRESHOLD = 0.6;
 const WEIGHTS = { title: 0.4, artist: 0.3, album: 0.05, duration: 0.25 };
 
 // 0 to 1. Missing album or duration leave their weight out rather than counting as a mismatch. A duration
-// 10 or more seconds off, or a title or artist that barely matches, caps the score under the threshold
-// whatever the rest says. Exact matches (found by identifier or from the file) score 1.
+// 10 or more seconds off, a title or artist that barely matches, or titles that disagree on the version (one a
+// remix or live, the other not) cap the score under the threshold whatever the rest says. Exact matches (found by identifier or from the file) score 1.
 export function scoreCandidate(query: TrackQuery, candidate: Candidate): ScoredCandidate {
   const detail: ScoreDetail = {
     title: similarity(normalizeTitle(query.title), normalizeTitle(candidate.track.title)),
@@ -87,7 +112,7 @@ export function scoreCandidate(query: TrackQuery, candidate: Candidate): ScoredC
     weights += WEIGHTS.duration;
   }
   let score = weighted / weights;
-  const vetoed = detail.duration === 0 || detail.title < 0.5 || detail.artist < 0.5;
+  const vetoed = detail.duration === 0 || detail.title < 0.5 || detail.artist < 0.5 || !sameVersion(query.title, candidate.track.title);
   if (vetoed) score = Math.min(score, THRESHOLD - 0.01);
   return { ...candidate, score: Math.round(score * 1000) / 1000, detail };
 }
