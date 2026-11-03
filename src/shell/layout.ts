@@ -22,6 +22,8 @@ export interface ShellOptions {
   // The monitor the overlay goes on, by name (backdrop's, as xrandr names it); otherwise the primary one
   monitor: string | null;
   position: OverlayPosition;
+  // Fill lines without word times word by word, estimated (the page's ?words=estimate)
+  estimateWords: boolean;
 }
 
 export interface Geometry {
@@ -80,7 +82,8 @@ export function parseShellArgs(argv: string[]): ShellOptions {
       url: { type: 'string' },
       geometry: { type: 'string' },
       monitor: { type: 'string' },
-      position: { type: 'string' }
+      position: { type: 'string' },
+      'estimate-words': { type: 'boolean' }
     }
   });
   const text = (name: string): string | undefined => (typeof values[name] === 'string' ? values[name] as string : undefined);
@@ -97,7 +100,7 @@ export function parseShellArgs(argv: string[]): ShellOptions {
   } catch {
     throw new Error(`Invalid --url: ${url}`);
   }
-  return { mode, url, geometry, monitor: text('monitor') ?? null, position };
+  return { mode, url, geometry, monitor: text('monitor') ?? null, position, estimateWords: values['estimate-words'] === true };
 }
 
 // backdrop's state, or null when it has none or it cannot be read
@@ -145,10 +148,11 @@ export function overlayGeometry(monitor: BackdropMonitor, gap = 12): Geometry {
   return { x: monitor.x, y: top, width: monitor.width, height: Math.max(100, bottom - top) };
 }
 
-// The renderer's URL for a mode: the overlay draws on a transparent page
-export function rendererUrl(base: string, mode: ShellMode): string {
+// The renderer's URL for a mode (the overlay draws on a transparent page) and the options the page takes
+export function rendererUrl(base: string, mode: ShellMode, estimateWords = false): string {
   const url = new URL(base);
   if (mode === 'overlay') url.searchParams.set('mode', 'overlay');
+  if (estimateWords) url.searchParams.set('words', 'estimate');
   return url.toString();
 }
 

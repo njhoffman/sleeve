@@ -125,7 +125,7 @@ async function openOverlay(options: ShellOptions): Promise<BrowserWindow> {
   const id = windowId(window);
   await markOverlay(id, options.position);
   const onState = forwardColors(window, id, state!);
-  load(window, rendererUrl(options.url, 'overlay'));
+  load(window, rendererUrl(options.url, 'overlay', options.estimateWords));
   window.once('show', () => {
     restack();
     // The compositor and Chromium may map in stages; once more after they settle
@@ -172,7 +172,7 @@ function openWindow(options: ShellOptions): BrowserWindow {
   };
   window.on('moved', save);
   window.on('resized', save);
-  load(window, rendererUrl(options.url, 'window'));
+  load(window, rendererUrl(options.url, 'window', options.estimateWords));
   return window;
 }
 

@@ -1,4 +1,5 @@
-import type { LyricsResult, ScoredCandidate } from '../core/types.ts';
+import type { LyricLine, LyricsResult, ScoredCandidate } from '../core/types.ts';
+import { nextLineTime, wordFill, wordTexts, wordTimings } from '../now/lines.ts';
 import type { NowState } from '../now/state.ts';
 import { Connection } from './connection.ts';
 import { textTheme, themeVariables, validColors } from './contrast.ts';
@@ -25,6 +26,8 @@ const toast = element<HTMLDivElement>('toast');
 
 // ?mode=overlay: drawn over the wallpaper by the Electron shell, with nothing but the lyrics
 const overlay = new URLSearchParams(location.search).get('mode') === 'overlay';
+// ?words=estimate: fill lines without word times word by word too, their timing estimated from the line's
+const estimateWords = new URLSearchParams(location.search).get('words') === 'estimate';
 document.documentElement.classList.toggle('overlay', overlay);
 
 // The Electron shell's one-way channel (shell/preload.cjs): the wallpaper colors behind the overlay, from backdrop
@@ -42,6 +45,9 @@ window.sleeveShell?.onColors(value => {
 const connection = new Connection(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws`);
 
 let lineElements: HTMLDivElement[] = [];
+// Per line, its word elements when it is filled word by word (empty otherwise), and the fill last set on each
+let wordElements: HTMLSpanElement[][] = [];
+let wordFills: number[] = [];
 let centers: number[] = [];
 let shownLyrics: ScoredCandidate | null | undefined = undefined;
 let shownMessage: string | null = null;
@@ -73,10 +79,18 @@ function rebuild(best: ScoredCandidate | null, text: string | null): void {
   snap = true;
   const lyrics = text ? null : best?.lyrics;
   viewport.classList.toggle('unsynced', !!lyrics && !lyrics.synced);
-  lineElements = (lyrics?.lines ?? []).map(line => {
+  const lines = lyrics?.lines ?? [];
+  wordElements = lines.map(line => lyrics?.synced && (line.words?.length || estimateWords) ? wordTexts(line).map(() => document.createElement('span')) : []);
+  wordFills = [];
+  lineElements = lines.map((line, at) => {
     const div = document.createElement('div');
     div.className = line.text.trim() ? 'line' : 'line blank';
-    div.textContent = line.text;
+    if (wordElements[at].length) {
+      div.classList.add('worded');
+      div.append(...wordNodes(line, wordElements[at]));
+    } else {
+      div.textContent = line.text;
+    }
     if (line.translation) {
       const translation = document.createElement('span');
       translation.className = 'translation';
@@ -90,12 +104,43 @@ function rebuild(best: ScoredCandidate | null, text: string | null): void {
   measure();
 }
 
+// A word drawn twice: the line's color underneath, and a full-color copy over it clipped to how much is sung
+// (--fill), so the fill sweeps through the word while its shadow stays whole underneath
+function wordNodes(line: LyricLine, elements: HTMLSpanElement[]): Node[] {
+  return wordTexts(line).flatMap((text, at) => {
+    const word = text.trimEnd();
+    const element = elements[at];
+    element.className = 'word';
+    const fill = document.createElement('span');
+    fill.className = 'fill';
+    fill.setAttribute('aria-hidden', 'true');
+    fill.textContent = word;
+    element.append(word, fill);
+    return text.length > word.length ? [element, document.createTextNode(' ')] : [element];
+  });
+}
+
+// Each word of the current line filled as far as it is sung at positionMs
+function fillWords(state: NowState, index: number, positionMs: number): void {
+  const line = state.result?.best?.lyrics.lines[index];
+  const elements = wordElements[index];
+  if (!line || !elements?.length) return;
+  const timings = wordTimings(line, state.result!.offsetMs, nextLineTime(state.result, positionMs));
+  timings.forEach((timing, at) => {
+    const fill = Math.round(wordFill(timing, positionMs) * 1000) / 1000;
+    if (wordFills[at] === fill || !elements[at]) return;
+    wordFills[at] = fill;
+    elements[at].style.setProperty('--fill', String(fill));
+  });
+}
+
 function mark(index: number): void {
   if (index === currentIndex) return;
   lineElements.forEach((line, at) => {
     line.classList.toggle('current', at === index);
     line.classList.toggle('past', at < index);
   });
+  wordFills = [];
   currentIndex = index;
 }
 
@@ -120,8 +165,10 @@ function render(now: number): void {
   let target = 0;
   const lyrics = shownMessage ? null : shownLyrics?.lyrics;
   if (lyrics?.synced && centers.length) {
+    const position = connection.mirror.position(now);
     const index = connection.mirror.line(now).index;
     mark(index);
+    if (index >= 0) fillWords(state, index, position);
     target = anchor - centers[Math.max(0, index)];
   } else if (lyrics && centers.length) {
     // Unsynced: drift through the text as the track plays

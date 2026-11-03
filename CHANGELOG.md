@@ -6,6 +6,19 @@ All notable changes to sleeve are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-11-02
+
+### Added
+
+- Word-by-word highlighting: in lyrics with word times, each word of the current line fills as it is sung, in the
+  browser and in the overlay. `?words=estimate` on the page (`just shell --estimate-words`) fills lines without
+  word times too, timed by the length of each word over the line.
+
+### Fixed
+
+- Enhanced LRC timed by syllable ("<00:10.00>Hel<00:10.20>lo") reads as "Hello", not "Hel lo", and text before a
+  line's first word time is no longer dropped.
+
 ## [0.11.0] - 2026-11-02
 
 ### Added

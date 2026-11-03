@@ -64,6 +64,21 @@ html, body {
 .line.past { color: var(--past); }
 .line.current { color: var(--text); transform: scale(1); }
 .line.blank { min-height: 1em; }
+/* Word by word: the current line keeps the upcoming color, and each word's full-color copy is clipped to how much
+   of it is sung (--fill, 0 to 1, set every frame). Other lines hide the copies. */
+.line.current.worded { color: var(--dim); }
+.word { position: relative; display: inline-block; --fill: 0; }
+.word .fill {
+  position: absolute;
+  left: 0;
+  top: 0;
+  white-space: nowrap;
+  color: var(--text);
+  text-shadow: none;
+  clip-path: inset(0 calc((1 - var(--fill)) * 100%) 0 0);
+  display: none;
+}
+.line.current .word .fill { display: inline; }
 .line .translation { display: block; font-size: 0.55em; font-weight: 500; opacity: 0.75; }
 
 .unsynced .line { color: var(--text); transform: none; font-size: calc(var(--line-size) * 0.75); }
@@ -156,3 +171,5 @@ html.overlay .line {
 }
 html.overlay .line.past { color: rgba(var(--overlay-text), var(--overlay-past-alpha)); }
 html.overlay .line.current { color: rgb(var(--overlay-text)); }
+html.overlay .line.current.worded { color: rgba(var(--overlay-text), var(--overlay-upcoming-alpha)); }
+html.overlay .word .fill { color: rgb(var(--overlay-text)); }

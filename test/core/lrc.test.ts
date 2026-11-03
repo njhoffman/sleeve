@@ -24,8 +24,21 @@ describe('LRC', () => {
     const lyrics = parseLrc('[00:10.00]<00:10.00>Hello <00:10.50>big <00:11.25>world');
     expect(lyrics.lines[0]).to.deep.equal({
       time: 10000, text: 'Hello big world',
-      words: [{ time: 10000, text: 'Hello' }, { time: 10500, text: 'big' }, { time: 11250, text: 'world' }]
+      words: [{ time: 10000, text: 'Hello ' }, { time: 10500, text: 'big ' }, { time: 11250, text: 'world' }]
     });
+  });
+
+  it('keeps the spacing of enhanced LRC: syllables join, space before a time goes to the word before it', () => {
+    const syllables = parseLrc('[00:10.00]<00:10.00>Hel<00:10.20>lo <00:10.60>there');
+    expect(syllables.lines[0].text).to.equal('Hello there');
+    expect(syllables.lines[0].words).to.deep.equal([{ time: 10000, text: 'Hel' }, { time: 10200, text: 'lo ' }, { time: 10600, text: 'there' }]);
+    const before = parseLrc('[00:10.00]<00:10.00>One<00:10.50>   two <00:11.00> ');
+    expect(before.lines[0]).to.deep.equal({ time: 10000, text: 'One two', words: [{ time: 10000, text: 'One ' }, { time: 10500, text: 'two' }] });
+  });
+
+  it('starts text before the first word time at the line time', () => {
+    const lyrics = parseLrc('[00:05.00]Oh <00:05.50>yeah');
+    expect(lyrics.lines[0]).to.deep.equal({ time: 5000, text: 'Oh yeah', words: [{ time: 5000, text: 'Oh ' }, { time: 5500, text: 'yeah' }] });
   });
 
   it('treats text without timestamps as unsynced', () => {
@@ -39,6 +52,7 @@ describe('LRC', () => {
     expect(formatLrc(lyrics)).to.equal(source);
     expect(plainText(lyrics)).to.equal('One\nTwo words');
     expect(formatLrc(parseLrc('plain\ntext'))).to.equal('plain\ntext');
+    expect(formatLrc(parseLrc('[00:10.00]<00:10.00>Hel<00:10.20>lo <00:10.60>there'))).to.equal('[00:10.00]<00:10.00>Hel<00:10.20>lo <00:10.60>there');
   });
 
   it('tells LRC text from plain text', () => {

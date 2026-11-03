@@ -121,6 +121,11 @@ While sleeved runs, `http://127.0.0.1:6620/` shows the lyrics in a browser, scro
 candidates to pick from, `r` looks the track up again online, and `?` lists the keys. The page is served from
 the sources (sleeved strips the TypeScript types as it sends each file), so there is nothing to build.
 
+Lyrics with word times (enhanced LRC, such as a word-timed `.lrc` next to the file) fill word by word as they
+are sung. Few lyrics online have word times, so `http://127.0.0.1:6620/?words=estimate` fills every line that
+way, spreading the line's time over its words by their length: it reads well on most lines, but runs ahead of
+held notes.
+
 ### The overlay
 
 `just shell-install` installs Electron into `shell/` (about 100 MB, apart from the rest). `just shell` then
@@ -128,7 +133,7 @@ shows the lyrics on the desktop: a transparent, click-through window just above 
 its visualizer, from 15% of the monitor down to where the visualizer starts. i3 never manages it, so it is on
 every workspace and under every window, as the visualizer is. backdrop stacks it again when its daemon
 restarts. Options: `--position above` (over the visualizer), `--geometry 1200x500+360+200`, `--monitor
-HDMI-1`, `--url`. The text color follows the wallpaper: backdrop samples the colors behind the overlay, and the
+HDMI-1`, `--url`, `--estimate-words` (the page's `?words=estimate`). The text color follows the wallpaper: backdrop samples the colors behind the overlay, and the
 lyrics turn light or dark by contrast against every part that covers a tenth of it, with a stronger shadow when
 no color reads well over all of it (a picture half dark, half bright). Without backdrop running it opens as a plain window instead; `just shell --window` always
 does, and remembers where it was.

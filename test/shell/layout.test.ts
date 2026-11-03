@@ -19,8 +19,9 @@ describe('shell layout', () => {
   });
 
   it('takes its own options and lets Chromium\'s through', () => {
-    expect(parseShellArgs([])).to.deep.equal({ mode: 'overlay', url: DEFAULT_URL, geometry: null, monitor: null, position: 'below' });
+    expect(parseShellArgs([])).to.deep.equal({ mode: 'overlay', url: DEFAULT_URL, geometry: null, monitor: null, position: 'below', estimateWords: false });
     expect(parseShellArgs(['--no-sandbox', '--window', '--url', 'http://127.0.0.1:7000/'])).to.deep.include({ mode: 'window', url: 'http://127.0.0.1:7000/' });
+    expect(parseShellArgs(['--estimate-words']).estimateWords).to.equal(true);
     expect(parseShellArgs(['--mode=overlay', '--geometry', '800x400+10+20', '--monitor', 'HDMI-1', '--position', 'above']))
       .to.deep.include({ geometry: { x: 10, y: 20, width: 800, height: 400 }, monitor: 'HDMI-1', position: 'above' });
     expect(() => parseShellArgs(['--mode', 'fullscreen'])).to.throw('Invalid --mode: fullscreen (overlay or window)');
@@ -77,5 +78,6 @@ describe('shell layout', () => {
   it('asks the renderer for overlay mode in the URL', () => {
     expect(rendererUrl('http://127.0.0.1:6620/', 'overlay')).to.equal('http://127.0.0.1:6620/?mode=overlay');
     expect(rendererUrl('http://127.0.0.1:6620/', 'window')).to.equal('http://127.0.0.1:6620/');
+    expect(rendererUrl('http://127.0.0.1:6620/', 'overlay', true)).to.equal('http://127.0.0.1:6620/?mode=overlay&words=estimate');
   });
 });

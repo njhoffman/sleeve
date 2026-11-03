@@ -15,17 +15,31 @@ function toMs(minutes: string, seconds: string, fraction: string | undefined): n
   return Number(minutes) * 60_000 + Number(seconds) * 1000 + ms;
 }
 
-function parseWords(text: string, offset: number): { text: string; words?: LyricWord[] } {
+// A line's enhanced word times. Each word keeps the space that follows it (one, however much there was), so
+// syllables ("<00:10.00>Hel<00:10.20>lo") join back into "Hello" and the words concatenated are the line's text.
+// Text before the first word time starts at the line's own time.
+function parseWords(text: string, lineTime: number, offset: number): { text: string; words?: LyricWord[] } {
   const marks = [...text.matchAll(WORD)];
   if (!marks.length) return { text: text.trim() };
-  const words: LyricWord[] = [];
+  const pieces: { time: number; text: string }[] = [];
+  const lead = text.slice(0, marks[0].index);
+  if (lead.trim()) pieces.push({ time: lineTime, text: lead });
   marks.forEach((mark, index) => {
     const start = mark.index + mark[0].length;
     const end = marks[index + 1]?.index ?? text.length;
-    const word = text.slice(start, end).trim();
-    if (word) words.push({ time: Math.max(0, toMs(mark[1], mark[2], mark[3]) - offset), text: word });
+    pieces.push({ time: Math.max(0, toMs(mark[1], mark[2], mark[3]) - offset), text: text.slice(start, end) });
   });
-  return { text: words.map(word => word.text).join(' '), words };
+  const words: LyricWord[] = [];
+  for (const piece of pieces) {
+    const body = piece.text.replace(/\s+/g, ' ');
+    // Space before a word belongs to the word before it
+    if (body.startsWith(' ') && words.length && !words[words.length - 1].text.endsWith(' ')) words[words.length - 1].text += ' ';
+    const word = body.trimStart();
+    if (word) words.push({ time: piece.time, text: word });
+  }
+  if (!words.length) return { text: '' };
+  words[words.length - 1].text = words[words.length - 1].text.trimEnd();
+  return { text: words.map(word => word.text).join(''), words };
 }
 
 export function parseLrc(source: string): Lyrics {
@@ -46,9 +60,10 @@ export function parseLrc(source: string): Lyrics {
       continue;
     }
     const last = stamps[stamps.length - 1];
-    const body = parseWords(line.slice(last.index + last[0].length), offset);
+    const rest = line.slice(last.index + last[0].length);
     for (const stamp of stamps) {
-      timed.push({ time: Math.max(0, toMs(stamp[1], stamp[2], stamp[3]) - offset), ...body });
+      const time = Math.max(0, toMs(stamp[1], stamp[2], stamp[3]) - offset);
+      timed.push({ time, ...parseWords(rest, time, offset) });
     }
   }
   if (!timed.length) return { synced: false, instrumental: false, lines: plain };
@@ -72,7 +87,7 @@ function stamp(ms: number): string {
 export function formatLrc(lyrics: Lyrics): string {
   return lyrics.lines.map(line => {
     if (line.time === null) return line.text;
-    const body = line.words?.length ? line.words.map(word => `<${stamp(word.time)}>${word.text}`).join(' ') : line.text;
+    const body = line.words?.length ? line.words.map(word => `<${stamp(word.time)}>${word.text}`).join('') : line.text;
     return `[${stamp(line.time)}]${body}`;
   }).join('\n');
 }

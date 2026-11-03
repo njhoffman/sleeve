@@ -91,9 +91,28 @@ build items that depend on it, listed in the later projects.
       what other providers and the cache are for: port Musixmatch/NetEase next, cache found and not-found
       results, and in batch tagging back off and retry later instead of failing the file.
       Mitigated in 0.2.0 (cache) and 0.3.0 (NetEase covers the misses); still open for batch tagging.
+- [ ] **A source of word timings.** (p2) [feature] Word-by-word highlight (0.12.0) needs `words`, and almost no
+      lyrics have them: on 2026-11-02 none of the 27 cached answers did, nor any of 160 LRCLIB synced records for
+      8 popular tracks (no enhanced LRC tags, `hasWordSync` false on all). Today only a word-timed `.lrc`
+      sidecar gives them; the rest falls back to `?words=estimate`. Candidates, best first:
+      (1) LRCLIB's `lyricsfile` (below): free and allowed, but the data is rare for now; re-sample later.
+      (2) Musixmatch's official API, `track.richsync.get`: word timing by ISRC or Spotify id, the best data, but
+      richsync and full synced lyrics are commercial plans only, priced on request (no public price; the free
+      plan returns about 30% of a lyric, by third-party accounts, unverified). Ask Musixmatch for a quote for
+      personal, non-commercial use before anything else (see Look into Musixmatch again).
+      (3) NetEase `yrc` (word-by-word, `[start,dur](wordStart,wordDur,0)word`, centiseconds): the public
+      `/api/song/lyric` and `/v1` return `lrc`, `tlyric` and an empty `klyric`, no `yrc`; community
+      clients get it from the encrypted eapi/weapi endpoints, imitating the app, which is out as for Musixmatch.
+      NetEase has an official open platform (developer.music.163.com: app id and private key, lyrics among its
+      APIs), but whether it returns `yrc`, costs anything, or takes developers outside mainland China is
+      unknown; its docs and sign-up are in Chinese and want a registered developer. Worth one look.
+      (4) Alignment: time the words ourselves from the audio (forced alignment of known lyrics, e.g. a
+      Whisper-based aligner, after vocal separation) for local files, stored as a sidecar. Heavy, offline only,
+      but works for the whole library; fits the planned batch tagging.
 - [ ] **Word timing from LRCLIB's lyricsfile.** (p3) [feature] LRCLIB records now carry `hasWordSync` and a
       `lyricsfile` (YAML: lines with `start_ms`/`end_ms`, words when word-synced). Parse it when
       `hasWordSync` is true for karaoke timing; needs a YAML parser and a recorded word-synced fixture.
+      Sampled 2026-11-02: no word-synced record among 160, so wait until some exist to record a fixture.
 - [ ] **Queries without a duration cannot tell versions apart.** (p3) [feature] `sleeve lyrics -a -t` without `-d`
       scores live and album versions alike (all 1.0 for "Everything In Its Right Place"). Prefer the record
       whose album matches, or the most common duration among candidates, when no duration is given.
@@ -112,6 +131,8 @@ build items that depend on it, listed in the later projects.
       keeps richsync and ID lookups, but still the unofficial API, against its terms, and the token can be
       revoked; (2) the official API with a developer key: allowed, but the free plan has no synced lyrics
       and full lyrics need a paid plan; (3) leave it out. Revisit after NetEase and the daemon.
+      Checked 2026-11-02: richsync (`track.richsync.get`) is on the commercial plans only, priced by quote;
+      developer.musixmatch.com could not be fetched to confirm the plans. Next step: ask them for a quote.
 - [x] **Match by IDs from the file's tags.** (p2) [feature] Files carry `sp_track_id`, `sp_isrc`/`TSRC`,
       `sp_duration_ms` and MusicBrainz IDs (not every file yet). Read them via the MPD path and pass
       them to providers that accept IDs; use the duration for scoring. Exact IDs beat fuzzy text.
@@ -199,9 +220,15 @@ build items that depend on it, listed in the later projects.
 - [ ] **Start the overlay with the session.** (p3) [feature] Today it is `exec just -f .../justfile shell` in the i3
       config. A systemd user unit bound to graphical-session.target would restart it and order it after
       sleeved and backdrop.
-- [ ] **Word-by-word highlight.** (p2) [feature] Lines carry `words` (enhanced LRC, later LRCLIB's lyricsfile and
+- [x] **Word-by-word highlight.** (p2) [feature] Lines carry `words` (enhanced LRC, later LRCLIB's lyricsfile and
       Musixmatch richsync); the renderer shows whole lines only. Fill each word as it comes due, from the same
       per-frame position.
+      Done in 0.12.0: `wordTimings` in `src/now/lines.ts`; each word of the current line is drawn twice, a
+      full-color copy clipped to how much is sung, so the overlay's shadow stays whole. `?words=estimate`
+      (`--estimate-words`) times lines without words by word length, capped at 250 ms a letter. Few lyrics
+      have word times yet (see A source of word timings).
+- [ ] **Word highlight in the terminal.** (p3) [feature] `sleeve now` shows whole lines; it could color the sung
+      part of the current line with the same `wordTimings`.
 - [ ] **Mouse in the renderer.** (p3) [feature] Click a candidate in the pick panel, scroll back through the
       lyrics by wheel (returning to the current line after a few seconds), click a line to seek (needs a seek
       command and player support).
