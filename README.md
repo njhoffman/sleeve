@@ -41,6 +41,7 @@ sleeve now                                     # lyrics for what MPD or Spotify 
 sleeve now --once                              # the track, where it is, and the current line
 sleeve now --once --json                       # the same with the lyrics, for scripts and status bars
 sleeve line                                    # the line playing, printed each time it changes, for status bars
+sleeve line --between ' '                      # the same, with this instead of an empty line during a synced track's gaps
 sleeved                                        # the daemon: serve what plays to displays (sleeve daemon)
 sleeve cache                                   # how many answers are stored, by provider (also --json)
 sleeve cache clear --not-found                 # forget "no lyrics" answers so those tracks are asked again

@@ -6,6 +6,13 @@ All notable changes to sleeve are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.31.0] - 2026-11-04
+
+### Added
+
+- `sleeve line --between <text>` prints that text instead of an empty line while the track has synced lyrics but no
+  line is playing, so a status bar can tell a gap from having no lyrics.
+
 ## [0.30.1] - 2026-11-04
 
 ### Fixed

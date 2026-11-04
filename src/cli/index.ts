@@ -110,6 +110,7 @@ export function buildProgram(io: Io, setExit: (code: number) => void): Command {
   program.command('line')
     .description('Print the line playing each time it changes, for status bars (polybar, i3blocks); an empty line for none. Waits for sleeved, and comes back to it when it restarts')
     .option('--socket <path>', 'sleeved\'s Unix socket (default: $XDG_RUNTIME_DIR/sleeve/sleeved.sock)')
+    .option('--between <text>', 'print this instead of an empty line while the track has synced lyrics but no line is playing')
     .action(async (options: LineOptions) => {
       setExit(await lineCommand(options, io));
     });
