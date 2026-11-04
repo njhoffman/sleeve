@@ -108,6 +108,8 @@ export function buildProgram(io: Io, setExit: (code: number) => void): Command {
     .option('--preset <name>', 'with display: lyrics, minimal or full')
     .option('--position <place>', 'with display: where the panel goes, e.g. bottom-left')
     .option('--align <side>', 'with display: left, center or right, for the lyrics')
+    .option('--lyrics-area <area>', 'with display: where the lyrics go inside the window, WxH+X+Y in pixels or percent')
+    .option('--now-area <area>', 'with display: the area the now-playing panel stands in')
     .option('--hide', 'with display: hide the page without closing it')
     .option('--show', 'with display: show it again')
     .option('--reset', 'with display: forget the changes made, for this instance or for every page')

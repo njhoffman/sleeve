@@ -274,8 +274,8 @@ export class SleeveDaemon {
       case 'seek':
         return { data: { positionMs: await this.session.seek(command.ms) } };
       case 'display': {
-        const { instance = ALL_INSTANCES, preset, position, align, visible, reset } = command;
-        const change: DisplayChange = { ...(preset ? { preset } : {}), ...(position ? { position } : {}), ...(align ? { align } : {}), ...(visible === undefined ? {} : { visible }) };
+        const { instance = ALL_INSTANCES, preset, position, align, lyricsArea, nowArea, visible, reset } = command;
+        const change: DisplayChange = { ...(preset ? { preset } : {}), ...(position ? { position } : {}), ...(align ? { align } : {}), ...(lyricsArea ? { lyricsArea } : {}), ...(nowArea ? { nowArea } : {}), ...(visible === undefined ? {} : { visible }) };
         const displays = { ...this.displays };
         // Without an instance, a reset forgets every page's changes
         if (reset && instance === ALL_INSTANCES) for (const name of Object.keys(displays)) delete displays[name];

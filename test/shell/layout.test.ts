@@ -24,14 +24,17 @@ describe('the shell\'s managed mode', () => {
   });
 
   it('refuses a preset or place it does not know', () => {
+    expect(() => parseShellArgs(['--lyrics-area', 'rubbish'])).to.throw('Invalid --lyrics-area: rubbish');
+    expect(() => parseShellArgs(['--now-area', '0x10+0+0'])).to.throw('Invalid --now-area: 0x10+0+0');
+    expect(parseShellArgs(['--lyrics-area', '33%x100%+0+0'])).to.deep.include({ lyricsArea: '33%x100%+0+0', nowArea: null });
     expect(() => parseShellArgs(['--now', 'huge'])).to.throw('Invalid --now: huge');
     expect(() => parseShellArgs(['--now-position', 'middle'])).to.throw('Invalid --now-position: middle');
     expect(() => parseShellArgs(['--lyrics-align', 'up'])).to.throw('Invalid --lyrics-align: up');
   });
 
   it('hands the page its instance and look in the URL', () => {
-    const url = new URL(rendererUrl('http://127.0.0.1:6620/', 'overlay', false, { instance: 'DP-3 lyrics', now: 'full', nowPosition: 'top-right', lyricsAlign: 'right' }));
-    expect(Object.fromEntries(url.searchParams)).to.deep.equal({ mode: 'overlay', instance: 'DP-3 lyrics', now: 'full', 'now-position': 'top-right', 'lyrics-align': 'right' });
+    const url = new URL(rendererUrl('http://127.0.0.1:6620/', 'overlay', false, { instance: 'DP-3 lyrics', now: 'full', nowPosition: 'top-right', lyricsAlign: 'right', lyricsArea: '33%x100%+0+0' }));
+    expect(Object.fromEntries(url.searchParams)).to.deep.equal({ mode: 'overlay', instance: 'DP-3 lyrics', now: 'full', 'now-position': 'top-right', 'lyrics-align': 'right', 'lyrics-area': '33%x100%+0+0' });
   });
 });
 

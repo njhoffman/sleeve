@@ -384,3 +384,15 @@ build items that depend on it, listed in the later projects.
       against the wallpaper region (from backdrop) or the cover, with a shadow as fallback.
       The overlay half is done in 0.11.0 (`src/renderer/contrast.ts`); the cover half in 0.23.0, from the cover
       as it shows (faded and dimmed, `coverColors` in view.ts).
+- [x] **Areas inside the window, for running as backdrop's wallpaper layer.** (p2) [feature] Asked for 2026-11-04: backdrop wants to give sleeve a whole
+      monitor and have the lyrics only in part of it (the left third, say), leaving the rest for GLava and whatever else. Spec in `docs/backdrop.md`:
+      `--lyrics-area` and `--now-area` (`WxH+X+Y`, pixels or percent of the window) on `sleeve shell` and `sleeve ctl display`, text sized to its area.
+      Done in 0.34.0.
+- [ ] **A background for the window.** (p2) [feature] `--background transparent|#rrggbb|#rrggbbaa|cover|cover@0.6`, on the shell and over `ctl`, so sleeve can be the
+      wallpaper with no mpv behind it, or a see-through layer over mpv with GLava above it. The alpha is the background's alone, text stays solid. `--hide` hides the content and keeps the
+      background. Text colors follow it, blended over the stdin line when see-through. `docs/backdrop.md`.
+- [ ] **`--map-below`.** (p2) [feature] A full-monitor opaque window mapped on top covers every other window for the 2 s until backdrop places it. Map it at
+      the bottom of the stack once, as GLava does for itself, and still never restack after. `docs/backdrop.md`, Stacking.
+- [ ] **Measure a full-monitor transparent window.** (p3) [perf] It runs all day under the compositor. Measure on Iris Xe, repaint only the areas if it matters, and
+      put the figures in the contract in `~/git/backdrop/docs/specs/sleeve.md`.
+

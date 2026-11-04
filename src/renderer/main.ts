@@ -4,7 +4,7 @@ import type { NowState } from '../now/state.ts';
 import { Connection } from './connection.ts';
 import { parseHex, textTheme, themeVariables, validColors } from './contrast.ts';
 import { CoverFlow } from './flow.ts';
-import { candidateEntries, coverColors, displaySettings, flowSettings, flowStep, follow, formatOffset, formatTime, lineStart, lyricsInsets, NO_SCROLL_BACK, nowText, progress, scrollBackOffset, status, wheel, type CandidateEntry, type DisplaySettings, type FlowSettings, type FlowView, type ScrollBack } from './view.ts';
+import { candidateEntries, coverColors, displaySettings, flowSettings, flowStep, follow, formatOffset, formatTime, lineStart, lyricsInsets, NO_SCROLL_BACK, nowText, resolveArea, progress, scrollBackOffset, status, wheel, type CandidateEntry, type DisplaySettings, type FlowSettings, type FlowView, type ScrollBack } from './view.ts';
 
 // The renderer: sleeved's session as scrolling lyrics. The current line is worked out every frame from the
 // mirrored playback clock, so line changes land on the frame they are due whatever the socket does; the scroll
@@ -26,6 +26,8 @@ const artistLine = element<HTMLDivElement>('artist');
 const albumLine = element<HTMLDivElement>('album');
 const nowArt = element<HTMLImageElement>('now-art');
 const statusPanel = element<HTMLElement>('status');
+const lyricsArea = element<HTMLDivElement>('lyrics-area');
+const nowArea = element<HTMLDivElement>('now-area');
 const seekBar = element<HTMLDivElement>('seek');
 const seekFill = element<HTMLDivElement>('seek-fill');
 const elapsedTime = element<HTMLSpanElement>('elapsed');
@@ -172,7 +174,7 @@ let shownTimes = '';
 
 function readDisplay(): void {
   const next = displaySettings(setting, pageParams, overlay, connection.mirror.displayFor(instance));
-  if (display && next.preset === display.preset && next.position === display.position && next.align === display.align && next.visible === display.visible) return;
+  if (display && next.preset === display.preset && next.position === display.position && next.align === display.align && next.lyricsArea === display.lyricsArea && next.nowArea === display.nowArea && next.visible === display.visible) return;
   if (display && !display.visible && next.visible) snap = true;
   display = next;
   document.documentElement.classList.toggle('page-hidden', !next.visible);
@@ -182,14 +184,28 @@ function readDisplay(): void {
   dataset.lyricsAlign = next.align;
   statusText = '';
   thumbnailKey = undefined;
+  placeAreas();
+}
+
+function placeAreas(): void {
+  if (!display) return;
+  const size = { width: innerWidth, height: innerHeight };
+  for (const [box, area] of [[lyricsArea, display.lyricsArea], [nowArea, display.nowArea]] as const) {
+    const rect = resolveArea(area, size);
+    box.style.left = `${rect.left}px`;
+    box.style.top = `${rect.top}px`;
+    box.style.width = `${rect.width}px`;
+    box.style.height = `${rect.height}px`;
+  }
   reservePanel();
 }
+addEventListener('resize', () => placeAreas());
 
 // Keeps the lyrics clear of the panel
 function reservePanel(): void {
   if (!display) return;
   const rect = display.preset === 'lyrics' ? null : statusPanel.getBoundingClientRect();
-  const insets = lyricsInsets(display.position, rect, { width: innerWidth, height: innerHeight });
+  const insets = lyricsInsets(display.position, rect, resolveArea(display.lyricsArea, { width: innerWidth, height: innerHeight }));
   const { style } = document.documentElement;
   style.setProperty('--reserve-top', `${insets.top}px`);
   style.setProperty('--reserve-right', `${insets.right}px`);

@@ -5,7 +5,7 @@
   --past: rgba(232, 236, 244, 0.22);
   --accent: #8fb4ff;
   --panel: rgba(22, 27, 37, 0.97);
-  --line-size: clamp(22px, 3.4vw, 44px);
+  --line-size: clamp(22px, 3.4cqw, 44px);
   --anchor: 0.42;
   color-scheme: dark;
 
@@ -30,7 +30,10 @@
                    seek bar, times); unset: lyrics on the overlay, minimal in a window
   --now-position:  top-left (default), top-center, top-right, center-left, center-right, bottom-left, bottom-center or
                    bottom-right; the lyrics keep clear of it
-  --lyrics-align:  left (default), center or right */
+  --lyrics-align:  left (default), center or right
+  --lyrics-area:   where the lyrics go inside the window, WxH+X+Y in pixels or percent of the window, e.g. 33%x100%+0+0
+                   (the left third); unset: the whole window. Text wraps and sizes to it.
+  --now-area:      the area the panel stands in, --now-position placing it inside; unset: the whole window */
   --now-scale: 1;                /* size of the panel */
   --now-margin: 24px;            /* its distance from the window's edge */
 
@@ -56,10 +59,26 @@ html, body {
   overflow: hidden;
 }
 
-#status {
+/* Where things stand inside the window; main.ts sets their rectangles. As containers they give the text its size (cqw),
+   so a third of a monitor looks like a window that size, and anything past their edge is clipped. */
+#lyrics-area, #now-area {
   position: fixed;
-  z-index: 2;
-  max-width: calc(100vw - 2 * var(--now-margin));
+  left: 0;
+  top: 0;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  container-type: size;
+  pointer-events: none;
+}
+#lyrics-area { z-index: 1; }
+#lyrics-area #viewport { pointer-events: auto; }
+html.overlay #lyrics-area #viewport { pointer-events: none; }
+#now-area { z-index: 2; }
+
+#status {
+  position: absolute;
+  max-width: calc(100cqw - 2 * var(--now-margin));
   font-size: calc(14px * var(--now-scale));
   line-height: 1.4;
   pointer-events: none;
@@ -84,7 +103,7 @@ html[data-now="full"] #status {
   grid-template-columns: auto minmax(0, 1fr);
   gap: calc(10px * var(--now-scale)) calc(14px * var(--now-scale));
   align-items: center;
-  width: min(calc(340px * var(--now-scale)), calc(100vw - 2 * var(--now-margin)));
+  width: min(calc(340px * var(--now-scale)), calc(100cqw - 2 * var(--now-margin)));
   text-align: left;
 }
 html[data-now="full"] #title { font-size: calc(16px * var(--now-scale)); }
@@ -168,8 +187,8 @@ html:not(.art) #art::after { display: none; }
 
 #lines {
   position: absolute;
-  left: 8vw;
-  right: 8vw;
+  left: 8cqw;
+  right: 8cqw;
   top: 0;
   will-change: transform;
 }
@@ -211,8 +230,8 @@ html.overlay #viewport .line { cursor: default; }
 
 #message {
   position: absolute;
-  left: 8vw;
-  right: 8vw;
+  left: 8cqw;
+  right: 8cqw;
   top: calc(var(--anchor) * 100%);
   transform: translateY(-50%);
   font-size: calc(var(--line-size) * 0.8);

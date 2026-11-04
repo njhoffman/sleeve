@@ -1,6 +1,6 @@
 import type { LyricsResult, ScoredCandidate } from '../core/types.ts';
 import type { NowState } from '../now/state.ts';
-import { LYRICS_ALIGNS, NOW_POSITIONS, NOW_PRESETS, type DisplayChange, type LyricsAlign, type NowPosition, type NowPreset } from '../protocol/messages.ts';
+import { LYRICS_ALIGNS, NOW_POSITIONS, NOW_PRESETS, parseArea, type AreaLength, type DisplayChange, type LyricsAlign, type NowPosition, type NowPreset } from '../protocol/messages.ts';
 import type { OverlayColors } from './contrast.ts';
 
 // What the renderer shows, worked out without the DOM, so it is tested in Node.
@@ -89,6 +89,9 @@ export interface DisplaySettings {
   preset: NowPreset;
   position: NowPosition;
   align: LyricsAlign;
+  // As given, whole window when null; see resolveArea
+  lyricsArea: string | null;
+  nowArea: string | null;
   visible: boolean;
 }
 
@@ -96,7 +99,10 @@ export interface DisplaySettings {
 export function displaySettings(read: (name: string) => string, params: { get(name: string): string | null }, overlay: boolean, given: DisplayChange = {}): DisplaySettings {
   const choose = <T extends string>(known: readonly T[], fallback: T, ...values: Array<string | null | undefined>): T =>
     values.map(value => value?.trim()).find((value): value is T => (known as readonly string[]).includes(value ?? '')) ?? fallback;
+  const area = (...values: Array<string | null | undefined>) => values.map(value => value?.trim()).find(value => !!value && parseArea(value)) ?? null;
   return {
+    lyricsArea: area(given.lyricsArea, params.get('lyrics-area'), read('--lyrics-area')),
+    nowArea: area(given.nowArea, params.get('now-area'), read('--now-area')),
     preset: choose(NOW_PRESETS, overlay ? 'lyrics' : 'minimal', given.preset, params.get('now'), read('--now-preset')),
     position: choose(NOW_POSITIONS, 'top-left', given.position, params.get('now-position'), read('--now-position')),
     align: choose(LYRICS_ALIGNS, 'left', given.align, params.get('lyrics-align'), read('--lyrics-align')),
@@ -120,6 +126,27 @@ export function formatTime(ms: number | undefined): string {
   return minutes >= 60 ? `${Math.floor(minutes / 60)}:${String(minutes % 60).padStart(2, '0')}:${rest}` : `${minutes}:${rest}`;
 }
 
+export interface Rect {
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+}
+
+// An area in pixels within a window of this size, clipped to it; the whole window without one
+export function resolveArea(text: string | null, window: { width: number; height: number }): Rect {
+  const area = text ? parseArea(text) : null;
+  if (!area) return { left: 0, top: 0, width: window.width, height: window.height };
+  const pixels = ({ value, percent }: AreaLength, whole: number) => (percent ? value / 100 * whole : value);
+  const left = pixels(area.x, window.width);
+  const top = pixels(area.y, window.height);
+  const right = Math.min(window.width, left + pixels(area.width, window.width));
+  const bottom = Math.min(window.height, top + pixels(area.height, window.height));
+  const clippedLeft = Math.max(0, left);
+  const clippedTop = Math.max(0, top);
+  return { left: clippedLeft, top: clippedTop, width: Math.max(0, right - clippedLeft), height: Math.max(0, bottom - clippedTop) };
+}
+
 export interface Insets {
   top: number;
   right: number;
@@ -133,13 +160,17 @@ export interface Insets {
 const TOP_FADE = 0.08;
 const PANEL_GAP = 16;
 
-export function lyricsInsets(position: NowPosition, panel: { top: number; right: number; bottom: number; left: number } | null, view: { width: number; height: number }): Insets {
+export function lyricsInsets(position: NowPosition, panel: { top: number; right: number; bottom: number; left: number } | null, area: { left?: number; top?: number; width: number; height: number }): Insets {
   const insets: Insets = { top: 0, right: 0, bottom: 0, left: 0 };
   if (!panel) return insets;
-  if (position.startsWith('top')) insets.top = Math.max(0, panel.bottom + PANEL_GAP - view.height * TOP_FADE);
-  else if (position.startsWith('bottom')) insets.bottom = view.height - panel.top + PANEL_GAP;
-  else if (position === 'center-left') insets.left = panel.right + PANEL_GAP;
-  else insets.right = view.width - panel.left + PANEL_GAP;
+  const areaLeft = area.left ?? 0;
+  const areaTop = area.top ?? 0;
+  // A panel standing elsewhere leaves the lyrics alone
+  if (panel.right <= areaLeft || panel.left >= areaLeft + area.width || panel.bottom <= areaTop || panel.top >= areaTop + area.height) return insets;
+  if (position.startsWith('top')) insets.top = Math.max(0, panel.bottom - areaTop + PANEL_GAP - area.height * TOP_FADE);
+  else if (position.startsWith('bottom')) insets.bottom = Math.max(0, areaTop + area.height - panel.top + PANEL_GAP);
+  else if (position === 'center-left') insets.left = Math.max(0, panel.right - areaLeft + PANEL_GAP);
+  else insets.right = Math.max(0, areaLeft + area.width - panel.left + PANEL_GAP);
   return insets;
 }
 

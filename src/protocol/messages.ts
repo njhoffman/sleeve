@@ -18,11 +18,37 @@ export type NowPreset = typeof NOW_PRESETS[number];
 export type NowPosition = typeof NOW_POSITIONS[number];
 export type LyricsAlign = typeof LYRICS_ALIGNS[number];
 
+// A part of the window, relative to it: WxH+X+Y, each part pixels or a percentage of the window ("33%x100%+0+0")
+export interface AreaLength {
+  value: number;
+  percent: boolean;
+}
+export interface Area {
+  width: AreaLength;
+  height: AreaLength;
+  x: AreaLength;
+  y: AreaLength;
+}
+
+const AREA_LENGTH = '\\d+(?:\\.\\d+)?%?';
+const AREA = new RegExp(`^(${AREA_LENGTH})x(${AREA_LENGTH})([+-]${AREA_LENGTH})([+-]${AREA_LENGTH})$`);
+
+// The area an option names; null for a form it cannot read or one with no size
+export function parseArea(text: string): Area | null {
+  const match = AREA.exec(text.trim());
+  if (!match) return null;
+  const [width, height, x, y] = match.slice(1).map(part => ({ value: Number.parseFloat(part), percent: part.endsWith('%') }));
+  return width.value > 0 && height.value > 0 ? { width, height, x, y } : null;
+}
+
 // Changes to how pages look, over what their URL and stylesheet say, until sleeved restarts
 export interface DisplayChange {
   preset?: NowPreset;
   position?: NowPosition;
   align?: LyricsAlign;
+  // Where the lyrics lay out, and where the now-playing panel stands, inside the window (see parseArea)
+  lyricsArea?: string;
+  nowArea?: string;
   // false hides the page without closing it
   visible?: boolean;
 }
@@ -164,9 +190,12 @@ export function parseCommand(text: string): { command: ClientCommand } | { error
     if (record.preset !== undefined && !(NOW_PRESETS as readonly unknown[]).includes(record.preset)) return failed(`display needs preset to be ${NOW_PRESETS.join(', ')}`);
     if (record.position !== undefined && !(NOW_POSITIONS as readonly unknown[]).includes(record.position)) return failed(`display needs position to be ${NOW_POSITIONS.join(', ')}`);
     if (record.align !== undefined && !(LYRICS_ALIGNS as readonly unknown[]).includes(record.align)) return failed(`display needs align to be ${LYRICS_ALIGNS.join(', ')}`);
+    for (const name of ['lyricsArea', 'nowArea']) {
+      if (record[name] !== undefined && (typeof record[name] !== 'string' || !parseArea(record[name] as string))) return failed(`display needs ${name} to be WxH+X+Y, in pixels or percent, not ${String(record[name])}`);
+    }
     if (record.visible !== undefined && typeof record.visible !== 'boolean') return failed('display needs visible to be true or false');
     if (record.reset !== undefined && typeof record.reset !== 'boolean') return failed('display needs reset to be true or false');
-    if (['preset', 'position', 'align', 'visible', 'reset'].every(key => record[key] === undefined)) return failed('display needs something to change');
+    if (['preset', 'position', 'align', 'lyricsArea', 'nowArea', 'visible', 'reset'].every(key => record[key] === undefined)) return failed('display needs something to change');
   }
   if (type === 'subscribe' && typeof record.lines !== 'boolean') return failed('subscribe needs lines, true or false');
   return { command: record as unknown as ClientCommand };

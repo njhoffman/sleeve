@@ -13,7 +13,7 @@ import { NowPlaying } from '../../src/now/session.ts';
 import type { NowState } from '../../src/now/state.ts';
 import { PlayerHub } from '../../src/players/hub.ts';
 import { Connection } from '../../src/renderer/connection.ts';
-import { candidateEntries, coverColors, displaySettings, flowSettings, flowStep, follow, formatOffset, formatTime, lineStart, lyricsInsets, nowText, NO_SCROLL_BACK, progress, reconnectDelay, SCROLL_BACK_MS, scrollBackOffset, status, wheel } from '../../src/renderer/view.ts';
+import { candidateEntries, coverColors, displaySettings, flowSettings, flowStep, follow, formatOffset, formatTime, lineStart, lyricsInsets, nowText, resolveArea, NO_SCROLL_BACK, progress, reconnectDelay, SCROLL_BACK_MS, scrollBackOffset, status, wheel } from '../../src/renderer/view.ts';
 import { until } from '../helpers/fakeMpd.ts';
 import { fakePlayer } from '../helpers/players.ts';
 
@@ -53,14 +53,14 @@ describe('renderer view', () => {
     const reading = (values: Record<string, string> = {}) => (name: string) => values[name] ?? '';
 
     it('shows only lyrics on the overlay and a line in a window unless told otherwise', () => {
-      expect(displaySettings(reading(), params(), true)).to.deep.equal({ preset: 'lyrics', position: 'top-left', align: 'left', visible: true });
-      expect(displaySettings(reading(), params(), false)).to.deep.equal({ preset: 'minimal', position: 'top-left', align: 'left', visible: true });
+      expect(displaySettings(reading(), params(), true)).to.deep.include({ preset: 'lyrics', position: 'top-left', align: 'left', visible: true });
+      expect(displaySettings(reading(), params(), false)).to.deep.include({ preset: 'minimal', position: 'top-left', align: 'left', visible: true });
     });
 
     it('takes a live change over the URL over the stylesheet, passing over what it does not know', () => {
       const css = reading({ '--now-preset': ' full ', '--now-position': 'bottom-right', '--lyrics-align': 'center' });
-      expect(displaySettings(css, params(), true)).to.deep.equal({ preset: 'full', position: 'bottom-right', align: 'center', visible: true });
-      expect(displaySettings(css, params('now=minimal&now-position=center-left&lyrics-align=right'), true)).to.deep.equal({ preset: 'minimal', position: 'center-left', align: 'right', visible: true });
+      expect(displaySettings(css, params(), true)).to.deep.include({ preset: 'full', position: 'bottom-right', align: 'center', visible: true });
+      expect(displaySettings(css, params('now=minimal&now-position=center-left&lyrics-align=right'), true)).to.deep.include({ preset: 'minimal', position: 'center-left', align: 'right', visible: true });
       expect(displaySettings(css, params('now=huge&now-position=middle'), true)).to.deep.include({ preset: 'full', position: 'bottom-right' });
       expect(displaySettings(css, params('now=minimal'), true, { preset: 'lyrics', visible: false })).to.deep.include({ preset: 'lyrics', visible: false });
     });
@@ -77,6 +77,32 @@ describe('renderer view', () => {
       expect(formatTime(61_999)).to.equal('1:01');
       expect(formatTime(3_725_000)).to.equal('1:02:05');
       expect(formatTime(undefined)).to.equal('');
+    });
+
+    it('takes areas like the rest, passing over a form it cannot read', () => {
+      const css = reading({ '--lyrics-area': '50%x100%+0+0' });
+      expect(displaySettings(css, params(), true)).to.deep.include({ lyricsArea: '50%x100%+0+0', nowArea: null });
+      expect(displaySettings(css, params('lyrics-area=33%25x100%25%2B0%2B0'), true).lyricsArea).to.equal('33%x100%+0+0');
+      expect(displaySettings(css, params('lyrics-area=rubbish'), true).lyricsArea).to.equal('50%x100%+0+0');
+      expect(displaySettings(css, params(), true, { nowArea: '100x100+0+0' }).nowArea).to.equal('100x100+0+0');
+    });
+
+    it('resolves an area in pixels or percent, clipped to the window', () => {
+      const window = { width: 2000, height: 1000 };
+      expect(resolveArea(null, window)).to.deep.equal({ left: 0, top: 0, width: 2000, height: 1000 });
+      expect(resolveArea('25%x100%+0+0', window)).to.deep.equal({ left: 0, top: 0, width: 500, height: 1000 });
+      expect(resolveArea('75%x50%+25%+50%', window)).to.deep.equal({ left: 500, top: 500, width: 1500, height: 500 });
+      expect(resolveArea('300x200+10+20', window)).to.deep.equal({ left: 10, top: 20, width: 300, height: 200 });
+      expect(resolveArea('300x200-100-50', window)).to.deep.equal({ left: 0, top: 0, width: 200, height: 150 });
+      expect(resolveArea('300x200+1900+900', window)).to.deep.equal({ left: 1900, top: 900, width: 100, height: 100 });
+      expect(resolveArea('300x200+3000+0', window).width).to.equal(0);
+    });
+
+    it('measures the lyrics\' clearance within their area, and leaves them alone for a panel elsewhere', () => {
+      const area = { left: 0, top: 0, width: 500, height: 1000 };
+      expect(lyricsInsets('bottom-left', { top: 850, right: 340, bottom: 980, left: 24 }, area)).to.deep.include({ bottom: 166 });
+      expect(lyricsInsets('bottom-left', { top: 850, right: 1000, bottom: 980, left: 600 }, area)).to.deep.equal({ top: 0, right: 0, bottom: 0, left: 0 });
+      expect(lyricsInsets('center-right', { top: 400, right: 480, bottom: 600, left: 300 }, { left: 100, top: 0, width: 400, height: 1000 }).right).to.equal(216);
     });
 
     it('keeps the lyrics clear of it: a strip at the top or bottom, a column at a side, nothing without one', () => {

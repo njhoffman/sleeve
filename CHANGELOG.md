@@ -6,6 +6,14 @@ All notable changes to sleeve are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.34.0] - 2026-11-04
+
+### Added
+
+- `--lyrics-area` and `--now-area` (`WxH+X+Y`, in pixels or percent of the window) put the lyrics and the now-playing panel
+  in part of the window, on `sleeve shell`, `sleeve ctl display` and in `~/.config/sleeve/style.css`. Text wraps and sizes
+  to its area, so sleeve can cover a monitor with the lyrics in its left third.
+
 ## [0.33.0] - 2026-11-04
 
 ### Added
