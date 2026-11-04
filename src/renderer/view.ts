@@ -82,6 +82,71 @@ export function candidateEntries(result: LyricsResult, shown: ScoredCandidate | 
   }));
 }
 
+// What the page shows besides the lyrics, and where: from the URL (?now=, ?now-position=, ?lyrics-align=), else from CSS
+// variables (--now-preset, --now-position, --lyrics-align). The overlay shows only lyrics unless told otherwise.
+export const NOW_PRESETS = ['lyrics', 'minimal', 'full'] as const;
+export const NOW_POSITIONS = ['top-left', 'top-center', 'top-right', 'center-left', 'center-right', 'bottom-left', 'bottom-center', 'bottom-right'] as const;
+export const LYRICS_ALIGNS = ['left', 'center', 'right'] as const;
+export type NowPreset = typeof NOW_PRESETS[number];
+export type NowPosition = typeof NOW_POSITIONS[number];
+export type LyricsAlign = typeof LYRICS_ALIGNS[number];
+
+export interface DisplaySettings {
+  preset: NowPreset;
+  position: NowPosition;
+  align: LyricsAlign;
+}
+
+// Each setting from the first place that names a known value: given (a live change), the URL, then the variable
+export function displaySettings(read: (name: string) => string, params: { get(name: string): string | null }, overlay: boolean, given: Partial<DisplaySettings> = {}): DisplaySettings {
+  const choose = <T extends string>(known: readonly T[], fallback: T, ...values: Array<string | null | undefined>): T =>
+    values.map(value => value?.trim()).find((value): value is T => (known as readonly string[]).includes(value ?? '')) ?? fallback;
+  return {
+    preset: choose(NOW_PRESETS, overlay ? 'lyrics' : 'minimal', given.preset, params.get('now'), read('--now-preset')),
+    position: choose(NOW_POSITIONS, 'top-left', given.position, params.get('now-position'), read('--now-position')),
+    align: choose(LYRICS_ALIGNS, 'left', given.align, params.get('lyrics-align'), read('--lyrics-align'))
+  };
+}
+
+// The panel's lines. The full panel gives artist and title lines of their own; the others share one line.
+export function nowText(state: NowState, preset: NowPreset, combined: string): { title: string; artist: string; album: string } {
+  const track = state.playback?.track;
+  if (preset !== 'full' || !track) return { title: combined, artist: '', album: '' };
+  return { title: track.title, artist: track.artist, album: track.album ?? '' };
+}
+
+// m:ss, or h:mm:ss from an hour up; an empty string for a length not known
+export function formatTime(ms: number | undefined): string {
+  if (ms === undefined || !Number.isFinite(ms)) return '';
+  const seconds = Math.max(0, Math.floor(ms / 1000));
+  const minutes = Math.floor(seconds / 60);
+  const rest = String(seconds % 60).padStart(2, '0');
+  return minutes >= 60 ? `${Math.floor(minutes / 60)}:${String(minutes % 60).padStart(2, '0')}:${rest}` : `${minutes}:${rest}`;
+}
+
+export interface Insets {
+  top: number;
+  right: number;
+  bottom: number;
+  left: number;
+}
+
+// How far the lyrics keep off the window's edges so the panel never covers them: the strip it stands in at the top or
+// bottom, the column at a side. The top of the lyrics is faded out over TOP_FADE of their height anyway, so a panel
+// that fits in there costs them nothing.
+const TOP_FADE = 0.08;
+const PANEL_GAP = 16;
+
+export function lyricsInsets(position: NowPosition, panel: { top: number; right: number; bottom: number; left: number } | null, view: { width: number; height: number }): Insets {
+  const insets: Insets = { top: 0, right: 0, bottom: 0, left: 0 };
+  if (!panel) return insets;
+  if (position.startsWith('top')) insets.top = Math.max(0, panel.bottom + PANEL_GAP - view.height * TOP_FADE);
+  else if (position.startsWith('bottom')) insets.bottom = view.height - panel.top + PANEL_GAP;
+  else if (position === 'center-left') insets.left = panel.right + PANEL_GAP;
+  else insets.right = view.width - panel.left + PANEL_GAP;
+  return insets;
+}
+
 // --art-animation: sleeve-art-flow, set from CSS variables. speed, amount, detail, zoom and saturation glide to a new
 // value; resolution and fps apply at once, since they do not show as movement.
 export interface FlowSettings {

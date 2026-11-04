@@ -13,7 +13,7 @@ import { NowPlaying } from '../../src/now/session.ts';
 import type { NowState } from '../../src/now/state.ts';
 import { PlayerHub } from '../../src/players/hub.ts';
 import { Connection } from '../../src/renderer/connection.ts';
-import { candidateEntries, coverColors, flowSettings, flowStep, follow, formatOffset, lineStart, NO_SCROLL_BACK, progress, reconnectDelay, SCROLL_BACK_MS, scrollBackOffset, status, wheel } from '../../src/renderer/view.ts';
+import { candidateEntries, coverColors, displaySettings, flowSettings, flowStep, follow, formatOffset, formatTime, lineStart, lyricsInsets, nowText, NO_SCROLL_BACK, progress, reconnectDelay, SCROLL_BACK_MS, scrollBackOffset, status, wheel } from '../../src/renderer/view.ts';
 import { until } from '../helpers/fakeMpd.ts';
 import { fakePlayer } from '../helpers/players.ts';
 
@@ -48,6 +48,50 @@ describe('renderer sources', () => {
 });
 
 describe('renderer view', () => {
+  describe('the now-playing panel', () => {
+    const params = (text = '') => new URLSearchParams(text);
+    const reading = (values: Record<string, string> = {}) => (name: string) => values[name] ?? '';
+
+    it('shows only lyrics on the overlay and a line in a window unless told otherwise', () => {
+      expect(displaySettings(reading(), params(), true)).to.deep.equal({ preset: 'lyrics', position: 'top-left', align: 'left' });
+      expect(displaySettings(reading(), params(), false)).to.deep.equal({ preset: 'minimal', position: 'top-left', align: 'left' });
+    });
+
+    it('takes a live change over the URL over the stylesheet, passing over what it does not know', () => {
+      const css = reading({ '--now-preset': ' full ', '--now-position': 'bottom-right', '--lyrics-align': 'center' });
+      expect(displaySettings(css, params(), true)).to.deep.equal({ preset: 'full', position: 'bottom-right', align: 'center' });
+      expect(displaySettings(css, params('now=minimal&now-position=center-left&lyrics-align=right'), true)).to.deep.equal({ preset: 'minimal', position: 'center-left', align: 'right' });
+      expect(displaySettings(css, params('now=huge&now-position=middle'), true)).to.deep.include({ preset: 'full', position: 'bottom-right' });
+      expect(displaySettings(css, params('now=minimal'), true, { preset: 'lyrics' }).preset).to.equal('lyrics');
+    });
+
+    it('gives the full panel lines of its own, and the others one line', () => {
+      const playing = state();
+      expect(nowText(playing, 'minimal', 'A - T')).to.deep.equal({ title: 'A - T', artist: '', album: '' });
+      expect(nowText(playing, 'full', 'A - T')).to.deep.include({ title: 'T', artist: 'A' });
+      expect(nowText(state({ playback: null }), 'full', '')).to.deep.equal({ title: '', artist: '', album: '' });
+    });
+
+    it('writes times as m:ss, and h:mm:ss from an hour', () => {
+      expect(formatTime(0)).to.equal('0:00');
+      expect(formatTime(61_999)).to.equal('1:01');
+      expect(formatTime(3_725_000)).to.equal('1:02:05');
+      expect(formatTime(undefined)).to.equal('');
+    });
+
+    it('keeps the lyrics clear of it: a strip at the top or bottom, a column at a side, nothing without one', () => {
+      const view = { width: 1000, height: 1000 };
+      const none = { top: 0, right: 0, bottom: 0, left: 0 };
+      expect(lyricsInsets('top-left', null, view)).to.deep.equal(none);
+      // Inside the faded top of the lyrics, as the one-line panel always was
+      expect(lyricsInsets('top-left', { top: 18, right: 200, bottom: 60, left: 24 }, view)).to.deep.equal(none);
+      expect(lyricsInsets('top-center', { top: 18, right: 600, bottom: 150, left: 300 }, view).top).to.equal(86);
+      expect(lyricsInsets('bottom-right', { top: 850, right: 980, bottom: 980, left: 600 }, view)).to.deep.equal({ ...none, bottom: 166 });
+      expect(lyricsInsets('center-left', { top: 400, right: 364, bottom: 600, left: 24 }, view)).to.deep.equal({ ...none, left: 380 });
+      expect(lyricsInsets('center-right', { top: 400, right: 976, bottom: 600, left: 636 }, view)).to.deep.equal({ ...none, right: 380 });
+    });
+  });
+
   describe('the flow background', () => {
     const settings = (values: Record<string, string> = {}) => flowSettings(name => values[name] ?? '');
 

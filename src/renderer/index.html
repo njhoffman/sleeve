@@ -12,8 +12,17 @@
 <body>
   <div id="art"></div>
   <header id="status">
-    <div id="title"></div>
-    <div id="source"></div>
+    <img id="now-art" alt="" hidden>
+    <div id="now-text">
+      <div id="title"></div>
+      <div id="artist"></div>
+      <div id="album"></div>
+      <div id="source"></div>
+    </div>
+    <div id="now-progress">
+      <div id="seek"><div id="seek-fill"></div></div>
+      <div id="times"><span id="elapsed"></span><span id="total"></span></div>
+    </div>
   </header>
   <main id="viewport">
     <div id="lines"></div>
@@ -33,7 +42,7 @@
       <dt><kbd>p</kbd></dt><dd>choose other lyrics</dd>
       <dt><kbd>r</kbd></dt><dd>look the track up again online</dd>
       <dt>wheel</dt><dd>scroll back through the lyrics (back to the current line after a few seconds)</dd>
-      <dt>click</dt><dd>play from that line</dd>
+      <dt>click</dt><dd>play from that line, or from that place on the seek bar</dd>
       <dt><kbd>?</kbd></dt><dd>this help</dd>
     </dl>
   </section>

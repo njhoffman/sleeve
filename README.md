@@ -152,6 +152,22 @@ loads after its own. Edits apply to an open page within a few seconds, with no r
 `sleeve-art-flow` glides to new settings from where the picture is, where changing a CSS animation restarts it. On an
 Iris Xe at about 1.5 megapixels it took 5 to 6% of the GPU's render time, against about 2% for the still cover and 9%
 for `sleeve-art-drift`; `--flow-resolution` is what matters most. Without WebGL 2 the cover stays still.
+What shows besides the lyrics is a preset, set the same way, with the panel at any of eight places; the lyrics keep clear
+of it. `lyrics` shows nothing else, `minimal` a line with artist and title, and `full` the cover, title, artist, album, a
+seek bar you can click, and the times. The overlay shows `lyrics` and a window `minimal` unless you say otherwise:
+
+```css
+:root {
+  --now-preset: full;            /* lyrics, minimal or full */
+  --now-position: bottom-left;   /* top-left (default), top-center, top-right, center-left, center-right, bottom-left, bottom-center, bottom-right */
+  --lyrics-align: center;        /* left (default), center or right */
+  --now-scale: 1;                /* the panel's size; also --now-margin */
+}
+```
+
+`?now=full&now-position=bottom-left&lyrics-align=center` in the URL does the same for one page and wins over the
+stylesheet. On the overlay the seek bar only shows, since the overlay takes no mouse.
+
 `src/renderer/style.css` lists every variable with its default; `?background=none` in the URL turns the cover off
 for one page. The overlay never shows a cover.
 The page is served from

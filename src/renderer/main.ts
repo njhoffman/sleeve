@@ -4,7 +4,7 @@ import type { NowState } from '../now/state.ts';
 import { Connection } from './connection.ts';
 import { parseHex, textTheme, themeVariables, validColors } from './contrast.ts';
 import { CoverFlow } from './flow.ts';
-import { candidateEntries, coverColors, flowSettings, flowStep, follow, formatOffset, lineStart, NO_SCROLL_BACK, progress, scrollBackOffset, status, wheel, type CandidateEntry, type FlowSettings, type FlowView, type ScrollBack } from './view.ts';
+import { candidateEntries, coverColors, displaySettings, flowSettings, flowStep, follow, formatOffset, formatTime, lineStart, lyricsInsets, NO_SCROLL_BACK, nowText, progress, scrollBackOffset, status, wheel, type CandidateEntry, type DisplaySettings, type FlowSettings, type FlowView, type ScrollBack } from './view.ts';
 
 // The renderer: sleeved's session as scrolling lyrics. The current line is worked out every frame from the
 // mirrored playback clock, so line changes land on the frame they are due whatever the socket does; the scroll
@@ -22,6 +22,14 @@ const viewport = element<HTMLElement>('viewport');
 const message = element<HTMLDivElement>('message');
 const title = element<HTMLDivElement>('title');
 const source = element<HTMLDivElement>('source');
+const artistLine = element<HTMLDivElement>('artist');
+const albumLine = element<HTMLDivElement>('album');
+const nowArt = element<HTMLImageElement>('now-art');
+const statusPanel = element<HTMLElement>('status');
+const seekBar = element<HTMLDivElement>('seek');
+const seekFill = element<HTMLDivElement>('seek-fill');
+const elapsedTime = element<HTMLSpanElement>('elapsed');
+const totalTime = element<HTMLSpanElement>('total');
 const picker = element<HTMLElement>('picker');
 const candidateList = element<HTMLOListElement>('candidates');
 const help = element<HTMLElement>('help');
@@ -127,16 +135,15 @@ function updateArt(state: NowState): void {
 // --art-animation: sleeve-art-flow, and its settings read about once a second, so an edit to the stylesheet shows
 // without a reload. The WebGL context is only made once it is wanted.
 
-const FLOW_READ_MS = 1000;
+const SETTINGS_READ_MS = 1000;
 let flow: CoverFlow | null = null;
 let flowOn = false;
 let latestCover: HTMLCanvasElement | null = null;
 let flowTarget: FlowSettings | null = null;
 let flowView: FlowView | null = null;
-let flowReadAt = -Infinity;
+let settingsReadAt = -Infinity;
 
 function readFlow(now: number): void {
-  flowReadAt = now;
   const wanted = artWanted() && setting('--art-animation').split(',')[0].trim() === 'sleeve-art-flow';
   if (wanted) flow ??= new CoverFlow(art);
   const on = wanted && !!flow?.available;
@@ -149,10 +156,64 @@ function readFlow(now: number): void {
 
 function updateFlow(now: number, dt: number): void {
   if (overlay) return;
-  if (now - flowReadAt >= FLOW_READ_MS) readFlow(now);
   if (!flowOn || !flowTarget || !flowView || !document.documentElement.classList.contains('art')) return;
   flowView = flowStep(flowView, flowTarget, dt);
   flow!.draw(now, flowView);
+}
+
+// The now-playing panel and the lyrics' alignment, read as often as the flow's settings
+
+const pageParams = new URLSearchParams(location.search);
+let display: DisplaySettings | null = null;
+let thumbnailKey: string | null | undefined = undefined;
+let shownTimes = '';
+
+function readDisplay(): void {
+  const next = displaySettings(setting, pageParams, overlay);
+  if (display && next.preset === display.preset && next.position === display.position && next.align === display.align) return;
+  display = next;
+  const { dataset } = document.documentElement;
+  dataset.now = next.preset;
+  dataset.nowPosition = next.position;
+  dataset.lyricsAlign = next.align;
+  statusText = '';
+  thumbnailKey = undefined;
+  reservePanel();
+}
+
+// Keeps the lyrics clear of the panel
+function reservePanel(): void {
+  if (!display) return;
+  const rect = display.preset === 'lyrics' ? null : statusPanel.getBoundingClientRect();
+  const insets = lyricsInsets(display.position, rect, { width: innerWidth, height: innerHeight });
+  const { style } = document.documentElement;
+  style.setProperty('--reserve-top', `${insets.top}px`);
+  style.setProperty('--reserve-right', `${insets.right}px`);
+  style.setProperty('--reserve-bottom', `${insets.bottom}px`);
+  style.setProperty('--reserve-left', `${insets.left}px`);
+}
+
+function updateThumbnail(key: string | null): void {
+  if (key === thumbnailKey) return;
+  thumbnailKey = key;
+  nowArt.hidden = true;
+  nowArt.removeAttribute('src');
+  if (key) nowArt.src = `/art/current?key=${encodeURIComponent(key)}`;
+}
+nowArt.addEventListener('load', () => { nowArt.hidden = false; });
+nowArt.addEventListener('error', () => { nowArt.hidden = true; });
+
+function updateProgress(state: NowState, now: number): void {
+  const position = connection.mirror.position(now);
+  const duration = state.playback?.track?.durationMs;
+  seekFill.style.transform = `scaleX(${progress(position, duration).toFixed(4)})`;
+  const elapsed = state.playback?.track ? formatTime(position) : '';
+  const total = formatTime(duration);
+  const times = `${elapsed}/${total}`;
+  if (times === shownTimes) return;
+  shownTimes = times;
+  elapsedTime.textContent = elapsed;
+  totalTime.textContent = total;
 }
 
 // ~/.config/sleeve/style.css applied when it changes, asked for every few seconds. Its text replaces the link in place,
@@ -175,7 +236,7 @@ async function checkUserCss(): Promise<void> {
         link?.remove();
       }
       userStyle.textContent = text;
-      flowReadAt = -Infinity;
+      settingsReadAt = -Infinity;
       artKey = undefined;
     }
     userCssText = text;
@@ -296,13 +357,25 @@ function render(now: number): void {
   lastFrame = now;
   const state: NowState = connection.mirror.current();
   updateArt(state);
+  if (now - settingsReadAt >= SETTINGS_READ_MS) {
+    settingsReadAt = now;
+    readDisplay();
+    if (!overlay) readFlow(now);
+  }
   updateFlow(now, dt);
   const view = status(state, connection.connected);
-  const text = `${view.title}\n${view.source}`;
+  const shown = nowText(state, display!.preset, view.title);
+  const text = `${shown.title}\n${shown.artist}\n${shown.album}\n${view.source}`;
   if (text !== statusText) {
     statusText = text;
-    title.textContent = view.title;
+    title.textContent = shown.title;
+    artistLine.textContent = shown.artist;
+    albumLine.textContent = shown.album;
     source.textContent = view.source;
+  }
+  if (display!.preset === 'full') {
+    updateThumbnail(state.playback?.track?.key ?? null);
+    updateProgress(state, now);
   }
   const best = state.result?.best ?? null;
   if (best !== shownLyrics || view.message !== shownMessage) rebuild(best, view.message);
@@ -425,6 +498,17 @@ document.addEventListener('keydown', event => {
   event.preventDefault();
 });
 
+// A click on the seek bar plays from there
+seekBar.addEventListener('click', event => {
+  const duration = connection.mirror.current().playback?.track?.durationMs;
+  if (overlay || !duration) return;
+  const bar = seekBar.getBoundingClientRect();
+  const ms = Math.round(Math.min(1, Math.max(0, (event.clientX - bar.left) / bar.width)) * duration);
+  void connection.send({ type: 'seek', ms }).then(reply => {
+    if (!reply.ok) showToast(reply.error ?? 'Failed');
+  });
+});
+
 // A click on a line plays from it, and the view returns to playback. Dragging over text to select it does not count.
 linesBox.addEventListener('click', event => {
   if (overlay || !picker.hidden || !getSelection()?.isCollapsed) return;
@@ -448,7 +532,11 @@ viewport.addEventListener('wheel', event => {
   back = wheel(back, event.deltaY, event.deltaMode, performance.now(), Math.min(min, 0), Math.max(max, 0));
 }, { passive: false });
 
-new ResizeObserver(() => measure()).observe(linesBox);
+const resized = new ResizeObserver(() => {
+  reservePanel();
+  measure();
+});
+for (const box of [linesBox, viewport, statusPanel]) resized.observe(box);
 connection.onConnected(connected => {
   if (!connected) picker.hidden = true;
 });

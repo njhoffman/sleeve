@@ -6,6 +6,20 @@ All notable changes to sleeve are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.32.0] - 2026-11-04
+
+### Added
+
+- Now-playing presets: `lyrics` (nothing else), `minimal` (a line with artist and title) and `full` (cover, title, artist,
+  album, a clickable seek bar and the times), from `--now-preset` in `~/.config/sleeve/style.css` or `?now=` in the URL.
+  The overlay still shows only lyrics and a window one line unless you choose otherwise.
+- `--now-position` puts the panel at any of eight places, and the lyrics keep clear of it. `--lyrics-align` sets the
+  lyrics left, center or right; `--now-scale` and `--now-margin` set the panel's size and distance from the edge.
+
+### Fixed
+
+- The title stays readable over a bright cover, using the text colors already worked out for it.
+
 ## [0.31.0] - 2026-11-04
 
 ### Added
