@@ -6,6 +6,14 @@ All notable changes to sleeve are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.26.0] - 2026-11-03
+
+### Added
+
+- `sleeve tag --recheck-fallbacks` asks LRCLIB again about the files written from NetEase after LRCLIB failed for a
+  day, and with `--write` replaces their lyrics when LRCLIB's fit the file. Lyrics changed since, and tracks picked
+  or marked since, are left alone. Files written that way are recorded from this version on.
+
 ## [0.25.0] - 2026-11-03
 
 ### Added

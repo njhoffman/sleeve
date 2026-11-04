@@ -236,9 +236,10 @@ build items that depend on it, listed in the later projects.
       sleeve would send the header when one is configured. LRCLIB still answered 429 about 180 times in the
       fourth dry run at about 85 requests a minute, below the 90 its docs give; the registered allowance would
       cover that.
-- [ ] **Waited-out fallbacks.** (p3) [feature] Files written from NetEase after LRCLIB failed for a day (0.17.0) keep
+- [x] **Waited-out fallbacks.** (p3) [feature] Files written from NetEase after LRCLIB failed for a day (0.17.0) keep
       those lyrics even once LRCLIB answers. Could record them (their report says "failing since") and offer a
       run that asks LRCLIB again for just those, replacing the lyrics when LRCLIB's fit.
+      Done in 0.26.0: `TagFallbacks` (schema 7), `sleeve tag --recheck-fallbacks`.
 - [ ] **LRCLIB's refusals in library runs.** (p3) [perf] About half the less-known tracks get a 503 from LRCLIB on
       first ask and are deferred when NetEase has nothing synced; with the 10 min / 1 h / 6 h / 24 h backoff a
       library run needs several passes. Watch how many stay deferred after a full run before tuning the backoff

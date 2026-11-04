@@ -270,8 +270,11 @@ LRC by unless `--force`):
   overloaded therefore does not fill the library with NetEase's lyrics, which match less well; NetEase's are
   written once LRCLIB has answered that it has none. Lyrics from LRCLIB are written whatever NetEase does.
   The wait has an end: once a file was first deferred a day ago and has been tried three times, the later
-  provider's lyrics (or instrumental) are taken, and the report says "lrclib failing since ...". Such a file
-  then holds synced lyrics, so a later answer from LRCLIB replaces them only with `--force`.
+  provider's lyrics (or instrumental) are taken, and the report says "lrclib failing since ...". Lyrics written
+  that way are remembered: `sleeve tag --recheck-fallbacks --write PATH...` asks LRCLIB about just those files and
+  replaces their lyrics when LRCLIB's fit. Lyrics that changed since, or a track you picked or marked since, are
+  left alone, and a file LRCLIB has nothing for keeps what it has; only a file LRCLIB fails for again is asked next
+  time.
 
 Only the `USLT` frame changes: every other frame stays byte for byte, the tag keeps its version, and the file is
 replaced through a temporary file only if nothing else changed it meanwhile. That is what sleeve promises

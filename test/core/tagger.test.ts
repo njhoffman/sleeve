@@ -5,7 +5,7 @@ import path from 'node:path';
 import { SleeveDatabase } from '../../src/core/db.ts';
 import { TrackPrefs } from '../../src/core/prefs.ts';
 import type { Provider } from '../../src/core/providers/provider.ts';
-import { FALLBACK_AFTER_MS, FALLBACK_ATTEMPTS, gaveUp, RETRY_BACKOFF_MS, TagRetries } from '../../src/core/retries.ts';
+import { FALLBACK_AFTER_MS, FALLBACK_ATTEMPTS, gaveUp, RETRY_BACKOFF_MS, TagFallbacks, TagRetries } from '../../src/core/retries.ts';
 import { queryForFile } from '../../src/core/fetchLyrics.ts';
 import { listMp3s, tagFiles, type TagReport } from '../../src/core/tagger.ts';
 import { parseId3 } from '../../src/core/tags/id3.ts';
@@ -280,6 +280,95 @@ describe('sleeve tag', () => {
       expect(result.status).to.deep.equal(['a.mp3: written']);
       expect(result.reports[0].detail).to.match(/^second:1, synced, 2 lines; first failing since /);
       expect(retries.count()).to.equal(0);
+    });
+
+    describe('fallbacks', () => {
+      const better: Lyrics = { synced: true, instrumental: false, lines: [{ time: 1000, text: 'Better' }, { time: 2500, text: 'Words' }] };
+      const first = (answer: () => Candidate[] | Error) => online('first', answer);
+      const from = (lyrics: Lyrics, provider: string) => ({ ...candidate(lyrics), provider });
+      // A file written from second after first kept failing
+      const fellBack = async (name: string) => {
+        let clock = 0;
+        const now = () => clock;
+        const retries = new TagRetries(database, { now });
+        const fallbacks = new TagFallbacks(database, { now });
+        const file = await mp3(name);
+        const busy = first(() => new Error('busy'));
+        const second = online('second', () => [from(synced, 'second')]);
+        const options = { retries, fallbacks, now, retryNow: true, write: true, providers: [busy, second] };
+        for (let attempt = 1; attempt <= FALLBACK_ATTEMPTS; attempt++) {
+          await run([file], options);
+          clock += FALLBACK_AFTER_MS / 2;
+        }
+        expect((await run([file], options)).status).to.deep.equal([`${name}: written`]);
+        return { file, fallbacks };
+      };
+
+      it('records only what a write gave up for', async () => {
+        const { file, fallbacks } = await fellBack('a.mp3');
+        expect(fallbacks.get(path.resolve(file))).to.deep.include({ provider: 'second', waitedFor: ['first'] });
+        const plain = await mp3('b.mp3');
+        await run([plain], { fallbacks, write: true, providers: [online('second', () => [from(synced, 'second')])] });
+        expect(fallbacks.get(path.resolve(plain))).to.equal(null);
+        expect(fallbacks.count()).to.equal(1);
+      });
+
+      it('replaces the lyrics with the waited-for provider\'s, previewing first, and asks only that provider', async () => {
+        const { file, fallbacks } = await fellBack('a.mp3');
+        const answered = first(() => [from(better, 'first')]);
+        const second = online('second', () => [from(synced, 'second')]);
+        const options = { fallbacks, recheck: true, providers: [answered, second] };
+        const preview = await run([file], options);
+        expect(preview.status).to.deep.equal(['a.mp3: would write']);
+        expect((await readLyricsTag(file)).uslt?.text).to.equal(LRC);
+        expect(fallbacks.count()).to.equal(1);
+        const result = await run([file], { ...options, write: true });
+        expect(result.status).to.deep.equal(['a.mp3: written']);
+        expect(result.reports[0].detail).to.equal('first:1, synced, 2 lines, replacing second\'s lyrics');
+        expect((await readLyricsTag(file)).uslt?.text).to.equal('[00:01.00]Better\n[00:02.50]Words');
+        expect(second.asked).to.deep.equal([]);
+        expect(fallbacks.count()).to.equal(0);
+      });
+
+      it('keeps the record when the provider fails again, and drops it when it has nothing that fits', async () => {
+        const { file, fallbacks } = await fellBack('a.mp3');
+        const options = { fallbacks, recheck: true, write: true };
+        expect((await run([file], { ...options, providers: [first(() => new Error('busy'))] })).status).to.deep.equal(['a.mp3: deferred']);
+        expect(fallbacks.count()).to.equal(1);
+        const tooShort: Lyrics = { synced: true, instrumental: false, lines: [{ time: 100, text: 'Once' }] };
+        const result = await run([file], { ...options, providers: [first(() => [from(tooShort, 'first')])] });
+        expect(result.status).to.deep.equal(['a.mp3: has lyrics']);
+        expect(result.reports[0].detail).to.equal('first has nothing that fits; second\'s lyrics stay');
+        expect((await readLyricsTag(file)).uslt?.text).to.equal(LRC);
+        expect(fallbacks.count()).to.equal(0);
+      });
+
+      it('leaves lyrics changed since alone, and a track picked or marked since', async () => {
+        const changed = await fellBack('a.mp3');
+        await writeLyricsTag(await readLyricsTag(changed.file), '[00:01.00]Mine');
+        const asked = first(() => [from(better, 'first')]);
+        const options = { fallbacks: changed.fallbacks, recheck: true, write: true, providers: [asked] };
+        const result = await run([changed.file], options);
+        expect(result.reports[0]).to.deep.include({ status: 'has lyrics', detail: 'changed since the fallback; left alone' });
+        expect((await readLyricsTag(changed.file)).uslt?.text).to.equal('[00:01.00]Mine');
+
+        const marked = await fellBack('b.mp3');
+        const prefs = new TrackPrefs(database);
+        prefs.setMark(await readQuery(marked.file), 'none');
+        const second = await run([marked.file], { ...options, prefs });
+        expect(second.reports[0]).to.deep.include({ status: 'has lyrics', detail: 'picked or marked since the fallback; left alone' });
+        expect(asked.asked).to.deep.equal([]);
+        expect(changed.fallbacks.count()).to.equal(0);
+      });
+
+      it('skips a file with no record, or when the provider is not among those asked', async () => {
+        const { file, fallbacks } = await fellBack('a.mp3');
+        const other = await mp3('b.mp3');
+        const options = { fallbacks, recheck: true, write: true, providers: [online('second', () => [])] };
+        const result = await run([file, other], options);
+        expect(result.reports.map(report => report.detail)).to.deep.equal(['first not among the providers', 'no fallback recorded']);
+        expect(fallbacks.count()).to.equal(1);
+      });
     });
 
     it('writes nothing for a marked track, forced or not, and says so when the file still has lyrics', async () => {

@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { defaultDatabasePath, openShared, SleeveDatabase } from './db.ts';
 
 // The files `sleeve tag` found no lyrics for because a provider failed (LRCLIB answers 503 for minutes when it is
@@ -67,6 +68,58 @@ export class TagRetries {
 
   count(): number {
     return (this.database.db.prepare('SELECT COUNT(*) AS count FROM tag_retries').get() as { count: number }).count;
+  }
+
+  close(): void {
+    if (this.owned) this.database.close();
+  }
+}
+
+// The files written from a later provider because an earlier one kept failing (gaveUp), until the earlier one has
+// been asked again (sleeve tag --recheck-fallbacks). The hash of the text written tells whether the lyrics are still
+// the ones sleeve wrote, so a recheck never replaces what anything else put there since.
+export interface TagFallback {
+  provider: string;
+  // The providers it took the place of
+  waitedFor: string[];
+  textHash: string;
+  writtenAt: number;
+}
+
+export const lyricsHash = (text: string) => createHash('sha256').update(text).digest('hex');
+
+export class TagFallbacks {
+  readonly file: string;
+  private database: SleeveDatabase;
+  private owned: boolean;
+  private now: () => number;
+
+  // As LyricsCache: a path opens and owns the database, a SleeveDatabase is shared
+  constructor(source: string | SleeveDatabase = defaultDatabasePath(), { now = Date.now }: { now?: () => number } = {}) {
+    ({ database: this.database, owned: this.owned } = openShared(source));
+    this.file = this.database.file;
+    this.now = now;
+  }
+
+  get(path: string): TagFallback | null {
+    const row = this.database.db.prepare('SELECT provider, waited_for, text_hash, written_at FROM tag_fallbacks WHERE path = ?').get(path) as
+      { provider: string; waited_for: string; text_hash: string; written_at: number } | undefined;
+    return row ? { provider: row.provider, waitedFor: row.waited_for.split(','), textHash: row.text_hash, writtenAt: row.written_at } : null;
+  }
+
+  record(path: string, provider: string, waitedFor: string[], text: string): void {
+    this.database.db.prepare(`
+      INSERT INTO tag_fallbacks (path, provider, waited_for, text_hash, written_at) VALUES (?, ?, ?, ?, ?)
+      ON CONFLICT (path) DO UPDATE SET provider = excluded.provider, waited_for = excluded.waited_for, text_hash = excluded.text_hash, written_at = excluded.written_at
+    `).run(path, provider, waitedFor.join(','), lyricsHash(text), this.now());
+  }
+
+  forget(path: string): void {
+    this.database.db.prepare('DELETE FROM tag_fallbacks WHERE path = ?').run(path);
+  }
+
+  count(): number {
+    return (this.database.db.prepare('SELECT COUNT(*) AS count FROM tag_fallbacks').get() as { count: number }).count;
   }
 
   close(): void {

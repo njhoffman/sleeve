@@ -3,7 +3,7 @@ import path from 'node:path';
 import { DEFAULT_PROVIDERS, fetchLyrics, queryForFile, type FetchOptions } from './fetchLyrics.ts';
 import { formatLrc, looksLikeLrc, plainText } from './lrc.ts';
 import { formatRef } from './prefs.ts';
-import { gaveUp, type TagRetries } from './retries.ts';
+import { gaveUp, lyricsHash, type TagFallbacks, type TagRetries } from './retries.ts';
 import { Id3Error } from './tags/id3.ts';
 import { FileChangedError, readLyricsTag, writeLyricsTag } from './tags/lyricsTag.ts';
 import { throttledFetch } from './throttle.ts';
@@ -22,7 +22,8 @@ import type { ScoredCandidate, TrackMark, TrackQuery } from './types.ts';
 // Lyrics that go into a file are held to more than a match on screen (see doubts below). The providers come in
 // the order of preference: when one fails, lyrics from one after it wait (the file is deferred) until it answers,
 // so a run while LRCLIB is overloaded does not fill the library with NetEase's lyrics. A file that has waited a day
-// and three tries (gaveUp, src/core/retries.ts) takes the later provider's answer, and its report says so.
+// and three tries (gaveUp, src/core/retries.ts) takes the later provider's answer, and its report says so. Such a
+// write is recorded (TagFallbacks), and a recheck run asks the providers it waited for again, about just those files.
 
 // The gap between requests to one service, and the files looked up at once
 export const DEFAULT_DELAY_MS = 300;
@@ -57,6 +58,10 @@ export interface TagOptions extends Pick<FetchOptions, 'providers' | 'timeoutMs'
   // Write unsynced lyrics when no synced ones are found
   unsynced?: boolean;
   retries?: TagRetries;
+  // Where writes that gave up on a provider are recorded
+  fallbacks?: TagFallbacks;
+  // Ask the providers those writes gave up on again, and do nothing else (see recheckFile)
+  recheck?: boolean;
   // Ask about deferred files now, whatever their pause
   retryNow?: boolean;
   // The gap between requests to one service
@@ -185,7 +190,62 @@ async function markOf(file: string, { prefs, tags }: TagOptions): Promise<TrackM
   }
 }
 
+// A file written from a later provider, asked about again: only the providers it gave up on are asked, and their synced
+// lyrics replace the file's when they fit it. Lyrics that changed since, or a pick or mark made since, stay as they
+// are, and so do the file's lyrics when those providers answer with nothing that fits; either way the file is done
+// with. A provider failing again leaves the record for the next recheck. Without write, nothing is changed.
+async function recheckFile(file: string, options: TagOptions & { fetch: typeof fetch }, online: Set<string>): Promise<TagReport> {
+  const report = (status: TagStatus, detail?: string): TagReport => ({ file, status, ...(detail ? { detail } : {}) });
+  const key = path.resolve(file);
+  const record = options.fallbacks?.get(key);
+  if (!record) return report('skipped', 'no fallback recorded');
+  const done = (status: TagStatus, detail: string) => {
+    if (options.write) options.fallbacks!.forget(key);
+    return report(status, detail);
+  };
+  let tag;
+  try {
+    tag = await readLyricsTag(file);
+  } catch (error) {
+    return error instanceof Id3Error ? report('skipped', error.message) : report('failed', (error as Error).message);
+  }
+  if (!tag.uslt || lyricsHash(tag.uslt.text) !== record.textHash) return done('has lyrics', 'changed since the fallback; left alone');
+  let query;
+  try {
+    query = await queryForFile(file, {}, options.tags);
+  } catch (error) {
+    return report('skipped', (error as Error).message);
+  }
+  const { fetch, cache, prefs, timeoutMs, userAgent, tags, signal } = options;
+  const decided = prefs?.get(query);
+  if (decided?.pick || decided?.mark) return done('has lyrics', 'picked or marked since the fallback; left alone');
+  const providers = options.providers!.filter(provider => record.waitedFor.includes(provider.name));
+  if (!providers.length) return report('skipped', `${record.waitedFor.join(', ')} not among the providers`);
+  const result = await fetchLyrics(query, {
+    providers, fetch,
+    ...(timeoutMs !== undefined ? { timeoutMs } : {}), ...(cache ? { cache } : {}),
+    ...(userAgent ? { userAgent } : {}), ...(tags ? { tags } : {}), ...(signal ? { signal } : {})
+  });
+  if (signal?.aborted) return report('failed', 'interrupted');
+  const failed = result.errors.filter(error => online.has(error.provider));
+  if (failed.length) return report('deferred', `${failed.map(error => error.provider).join(', ')} failed again; ${record.provider}'s lyrics stay until the next recheck`);
+  const chosen = result.candidates.find(candidate => candidate.lyrics.synced && doubts(query, candidate) === null);
+  if (!chosen) return done('has lyrics', `${record.waitedFor.join(', ')} has nothing that fits; ${record.provider}'s lyrics stay`);
+  const text = formatLrc(chosen.lyrics, { words: false });
+  const source = `${formatRef(chosen)}, synced, ${chosen.lyrics.lines.length} lines, replacing ${record.provider}'s lyrics`;
+  if (tag.uslt.text === text) return done('unchanged', source);
+  if (!options.write) return report('would write', source);
+  try {
+    await writeLyricsTag(tag, text);
+  } catch (error) {
+    if (error instanceof FileChangedError) return report('failed', 'changed while sleeve looked its lyrics up; run again');
+    return error instanceof Id3Error ? report('skipped', error.message) : report('failed', (error as Error).message);
+  }
+  return done('written', source);
+}
+
 async function tagFile(file: string, options: TagOptions & { fetch: typeof fetch; anyMarks: boolean }, online: Set<string>, now: () => number): Promise<TagReport> {
+  if (options.recheck) return recheckFile(file, options, online);
   const report = (status: TagStatus, detail?: string): TagReport => ({ file, status, ...(detail ? { detail } : {}) });
   if (!/\.mp3$/i.test(file)) return report('skipped', 'not an mp3');
   let tag;
@@ -274,5 +334,6 @@ async function tagFile(file: string, options: TagOptions & { fetch: typeof fetch
     return error instanceof Id3Error ? report('skipped', error.message) : report('failed', (error as Error).message);
   }
   retries?.clear(tag.file);
+  if (waitedOut) options.fallbacks?.record(path.resolve(file), chosen.provider, earlier.map(error => error.provider), text);
   return report('written', source);
 }
