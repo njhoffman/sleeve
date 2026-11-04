@@ -23,6 +23,9 @@ Related projects (keep them in mind before designing player, tagging or window f
   musicman's `docs/09-contract.md` promises (`paths.json`, the `spotify_track_files` view read-only, and
   `musicman spotify queue --format json`); never its other tables. A change sleeve needs from musicman goes
   into that contract first.
+- **harmonic** (`~/git/harmonic`) is a music visualizer in its early days, driven by stems separated offline, and meant
+  to take lyrics too. No contract exists yet; `TODO.md` has the ideas ("Lyrics for harmonic"). Keep what it would need
+  in mind before changing `sleeve lyrics --json`.
 
 ## Commands
 

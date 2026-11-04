@@ -131,7 +131,8 @@ build items that depend on it, listed in the later projects.
       `lyricsfile` (YAML: lines with `start_ms`/`end_ms`, words when word-synced). Parse it when
       `hasWordSync` is true for karaoke timing; needs a YAML parser and a recorded word-synced fixture.
       Sampled 2026-11-02: no word-synced record among 160, and 2026-11-03: none among 100 for five popular tracks
-      (all have a `lyricsfile`), so wait until some exist to record a fixture.
+      (all have a `lyricsfile`), and 2026-11-04: none among 400 for 20 tracks, popular and recent, with no `words:` in any
+      `lyricsfile`, and none in the 12265 answers cached. Wait until some exist to record a fixture.
 - [x] **Queries without a duration cannot tell versions apart.** (p3) [feature] `sleeve lyrics -a -t` without `-d`
       scores live and album versions alike (all 1.0 for "Everything In Its Right Place"). Prefer the record
       whose album matches, or the most common duration among candidates, when no duration is given.
@@ -141,6 +142,15 @@ build items that depend on it, listed in the later projects.
       Done in 0.3.0: `src/core/providers/netease.ts`; search results scored before fetching the
       best two lyrics, credit lines dropped. A 10-file library sample found synced lyrics for all 10, NetEase
       covering the 3 LRCLIB "server busy" answers.
+- [ ] **Lyrics for harmonic.** (p3) [feature] harmonic (`~/git/harmonic`) is a visualizer driven by separated stems,
+      and wants timed lyrics for its scenes. It has just started, and its real separation waits on AWS GPU quota (noted
+      2026-11-04), so nothing here is decided. Ideas, to settle with it: sleeve as its source of lyrics, instead of its
+      planned "import line-timed lyrics" and `lyric_tracks` fetching a second time (`sleeve lyrics FILE --json` may be
+      most of it; its fields for source, timing granularity and offset match what sleeve knows, and picks, marks and
+      offsets come along). Identity differs: harmonic knows a recording by checksums and a 48 kHz sample timeline, sleeve
+      by artist, title and length, in milliseconds. In the other direction, aligning lyrics to its vocal stem could give
+      the word timings no provider has (see "A source of word timings"); untried. A contract goes in writing first, as
+      with musicman.
 - [ ] **Port the Genius provider.** (p3) [feature] Unsynced lyrics only, as the last fallback; Sunamu scrapes its
       pages (`src/main/lyricproviders/genius.ts` there). Check whether its API gives lyrics without scraping.
 - [ ] **Look into Musixmatch again.** (p3) [feature] Wanted for word-level richsync and lookups by ISRC and
