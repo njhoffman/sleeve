@@ -149,8 +149,8 @@ export class SleeveDaemon {
     return { type: 'lyrics', key: trackKey(state.playback), query: state.query, loading: state.loading, error: state.error, result: state.result };
   }
 
-  private currentLine(): WireLine {
-    const line = this.session.line(this.monotonic());
+  private currentLine(now: number = this.monotonic()): WireLine {
+    const line = this.session.line(now);
     return { index: line.index, text: line.line?.text ?? null, timeMs: line.time };
   }
 
@@ -215,8 +215,8 @@ export class SleeveDaemon {
   // Lines, for subscribers: sent when the line playing changes, by a timer set for the next line's start rather
   // than a poll
 
-  private sendLine(client: Client, always = false): void {
-    const line = this.currentLine();
+  private sendLine(client: Client, always = false, now?: number): void {
+    const line = this.currentLine(now);
     const key = trackKey(this.session.current().playback);
     const id = `${key}#${line.index}#${line.timeMs}`;
     if (!always && id === client.lastLine) return;
@@ -229,11 +229,14 @@ export class SleeveDaemon {
     this.lineTimer = null;
     const subscribers = [...this.clients].filter(client => client.lines);
     if (!subscribers.length) return;
-    for (const client of subscribers) this.sendLine(client);
+    // One reading of the clock for the line sent and the next one's timer: a line coming due between two would be
+    // neither sent nor waited for
+    const now = this.monotonic();
+    for (const client of subscribers) this.sendLine(client, false, now);
     const state = this.session.current();
     const playback = state.playback;
     if (!playback || playback.state !== 'playing' || playback.rate <= 0 || state.loading) return;
-    const position = this.session.position(this.monotonic());
+    const position = this.session.position(now);
     const next = nextLineTime(state.result, position);
     if (next === null) return;
     const delay = Math.max(0, Math.ceil((next - position) / playback.rate));

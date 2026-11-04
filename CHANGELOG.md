@@ -6,6 +6,13 @@ All notable changes to sleeve are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.29.1] - 2026-11-04
+
+### Fixed
+
+- A client subscribed to lines, such as `sleeve line`, could miss a line that came due at the moment sleeved was
+  sending the one before it, and a track's last line until the next change in playback.
+
 ## [0.29.0] - 2026-11-03
 
 ### Added

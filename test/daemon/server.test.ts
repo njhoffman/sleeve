@@ -217,6 +217,19 @@ describe('sleeved', () => {
     expect(client.messages.some(message => message.type === 'line')).to.equal(false);
   });
 
+  it('sends the last line when it comes due between working out the line and the next one', async () => {
+    answer = { ...answer, best: candidate('lrclib', '1', [40, 80, 120]) };
+    let reads = -1;
+    // Stands still until reads starts counting, then only the first read is before the last line
+    await start({ monotonic: () => reads < 0 ? 1000 : reads++ === 0 ? 1119.9 : 1120.1 });
+    const client = await unixClient();
+    player.set(playing(0, { at: 1000 }));
+    await session.settled();
+    reads = 0;
+    client.send({ type: 'subscribe', lines: true, id: 1 });
+    await until(() => client.messages.some(message => message.type === 'line' && message.line.index === 2), 1000);
+  });
+
   it('logs the track it looks up ahead', async () => {
     const logs: string[] = [];
     await start({ log: text => logs.push(text) });
