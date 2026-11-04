@@ -339,6 +339,7 @@ just check           # tests (dot reporter) and typecheck, as before every commi
 just test-file test/players/mpd.test.ts   # only these files
 just now --once      # the CLI from the sources
 npm test             # mocha, offline, spec reporter
+just bench-gpu       # what each background costs the GPU, kept in benchmarks/gpu.jsonl, with the average of every run
 ```
 
 Tests never reach the network, MPD or D-Bus: provider tests replay recorded responses from `test/fixtures/`,

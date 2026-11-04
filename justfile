@@ -72,6 +72,12 @@ install-service:
 shell-install:
     cd shell && npm install --no-audit --no-fund
 
+# What each background costs the GPU in the real shell, kept in benchmarks/gpu.jsonl, with the average of every run so far.
+# Placeholder lyrics show on the desktop while it runs, ignoring clicks. E.g. just bench-gpu --rounds 3; --show only prints
+# the averages; --no-save tries it without keeping the result; --scene flow runs only the scenes with that in their name
+bench-gpu *args:
+    node src/bench/run.ts "$@"
+
 # The lyrics window: an overlay (stacked by backdrop, else by sleeve), or --window; e.g. just shell --position above
 shell *args:
     #!/usr/bin/env bash

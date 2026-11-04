@@ -6,6 +6,13 @@ All notable changes to sleeve are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.37.0] - 2026-11-04
+
+### Added
+
+- `just bench-gpu` measures what each background costs the GPU in the real shell, with its own placeholder track, so it needs no
+  music. Results stay in `benchmarks/gpu.jsonl`, with the first measurements in it, and it shows the average of every run.
+
 ## [0.36.0] - 2026-11-04
 
 ### Added

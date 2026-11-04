@@ -92,6 +92,9 @@ window, and 20.3% to 26.5% with one. The last two were measured at the bottom of
 covered the desktop, so they say nothing of picom. Repainting only the areas has not been built, since nothing here calls
 for it. `--flow-resolution` is the lever for the last row.
 
+`just bench-gpu` measures all of this again, with a placeholder track and more scenes, and keeps every run in
+`benchmarks/gpu.jsonl`; the averages there are the figures to trust as they grow.
+
 A start measured 2 s before, and 3.7 s to 4.1 s while a stack-polling test and a library run were going, so allow for more.
 
 ## What backdrop does once this ships
