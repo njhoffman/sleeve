@@ -82,6 +82,65 @@ export function candidateEntries(result: LyricsResult, shown: ScoredCandidate | 
   }));
 }
 
+// --art-animation: sleeve-art-flow, set from CSS variables. speed, amount, detail, zoom and saturation glide to a new
+// value; resolution and fps apply at once, since they do not show as movement.
+export interface FlowSettings {
+  speed: number;
+  amount: number;
+  detail: number;
+  zoom: number;
+  saturation: number;
+  resolution: number;
+  fps: number;
+}
+
+// What is drawn this frame: phase is how far the picture has moved, so a new speed carries on from there
+export interface FlowView extends FlowSettings {
+  phase: number;
+}
+
+const FLOW_VARIABLES: Record<keyof FlowSettings, { name: string; fallback: number; min: number; max: number }> = {
+  speed: { name: '--flow-speed', fallback: 1, min: -20, max: 20 },
+  amount: { name: '--flow-amount', fallback: 1, min: 0, max: 5 },
+  detail: { name: '--flow-detail', fallback: 1, min: 0.1, max: 10 },
+  zoom: { name: '--flow-zoom', fallback: 1.4, min: 1, max: 6 },
+  saturation: { name: '--art-saturation', fallback: 1.3, min: 0, max: 4 },
+  resolution: { name: '--flow-resolution', fallback: 0.25, min: 0.05, max: 1 },
+  fps: { name: '--flow-fps', fallback: 30, min: 1, max: 60 }
+};
+const FLOW_GLIDE_MS = 800;
+
+// The settings from CSS variables (read gives one's value); a missing or unreadable one takes its default, and each
+// stays within its range
+export function flowSettings(read: (name: string) => string): FlowSettings {
+  const settings = {} as FlowSettings;
+  for (const key of Object.keys(FLOW_VARIABLES) as Array<keyof FlowSettings>) {
+    const { name, fallback, min, max } = FLOW_VARIABLES[key];
+    const value = Number.parseFloat(read(name));
+    settings[key] = Number.isFinite(value) ? Math.min(max, Math.max(min, value)) : fallback;
+  }
+  return settings;
+}
+
+// The next frame's view: the phase moved on at the speed shown, the rest closer to its setting
+export function flowStep(view: FlowView, target: FlowSettings, dtMs: number): FlowView {
+  const share = 1 - Math.exp(-Math.max(0, dtMs) / FLOW_GLIDE_MS);
+  const glide = (key: 'speed' | 'amount' | 'detail' | 'zoom' | 'saturation') => {
+    const next = view[key] + (target[key] - view[key]) * share;
+    return Math.abs(next - target[key]) < 0.001 ? target[key] : next;
+  };
+  return {
+    phase: view.phase + dtMs / 1000 * view.speed,
+    speed: glide('speed'),
+    amount: glide('amount'),
+    detail: glide('detail'),
+    zoom: glide('zoom'),
+    saturation: glide('saturation'),
+    resolution: target.resolution,
+    fps: target.fps
+  };
+}
+
 // Where a click on a line plays from (ms into the track, offset applied); null for a line without a time
 export function lineStart(line: { time: number | null } | undefined, offsetMs: number): number | null {
   return typeof line?.time === 'number' ? Math.max(0, line.time + offsetMs) : null;

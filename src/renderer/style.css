@@ -12,7 +12,7 @@
   /* The cover behind the lyrics (window mode and browsers; never the overlay). Set any of these in
      ~/.config/sleeve/style.css (served as /user.css, loaded after this file), e.g. :root { --art-animation: sleeve-art-drift; } */
   --art-background: on;          /* off: no cover at all */
-  --art-animation: none;         /* sleeve-art-drift (slow turn) or sleeve-art-breathe (slow zoom; pair with alternate) */
+  --art-animation: none;         /* sleeve-art-flow (the cover warping slowly, by WebGL), sleeve-art-drift (slow turn) or sleeve-art-breathe (slow zoom; pair with alternate) */
   --art-duration: 120s;
   --art-timing: linear;
   --art-delay: 0s;
@@ -24,6 +24,14 @@
   --art-saturation: 1.3;
   --art-blur: 6;                 /* blur of the 64 px cover before it is stretched, in its own pixels (drawn once, free) */
   --art-fade: 900ms;             /* cross-fade to the next track's cover */
+
+  /* With sleeve-art-flow (the opacity, dim, saturation, blur and fade above apply too; --art-duration and the like do not) */
+  --flow-speed: 1;               /* how fast it moves; 0 stops it, negative runs it backward (-20 to 20) */
+  --flow-amount: 1;              /* how far the cover bends (0 to 5) */
+  --flow-detail: 1;              /* how many waves across it: higher is busier (0.1 to 10) */
+  --flow-zoom: 1.4;              /* how far into the cover it looks (1 to 6) */
+  --flow-resolution: 0.25;       /* share of the window's size it is drawn at: the main cost (0.05 to 1) */
+  --flow-fps: 30;                /* frames a second it is drawn at (1 to 60) */
 }
 
 * { box-sizing: border-box; }
@@ -64,6 +72,7 @@ html, body {
   position: absolute;
   inset: 0;
   background: rgba(0, 0, 0, var(--art-dim));
+  transition: background var(--art-fade) ease;
 }
 #art canvas {
   position: absolute;
@@ -79,6 +88,18 @@ html, body {
   will-change: transform, opacity;
 }
 #art canvas.shown { opacity: var(--art-opacity); }
+#art canvas.flow {
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  translate: none;
+  filter: none;
+  animation: none;
+  will-change: opacity;
+}
+html.flow #art canvas:not(.flow) { display: none; }
+html.flow.art #art canvas.flow { opacity: var(--art-opacity); }
 html:not(.art) #art::after { display: none; }
 
 @keyframes sleeve-art-drift {

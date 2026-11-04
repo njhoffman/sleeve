@@ -6,6 +6,18 @@ All notable changes to sleeve are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.30.0] - 2026-11-04
+
+### Added
+
+- `--art-animation: sleeve-art-flow`: the cover behind the lyrics warps slowly, drawn by WebGL at a quarter of the
+  window's size. `--flow-speed`, `--flow-amount`, `--flow-detail`, `--flow-zoom`, `--flow-resolution` and `--flow-fps`
+  set it from `~/.config/sleeve/style.css`, and it glides to new values rather than restarting.
+
+### Changed
+
+- Edits to `~/.config/sleeve/style.css` now apply to an open page within a few seconds, without a reload.
+
 ## [0.29.2] - 2026-11-04
 
 ### Changed

@@ -3,7 +3,8 @@ import { nextLineTime, wordFill, wordTexts, wordTimings } from '../now/lines.ts'
 import type { NowState } from '../now/state.ts';
 import { Connection } from './connection.ts';
 import { parseHex, textTheme, themeVariables, validColors } from './contrast.ts';
-import { candidateEntries, coverColors, follow, formatOffset, lineStart, NO_SCROLL_BACK, progress, scrollBackOffset, status, wheel, type CandidateEntry, type ScrollBack } from './view.ts';
+import { CoverFlow } from './flow.ts';
+import { candidateEntries, coverColors, flowSettings, flowStep, follow, formatOffset, lineStart, NO_SCROLL_BACK, progress, scrollBackOffset, status, wheel, type CandidateEntry, type FlowSettings, type FlowView, type ScrollBack } from './view.ts';
 
 // The renderer: sleeved's session as scrolling lyrics. The current line is worked out every frame from the
 // mirrored playback clock, so line changes land on the frame they are due whatever the socket does; the scroll
@@ -67,10 +68,12 @@ function setTheme(variables: Record<string, string> | null): void {
   }
 }
 
+const artFadeMs = () => number('--art-fade', 900) * (setting('--art-fade').endsWith('ms') ? 1 : 1000);
+
 // Fades the layers out and away; the newest stays when keep is given
 function fadeArt(keep: HTMLCanvasElement | null = null): void {
-  const fadeMs = number('--art-fade', 900) * (setting('--art-fade').endsWith('ms') ? 1 : 1000);
-  for (const layer of art.querySelectorAll('canvas')) {
+  const fadeMs = artFadeMs();
+  for (const layer of art.querySelectorAll<HTMLCanvasElement>('canvas:not(.flow)')) {
     if (layer === keep) continue;
     layer.classList.remove('shown');
     window.setTimeout(() => layer.remove(), fadeMs + 100);
@@ -99,6 +102,8 @@ function showArt(image: HTMLImageElement): void {
   requestAnimationFrame(() => canvas.classList.add('shown'));
   fadeArt(canvas);
   document.documentElement.classList.add('art');
+  latestCover = canvas;
+  if (flowOn) flow?.setCover(canvas, performance.now(), artFadeMs());
   const base = parseHex(setting('--bg')) ?? [15, 18, 24];
   const colors = coverColors(context.getImageData(0, 0, ART_SIZE, ART_SIZE).data, { opacity: number('--art-opacity', 0.6), dim: number('--art-dim', 0.45), base });
   setTheme(themeVariables(textTheme(colors)));
@@ -115,6 +120,66 @@ function updateArt(state: NowState): void {
   image.onload = () => { if (artKey === key) showArt(image); };
   image.onerror = () => { if (artKey === key) clearArt(); };
   image.src = `/art/current?key=${encodeURIComponent(key)}`;
+}
+
+// --art-animation: sleeve-art-flow, and its settings read about once a second, so an edit to the stylesheet shows
+// without a reload. The WebGL context is only made once it is wanted.
+
+const FLOW_READ_MS = 1000;
+let flow: CoverFlow | null = null;
+let flowOn = false;
+let latestCover: HTMLCanvasElement | null = null;
+let flowTarget: FlowSettings | null = null;
+let flowView: FlowView | null = null;
+let flowReadAt = -Infinity;
+
+function readFlow(now: number): void {
+  flowReadAt = now;
+  const wanted = artWanted() && setting('--art-animation').split(',')[0].trim() === 'sleeve-art-flow';
+  if (wanted) flow ??= new CoverFlow(art);
+  const on = wanted && !!flow?.available;
+  if (on && !flowOn && latestCover) flow!.setCover(latestCover, now, 0);
+  flowOn = on;
+  document.documentElement.classList.toggle('flow', on);
+  flowTarget = on ? flowSettings(setting) : null;
+  if (flowTarget) flowView ??= { ...flowTarget, phase: 0 };
+}
+
+function updateFlow(now: number, dt: number): void {
+  if (overlay) return;
+  if (now - flowReadAt >= FLOW_READ_MS) readFlow(now);
+  if (!flowOn || !flowTarget || !flowView || !document.documentElement.classList.contains('art')) return;
+  flowView = flowStep(flowView, flowTarget, dt);
+  flow!.draw(now, flowView);
+}
+
+// ~/.config/sleeve/style.css applied when it changes, asked for every few seconds. Its text replaces the link in place,
+// so nothing flashes, and the cover is drawn again, for its blur and for the text's colors over it.
+
+const USER_CSS_POLL_MS = 2000;
+let userCssText: string | null = null;
+let userStyle: HTMLStyleElement | null = null;
+
+async function checkUserCss(): Promise<void> {
+  try {
+    const response = await fetch('/user.css', { cache: 'no-store' });
+    if (!response.ok) return;
+    const text = await response.text();
+    if (userCssText !== null && text !== userCssText) {
+      if (!userStyle) {
+        userStyle = document.createElement('style');
+        const link = document.querySelector('link[href="/user.css"]');
+        link?.after(userStyle);
+        link?.remove();
+      }
+      userStyle.textContent = text;
+      flowReadAt = -Infinity;
+      artKey = undefined;
+    }
+    userCssText = text;
+  } catch {
+    // sleeved is away: the next try will do
+  }
 }
 
 const connection = new Connection(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws`);
@@ -229,6 +294,7 @@ function render(now: number): void {
   lastFrame = now;
   const state: NowState = connection.mirror.current();
   updateArt(state);
+  updateFlow(now, dt);
   const view = status(state, connection.connected);
   const text = `${view.title}\n${view.source}`;
   if (text !== statusText) {
@@ -385,4 +451,6 @@ connection.onConnected(connected => {
   if (!connected) picker.hidden = true;
 });
 connection.start();
+void checkUserCss();
+window.setInterval(() => void checkUserCss(), USER_CSS_POLL_MS);
 requestAnimationFrame(render);

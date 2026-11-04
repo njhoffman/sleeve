@@ -13,7 +13,7 @@ import { NowPlaying } from '../../src/now/session.ts';
 import type { NowState } from '../../src/now/state.ts';
 import { PlayerHub } from '../../src/players/hub.ts';
 import { Connection } from '../../src/renderer/connection.ts';
-import { candidateEntries, coverColors, follow, formatOffset, lineStart, NO_SCROLL_BACK, progress, reconnectDelay, SCROLL_BACK_MS, scrollBackOffset, status, wheel } from '../../src/renderer/view.ts';
+import { candidateEntries, coverColors, flowSettings, flowStep, follow, formatOffset, lineStart, NO_SCROLL_BACK, progress, reconnectDelay, SCROLL_BACK_MS, scrollBackOffset, status, wheel } from '../../src/renderer/view.ts';
 import { until } from '../helpers/fakeMpd.ts';
 import { fakePlayer } from '../helpers/players.ts';
 
@@ -48,6 +48,38 @@ describe('renderer sources', () => {
 });
 
 describe('renderer view', () => {
+  describe('the flow background', () => {
+    const settings = (values: Record<string, string> = {}) => flowSettings(name => values[name] ?? '');
+
+    it('takes its settings from CSS variables, its defaults for what is missing or unreadable, within range', () => {
+      expect(settings()).to.deep.equal({ speed: 1, amount: 1, detail: 1, zoom: 1.4, saturation: 1.3, resolution: 0.25, fps: 30 });
+      expect(settings({ '--flow-speed': ' 2.5 ', '--flow-fps': '20', '--art-saturation': '0.5' })).to.deep.include({ speed: 2.5, fps: 20, saturation: 0.5 });
+      expect(settings({ '--flow-speed': 'fast' }).speed).to.equal(1);
+      expect(settings({ '--flow-resolution': '9', '--flow-fps': '0', '--flow-zoom': '0' })).to.deep.include({ resolution: 1, fps: 1, zoom: 1 });
+    });
+
+    it('moves at the speed shown, so a new speed carries on from where the picture is', () => {
+      const start = { ...settings(), phase: 10 };
+      expect(flowStep(start, settings(), 500).phase).to.be.closeTo(10.5, 1e-9);
+      const faster = flowStep(start, settings({ '--flow-speed': '20' }), 16);
+      expect(faster.phase).to.be.closeTo(10.016, 1e-9);
+      expect(faster.speed).to.be.greaterThan(1).and.lessThan(2);
+    });
+
+    it('glides to a changed setting and settles on it, the same at any frame rate; resolution and fps apply at once', () => {
+      const target = settings({ '--flow-amount': '3', '--flow-resolution': '0.5', '--flow-fps': '60' });
+      const steps = (count: number, dtMs: number) => {
+        let view = { ...settings(), phase: 0 };
+        for (let at = 0; at < count; at++) view = flowStep(view, target, dtMs);
+        return view;
+      };
+      expect(steps(1, 16)).to.deep.include({ resolution: 0.5, fps: 60 });
+      expect(steps(1, 16).amount).to.be.lessThan(1.1);
+      expect(steps(30, 16).amount).to.be.closeTo(steps(15, 32).amount, 1e-6);
+      expect(steps(500, 16).amount).to.equal(3);
+    });
+  });
+
   it('plays from a line at its time with the offset applied, and only lines with a time', () => {
     expect(lineStart({ time: 5000 }, 0)).to.equal(5000);
     expect(lineStart({ time: 5000 }, 250)).to.equal(5250);

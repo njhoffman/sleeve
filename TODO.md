@@ -52,9 +52,14 @@ build items that depend on it, listed in the later projects.
       `backdrop restack` when the window maps, when the mark changes, and when backdrop's daemon pid in
       `state.json` changes. backdrop detected = a live `state.json`; otherwise sleeve stacks itself.
       Contract: Overlays in `~/git/backdrop/docs/specs/visualizer.md`.
-- [ ] **Seamless, cheap background animation.** (p2) [chore] CSS keyframes restart when edited and the
+- [x] **Seamless, cheap background animation.** (p2) [chore] CSS keyframes restart when edited and the
       `blur(180px)` layers cost GPU all day. Prototype a WebGL shader on a downscaled cover with
       parameters interpolated over the socket, and compare its GPU use against Sunamu's CSS.
+      Measured 2026-11-04 on Iris Xe in Chrome, 1245x1205, render engine time of Chrome's GPU process from fdinfo, three
+      16 s rounds each: no cover 1.2%, static cover (the default) 1.8%, `sleeve-art-drift` 9.3%, a WebGL warp of the
+      64 px cover at quarter resolution and 30 fps 4.9%, the same at full resolution and frame rate 12.4%. The blur that
+      prompted this item is Sunamu's; sleeve's default already costs next to nothing.
+      Done in 0.30.0: `sleeve-art-flow`, the quarter-resolution warp, opt-in; the still cover stays the default.
 - [ ] **Weak lyrics sources and first-hit selection.** (p2) [chore] Musixmatch's token is unofficial, NetEase
       mismatches, Genius has no timing, LRCLIB is missing, and Sunamu takes the first synced hit.
       Settle the scoring rules and provider order before porting providers.
@@ -358,10 +363,12 @@ build items that depend on it, listed in the later projects.
       blurred into a 64 px canvas, stretched and cross-faded, an optional animation on transform only; text
       colors from `coverColors` (view.ts) through contrast.ts, as over the wallpaper. Every setting is a CSS
       variable, overridable in ~/.config/sleeve/style.css (served at /user.css).
-- [ ] **Live, seamless animation parameters.** (p2) [feature] Changing CSS keyframes restarts the animation.
+- [x] **Live, seamless animation parameters.** (p2) [feature] Changing CSS keyframes restarts the animation.
       Drive the animation from a clock with parameters pushed over the socket and interpolated, so edits
       from the config or a dev panel apply without a jump. The renderer's scroll already works this way
       (`follow` in `src/renderer/view.ts`); the line highlight is still a CSS transition.
+      Done in 0.30.0 for `sleeve-art-flow`: `style.css` is watched by the page and values glide. CSS keyframes still
+      restart when edited, and the line highlight is still a CSS transition; no dev panel.
 - [x] **Lyric colors by contrast against what is actually behind them.** (p2) [feature] Sunamu picks from the cover
       palette; in overlay mode the background is the wallpaper. Choose text color by APCA/WCAG contrast
       against the wallpaper region (from backdrop) or the cover, with a shadow as fallback.

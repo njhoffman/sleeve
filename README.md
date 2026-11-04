@@ -134,19 +134,23 @@ The wheel scrolls back through the lyrics; a few seconds after the last turn the
 
 Behind the lyrics lies the track's cover, blurred and dimmed, with the text colored for it as over the overlay's
 wallpaper. It comes from the player (Spotify's cover over MPRIS), the file's own picture, or a `cover`, `folder` or
-`front` image beside the file. It is a 64-pixel canvas stretched over the window, so it costs nothing per frame.
-Everything about it is a CSS variable you can set in `~/.config/sleeve/style.css`, which the page loads after its
-own (reload the page to apply):
+`front` image beside the file. It is a 64-pixel canvas stretched over the window, so held still it costs next to
+nothing per frame. Everything about it is a CSS variable you can set in `~/.config/sleeve/style.css`, which the page
+loads after its own. Edits apply to an open page within a few seconds, with no reload:
 
 ```css
 :root {
-  --art-animation: sleeve-art-drift;  /* none (default), sleeve-art-drift (slow turn), sleeve-art-breathe (slow zoom) */
-  --art-duration: 120s;               /* also --art-timing, --art-delay, --art-iteration, --art-direction */
+  --art-animation: sleeve-art-flow;   /* none (default), sleeve-art-flow (the cover warping, WebGL), sleeve-art-drift (slow turn), sleeve-art-breathe (slow zoom) */
+  --flow-speed: 1;                    /* also --flow-amount, --flow-detail, --flow-zoom, --flow-resolution, --flow-fps */
+  --art-duration: 120s;               /* for drift and breathe; also --art-timing, --art-delay, --art-iteration, --art-direction */
   --art-opacity: 0.6;                 /* also --art-dim, --art-saturation, --art-scale, --art-blur, --art-fade */
   --art-background: on;               /* off: no cover */
 }
 ```
 
+`sleeve-art-flow` glides to new settings from where the picture is, where changing a CSS animation restarts it. On an
+Iris Xe at about 1.5 megapixels it took 5 to 6% of the GPU's render time, against about 2% for the still cover and 9%
+for `sleeve-art-drift`; `--flow-resolution` is what matters most. Without WebGL 2 the cover stays still.
 `src/renderer/style.css` lists every variable with its default; `?background=none` in the URL turns the cover off
 for one page. The overlay never shows a cover.
 The page is served from

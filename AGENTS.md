@@ -58,7 +58,7 @@ just install-service     # the systemd user unit for sleeved
   `SERVED` (`src/daemon/static.ts`), stripping types on request. Everything it imports (`src/protocol/`,
   `src/now/lines.ts`, `src/now/state.ts`, `src/players/clock.ts`, `src/players/types.ts`) stays free of Node;
   `src/renderer/tsconfig.json` (DOM lib, no Node types, run by `npm run typecheck`) enforces it. A new file the
-  renderer imports goes into `SERVED`. DOM code stays in `main.ts`; logic goes in `view.ts`, tested in Node. A protocol change is a change to
+  renderer imports goes into `SERVED`. DOM code stays in `main.ts` (WebGL in `flow.ts`); logic goes in `view.ts`, tested in Node. A protocol change is a change to
   `src/protocol/messages.ts` and `docs/protocol.md` together; a breaking one bumps `PROTOCOL_VERSION`.
 - The WebSocket server is our own (`src/daemon/websocket.ts`, on `node:http`); do not add ws. Playback goes on
   the wire stamped with the wall clock (`Date.now()`), never `performance.now()`, which differs per process.

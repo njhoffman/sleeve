@@ -16,5 +16,5 @@
     "skipLibCheck": true
   },
   "include": ["src", "test"],
-  "exclude": ["src/renderer/main.ts"]
+  "exclude": ["src/renderer/main.ts", "src/renderer/flow.ts"]
 }
