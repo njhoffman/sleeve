@@ -16,6 +16,8 @@ export interface TrackCommandOptions {
   providers?: string;
   timeout?: string;
   reset?: boolean;
+  none?: boolean;
+  instrumental?: boolean;
 }
 
 const name = (query: TrackQuery) => `${query.artist} - ${query.title}`;
@@ -37,15 +39,22 @@ async function withTrack<T>(file: string | undefined, options: TrackCommandOptio
   }
 }
 
-// [file] <ref>, or [file] alone with --reset
+// [file] <ref>, or [file] alone with --reset, --none or --instrumental
 export async function pickCommand(args: string[], options: TrackCommandOptions, io: Io, fetchOptions: FetchOptions = {}): Promise<number> {
-  const wanted = options.reset ? 0 : 1;
+  const flags = [options.reset && '--reset', options.none && '--none', options.instrumental && '--instrumental'].filter(Boolean);
+  if (flags.length > 1) throw new Error(`Give only one of ${flags.join(', ')}`);
+  const wanted = flags.length ? 0 : 1;
   if (args.length < wanted || args.length > wanted + 1) {
-    throw new Error(options.reset ? 'Give at most a file with --reset' : 'Give a candidate (provider:id, or a number from sleeve lyrics --all), after the file if there is one');
+    throw new Error(flags.length ? `Give at most a file with ${flags[0]}` : 'Give a candidate (provider:id, or a number from sleeve lyrics --all), after the file if there is one');
   }
   const file = args.length > wanted ? args[0] : undefined;
-  const choice = options.reset ? undefined : args.at(-1)!;
+  const choice = flags.length ? undefined : args.at(-1)!;
   return withTrack(file, options, fetchOptions, async (query, prefs, lookup) => {
+    if (options.none || options.instrumental) {
+      prefs.setMark(query, options.none ? 'none' : 'instrumental');
+      io.out(`Marked ${name(query)} as ${options.none ? 'having no correct lyrics' : 'instrumental'}; lyrics already in its file stay there`);
+      return 0;
+    }
     if (choice === undefined) {
       io.out(prefs.clearPick(query) ? `Removed the pick for ${name(query)}` : `No pick for ${name(query)}`);
       return 0;

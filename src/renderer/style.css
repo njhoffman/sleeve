@@ -181,6 +181,9 @@ h2 { margin: 0 0 12px; font-size: 16px; }
 #candidates li.rejected { color: var(--dim); }
 #candidates li.loading { list-style: none; color: var(--dim); }
 
+.marks { margin: 14px 0 0; }
+.marks button { padding: 4px 10px; color: inherit; font: inherit; background: none; border: 1px solid var(--dim); border-radius: 6px; cursor: pointer; }
+.marks button:hover { color: var(--accent); border-color: var(--accent); }
 .hint { color: var(--dim); margin: 14px 0 0; font-size: 12px; }
 dl { display: grid; grid-template-columns: max-content 1fr; gap: 6px 18px; margin: 0; }
 dt { text-align: right; }

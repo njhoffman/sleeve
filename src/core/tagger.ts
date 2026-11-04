@@ -8,7 +8,7 @@ import { Id3Error } from './tags/id3.ts';
 import { FileChangedError, readLyricsTag, writeLyricsTag } from './tags/lyricsTag.ts';
 import { throttledFetch } from './throttle.ts';
 import { shiftLyrics } from './timing.ts';
-import type { ScoredCandidate, TrackQuery } from './types.ts';
+import type { ScoredCandidate, TrackMark, TrackQuery } from './types.ts';
 
 // `sleeve tag`: lyrics written into mp3 files' USLT frame as LRC text, the user's offset applied, word times left
 // out (most players would show them as text). Synced lyrics replace unsynced ones in the USLT (beets' lyrics plugin
@@ -105,6 +105,8 @@ export async function tagFiles(files: string[], options: TagOptions = {}): Promi
     gapMs: options.delayMs ?? DEFAULT_DELAY_MS, limits, now, ...(options.sleep ? { sleep: options.sleep } : {})
   });
   const jobs = Math.max(1, options.jobs ?? DEFAULT_JOBS);
+  // Finding a file's track means reading its tags, which a library's files with lyrics otherwise never need
+  const anyMarks = Boolean(options.prefs?.markCount());
   // Reports by file, held until the ones before them are in; null for a file not reported
   const done: Array<TagReport | null> = [];
   let reported = 0;
@@ -127,7 +129,7 @@ export async function tagFiles(files: string[], options: TagOptions = {}): Promi
       const index = started++;
       underWay++;
       try {
-        const report = await tagFile(files[index], { ...options, providers, fetch }, online, now);
+        const report = await tagFile(files[index], { ...options, providers, fetch, anyMarks }, online, now);
         // Interrupted: only a file written counts, the rest is looked at again on the next run
         const counted = !options.signal?.aborted || report.status === 'written';
         done[index] = counted ? report : null;
@@ -174,7 +176,16 @@ export function doubts(query: TrackQuery, candidate: ScoredCandidate): string | 
   return null;
 }
 
-async function tagFile(file: string, options: TagOptions & { fetch: typeof fetch }, online: Set<string>, now: () => number): Promise<TagReport> {
+// What the user marked the file's track as; null for a file with no tags to look it up by
+async function markOf(file: string, { prefs, tags }: TagOptions): Promise<TrackMark | null> {
+  try {
+    return prefs!.get(await queryForFile(file, {}, tags))?.mark ?? null;
+  } catch {
+    return null;
+  }
+}
+
+async function tagFile(file: string, options: TagOptions & { fetch: typeof fetch; anyMarks: boolean }, online: Set<string>, now: () => number): Promise<TagReport> {
   const report = (status: TagStatus, detail?: string): TagReport => ({ file, status, ...(detail ? { detail } : {}) });
   if (!/\.mp3$/i.test(file)) return report('skipped', 'not an mp3');
   let tag;
@@ -184,6 +195,13 @@ async function tagFile(file: string, options: TagOptions & { fetch: typeof fetch
     return error instanceof Id3Error ? report('skipped', error.message) : report('failed', (error as Error).message);
   }
   if (tag.usltCount > 1) return report('skipped', `${tag.usltCount} USLT frames`);
+  // Marked by the user: never written, whatever the file has now, forced or not
+  const mark = options.anyMarks ? await markOf(file, options) : null;
+  if (mark) {
+    options.retries?.clear(tag.file);
+    const left = tag.uslt?.text.trim() ? '; the file still has lyrics' : '';
+    return report(mark === 'none' ? 'not found' : 'instrumental', `marked by you${left}`);
+  }
   // What the file has: synced lyrics (LRC) stay unless forced; unsynced ones give way to synced lyrics found
   const existing = tag.uslt?.text.trim() ? tag.uslt.text : '';
   if (existing && looksLikeLrc(existing) && !options.force) return report('has lyrics');

@@ -78,6 +78,9 @@ export interface ProviderError {
   message: string;
 }
 
+// What the user can say instead of picking lyrics: none are right for this track, or it has no words
+export type TrackMark = 'none' | 'instrumental';
+
 export interface LyricsResult {
   best: ScoredCandidate | null;
   // Every candidate that passed the threshold, best first
@@ -90,4 +93,6 @@ export interface LyricsResult {
   // The user's timing offset for best, in milliseconds (positive: later); 0 when none. best's lyrics are as the
   // provider gave them, so a display applies this itself (shiftLyrics) and can change it live.
   offsetMs: number;
+  // The user marked the track as having no right lyrics, or as instrumental: best is null whatever was found
+  marked?: TrackMark;
 }

@@ -38,9 +38,10 @@ export function status(state: NowState, connected: boolean): Status {
   const source = best
     ? [best.provider, best.lyrics.synced ? null : 'unsynced', result!.pinned ? 'pinned' : null, result!.offsetMs ? formatOffset(result!.offsetMs) : null]
       .filter(Boolean).join(' · ')
-    : '';
+    : result?.marked ? 'marked' : '';
   let message: string | null = null;
   if (state.error) message = `Lookup failed: ${state.error}`;
+  else if (result?.marked) message = result.marked === 'none' ? 'No correct lyrics' : 'Instrumental';
   else if (!best && state.loading) message = 'Looking up lyrics';
   else if (!state.query && !state.loading) message = 'No artist or title to look up';
   else if (!best) message = 'No lyrics found';

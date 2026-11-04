@@ -1,3 +1,6 @@
+import { spawnSync } from 'node:child_process';
+import { readdirSync, readFileSync } from 'node:fs';
+import { stripTypeScriptTypes } from 'node:module';
 import { expect } from 'chai';
 import { mkdtemp, rm, utimes, writeFile, mkdir } from 'node:fs/promises';
 import { request } from 'node:http';
@@ -27,6 +30,23 @@ const state = (extra: Partial<NowState> = {}): NowState => ({
   query: { artist: 'A', title: 'T' }, result: result(), loading: false, error: null, ...extra
 });
 
+// A module with a syntax error, a name declared twice included, leaves the page blank; tsc does not always say so
+describe('renderer sources', () => {
+  for (const name of readdirSync(new URL('../../src/renderer/', import.meta.url)).filter(file => file.endsWith('.ts'))) {
+    it(`${name} loads as a module`, async () => {
+      const source = stripTypeScriptTypes(readFileSync(new URL(`../../src/renderer/${name}`, import.meta.url), 'utf8'));
+      const dir = await mkdtemp(path.join(os.tmpdir(), 'sleeve-renderer-'));
+      try {
+        const file = path.join(dir, `${name}.mjs`);
+        await writeFile(file, source);
+        expect(spawnSync(process.execPath, ['--check', file], { encoding: 'utf8' }).stderr).to.equal('');
+      } finally {
+        await rm(dir, { recursive: true, force: true });
+      }
+    });
+  }
+});
+
 describe('renderer view', () => {
   it('follows a target the same at any frame rate, and settles on it', () => {
     let fast = 0;
@@ -49,6 +69,8 @@ describe('renderer view', () => {
     expect(status(state(), true)).to.deep.equal({ title: 'A - T', source: 'lrclib', message: null });
     expect(status(state({ result: result({ pinned: true, offsetMs: -300 }) }), true).source).to.equal('lrclib · pinned · -300 ms');
     expect(status(state({ result: null, loading: true }), true).message).to.equal('Looking up lyrics');
+    expect(status(state({ result: result({ best: null, marked: 'none' }) }), true)).to.deep.equal({ title: 'A - T', source: 'marked', message: 'No correct lyrics' });
+    expect(status(state({ result: result({ best: null, marked: 'instrumental' }) }), true).message).to.equal('Instrumental');
     expect(status(state({ result: null, error: 'disk full' }), true).message).to.equal('Lookup failed: disk full');
     expect(status(state({ result: null, query: null }), true).message).to.equal('No artist or title to look up');
     expect(status(state({ result: result({ best: null }) }), true).message).to.equal('No lyrics found');

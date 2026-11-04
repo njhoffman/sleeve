@@ -24,6 +24,28 @@ describe('TrackPrefs', () => {
     expect(prefs.get({ artist: 'Radiohead', title: 'Airbag' })).to.equal(null);
   });
 
+  it('keeps a mark in place of a pick, and a pick in place of a mark', () => {
+    expect(prefs.markCount()).to.equal(0);
+    prefs.setPick(query, candidate);
+    prefs.setMark(query, 'none');
+    expect(prefs.get(query)).to.deep.equal({ pick: null, offset: null, updatedAt: 1000, mark: 'none' });
+    expect(prefs.markCount()).to.equal(1);
+    prefs.setPick(query, other);
+    expect(prefs.get(query)).to.deep.equal({ pick: other, offset: null, updatedAt: 1000 });
+    expect(prefs.markCount()).to.equal(0);
+  });
+
+  it('forgets a mark with the pick, and the track once nothing is left for it', () => {
+    prefs.setMark(query, 'instrumental');
+    expect(prefs.clearPick(query)).to.equal(true);
+    expect(prefs.get(query)).to.equal(null);
+    expect(prefs.clearPick(query)).to.equal(false);
+    prefs.setMark(query, 'none');
+    prefs.setOffset(query, 100, candidate);
+    prefs.clearPick(query);
+    expect(prefs.get(query)?.offset?.ms).to.equal(100);
+  });
+
   it('replaces a pick, and removes the track once nothing is left for it', () => {
     prefs.setPick(query, candidate);
     time = 2000;

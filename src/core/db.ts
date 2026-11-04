@@ -9,9 +9,9 @@ import type { TrackQuery } from './types.ts';
 // (prefs.ts) share it, and so do the files `sleeve tag` is to ask about again (retries.ts). This file opens it and
 // owns the schema; each store keeps to its own tables.
 //
-// Schema 1: answers. Schema 2: track_prefs. Schema 3: isrc and spotify_id on both. Schema 4: tag_retries.
+// Schema 1: answers. Schema 2: track_prefs. Schema 3: isrc and spotify_id on both. Schema 4: tag_retries. Schema 6: track_prefs.mark.
 
-export const SCHEMA_VERSION = 5;
+export const SCHEMA_VERSION = 6;
 
 // A track is its normalized artist and title plus the duration asked with; rows match a query whose duration
 // is within DURATION_WINDOW_MS of theirs, or when both have none. When the query carries IDs, a row with the
@@ -161,6 +161,9 @@ const MIGRATIONS: Record<number, string> = {
   5: `
     ALTER TABLE tag_retries ADD COLUMN first_at INTEGER NOT NULL DEFAULT 0;
     UPDATE tag_retries SET first_at = unixepoch('now') * 1000;
+  `,
+  6: `
+    ALTER TABLE track_prefs ADD COLUMN mark TEXT;
   `
 };
 

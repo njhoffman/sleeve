@@ -6,6 +6,7 @@ import { SleeveDatabase } from '../../src/core/db.ts';
 import { TrackPrefs } from '../../src/core/prefs.ts';
 import type { Provider } from '../../src/core/providers/provider.ts';
 import { FALLBACK_AFTER_MS, FALLBACK_ATTEMPTS, gaveUp, RETRY_BACKOFF_MS, TagRetries } from '../../src/core/retries.ts';
+import { queryForFile } from '../../src/core/fetchLyrics.ts';
 import { listMp3s, tagFiles, type TagReport } from '../../src/core/tagger.ts';
 import { parseId3 } from '../../src/core/tags/id3.ts';
 import { FileChangedError, readLyricsTag, writeLyricsTag } from '../../src/core/tags/lyricsTag.ts';
@@ -33,6 +34,8 @@ function online(name: string, answer: (title: string) => Candidate[] | Error): P
 }
 
 const candidate = (lyrics: Lyrics, id = '1'): Candidate => ({ provider: 'fake', id, track: { artist: 'Artist', title: 'Song', durationMs: 3000 }, lyrics });
+
+const readQuery = (file: string) => queryForFile(file, {}, musicMetadataReader);
 
 describe('sleeve tag', () => {
   let dir: string;
@@ -277,6 +280,24 @@ describe('sleeve tag', () => {
       expect(result.status).to.deep.equal(['a.mp3: written']);
       expect(result.reports[0].detail).to.match(/^second:1, synced, 2 lines; first failing since /);
       expect(retries.count()).to.equal(0);
+    });
+
+    it('writes nothing for a marked track, forced or not, and says so when the file still has lyrics', async () => {
+      const prefs = new TrackPrefs(database);
+      const empty = await mp3('a.mp3', { title: 'Empty' });
+      const full = await mp3('b.mp3', { title: 'Full', unsynced: LRC });
+      const silent = await mp3('c.mp3', { title: 'Silent' });
+      prefs.setMark({ artist: 'Artist', title: 'Empty', durationMs: (await readQuery(empty)).durationMs }, 'none');
+      prefs.setMark({ artist: 'Artist', title: 'Full', durationMs: (await readQuery(full)).durationMs }, 'none');
+      prefs.setMark({ artist: 'Artist', title: 'Silent', durationMs: (await readQuery(silent)).durationMs }, 'instrumental');
+      const asked = online('fake', () => [candidate(synced)]);
+      const before = await readFile(full);
+      const result = await run([empty, full, silent], { providers: [asked], prefs, write: true, force: true });
+      expect(result.status).to.deep.equal(['a.mp3: not found', 'b.mp3: not found', 'c.mp3: instrumental']);
+      expect(result.reports.map(report => report.detail)).to.deep.equal(['marked by you', 'marked by you; the file still has lyrics', 'marked by you']);
+      expect(asked.asked).to.deep.equal([]);
+      expect((await readFile(full)).equals(before)).to.equal(true);
+      expect((await readLyricsTag(empty)).uslt).to.equal(null);
     });
 
     it('spaces requests to a service, not files, stops at the limit, and skips what it cannot tag', async () => {

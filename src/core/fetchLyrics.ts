@@ -24,6 +24,9 @@ import type { Candidate, LyricsResult, ProviderError, ScoredCandidate, TrackQuer
 // pick goes first. A pick that is no longer there (its file gone) is reported in errors and the ranking
 // stands. The offset for the candidate shown comes back as offsetMs; the lyrics themselves are not shifted.
 //
+// A track the user marked (no right lyrics, or instrumental) has no answer: nothing is asked, the file's own lyrics
+// included, since those may be the wrong ones. With `all` every provider runs, so there is something to pick from.
+//
 // onPartial hears the result so far whenever an online provider answers while others are still out, once
 // something passes the threshold: a display can show it instead of waiting on a slow or retrying provider.
 //
@@ -173,6 +176,8 @@ export async function fetchLyrics(query: TrackQuery, options: FetchOptions = {})
   };
   const errors: ProviderError[] = [];
   const record = readPrefs(options.prefs, query, errors);
+  const mark = record?.mark;
+  if (mark && !options.all) return { best: null, candidates: [], rejected: [], errors, pinned: true, offsetMs: 0, marked: mark };
   const stored = record?.pick ?? null;
   // A pick in another alphabet is no pick
   const pick = stored ? latinCandidate(stored) : null;
@@ -216,7 +221,8 @@ export async function fetchLyrics(query: TrackQuery, options: FetchOptions = {})
   }
   const candidates = rankCandidates(all.filter(candidate => candidate.score >= THRESHOLD));
   const rejected = rankCandidates(all.filter(candidate => candidate.score < THRESHOLD));
-  return finish(candidates, rejected, pinned, record, errors);
+  const result = finish(candidates, rejected, pinned, record, errors);
+  return mark ? { ...result, best: null, pinned: true, offsetMs: 0, marked: mark } : result;
 }
 
 // A query for a local file from its tags, with what the caller already knows taking precedence. The

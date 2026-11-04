@@ -199,6 +199,27 @@ describe('fetchLyrics with prefs', () => {
     expect(result.pinned).to.equal(true);
   });
 
+  it('answers a marked track with nothing, asking nobody, the file included; all still lists what there is', async () => {
+    const prefs = new TrackPrefs(':memory:');
+    const asked: string[] = [];
+    const providers = [
+      provider('embedded', true, async () => { asked.push('embedded'); return [answer('embedded', synced, { id: 'e', exact: true })]; }),
+      provider('online', false, async () => { asked.push('online'); return [answer('online', synced, { id: 'o' })]; })
+    ];
+    prefs.setMark(query, 'none');
+    const result = await fetchLyrics(query, { providers, prefs });
+    expect(asked).to.deep.equal([]);
+    expect(result).to.deep.include({ best: null, marked: 'none', pinned: true, offsetMs: 0 });
+    const everything = await fetchLyrics(query, { providers, prefs, all: true });
+    expect(everything).to.deep.include({ best: null, marked: 'none', pinned: true });
+    expect(everything.candidates.map(item => item.provider)).to.deep.equal(['embedded', 'online']);
+    prefs.setPick(query, everything.candidates[1]);
+    const picked = await fetchLyrics(query, { providers, prefs });
+    expect(picked.best?.provider).to.equal('online');
+    expect(picked.marked).to.equal(undefined);
+    prefs.close();
+  });
+
   it('ignores a pick in another alphabet', async () => {
     const prefs = new TrackPrefs(':memory:');
     prefs.setPick(query, answer('far', { synced: true, instrumental: false, lines: [{ time: 0, text: '你好' }] }, { id: '9' }));

@@ -43,6 +43,7 @@ describe('SleeveDatabase', () => {
     old.exec(`
       CREATE TABLE tag_retries (path TEXT PRIMARY KEY, attempts INTEGER NOT NULL, next_at INTEGER NOT NULL, error TEXT NOT NULL);
       INSERT INTO tag_retries VALUES ('/a.mp3', 4, 5, 'lrclib: 503');
+      CREATE TABLE track_prefs (id INTEGER PRIMARY KEY);
       PRAGMA user_version = 4;
     `);
     old.close();

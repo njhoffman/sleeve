@@ -124,7 +124,8 @@ build items that depend on it, listed in the later projects.
 - [ ] **Word timing from LRCLIB's lyricsfile.** (p3) [feature] LRCLIB records now carry `hasWordSync` and a
       `lyricsfile` (YAML: lines with `start_ms`/`end_ms`, words when word-synced). Parse it when
       `hasWordSync` is true for karaoke timing; needs a YAML parser and a recorded word-synced fixture.
-      Sampled 2026-11-02: no word-synced record among 160, so wait until some exist to record a fixture.
+      Sampled 2026-11-02: no word-synced record among 160, and 2026-11-03: none among 100 for five popular tracks
+      (all have a `lyricsfile`), so wait until some exist to record a fixture.
 - [x] **Queries without a duration cannot tell versions apart.** (p3) [feature] `sleeve lyrics -a -t` without `-d`
       scores live and album versions alike (all 1.0 for "Everything In Its Right Place"). Prefer the record
       whose album matches, or the most common duration among candidates, when no duration is given.
@@ -161,9 +162,11 @@ build items that depend on it, listed in the later projects.
       candidate, and remember both. Store them in `sleeve.db` (schema 2) next to the cached answers.
       Done in 0.4.0: `sleeve pick`, `sleeve offset`, `TrackPrefs` (`src/core/prefs.ts`); offsets belong to
       the candidate they were set for and come back as `offsetMs` for the display to apply.
-- [ ] **"No correct lyrics" pick.** (p3) [feature] A negative pick: the user marks a track as having no right
+- [x] **"No correct lyrics" pick.** (p3) [feature] A negative pick: the user marks a track as having no right
       lyrics anywhere (or as instrumental), so the display stays empty instead of showing the ranking's wrong
       choice. Left out of 0.4.0.
+      Done in 0.25.0: `TrackPrefs.setMark`, `sleeve pick --none`/`--instrumental`, `sleeve ctl mark`, the pick panel.
+      Lyrics already in a marked file stay there; `sleeve tag` reports them. Emptying them could be a later flag.
 - [x] **Relative offset nudges for the daemon.** (p3) [feature] The display will nudge by steps (+/-100 ms);
       add `TrackPrefs.adjustOffset` (or a protocol message) when the daemon exists. `sleeve offset` sets
       absolute values only.

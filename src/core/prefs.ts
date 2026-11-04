@@ -1,8 +1,9 @@
 import { defaultDatabasePath, openShared, rankRows, rememberIds, SleeveDatabase, trackKey, trackMatch, type TrackRow } from './db.ts';
-import type { Candidate, TrackQuery } from './types.ts';
+import type { Candidate, TrackMark, TrackQuery } from './types.ts';
 
-// What the user decided for a track: a pick (the candidate to show, whatever the ranking says) and a timing
-// offset. Both are kept until the user resets them; `sleeve cache clear` does not touch them.
+// What the user decided for a track: a pick (the candidate to show, whatever the ranking says) or a mark (no
+// lyrics are right for it, or it is instrumental: nothing is shown or written, whatever is found), and a timing
+// offset. They are kept until the user resets them; `sleeve cache clear` does not touch them.
 //
 // A pick is the candidate's provider and id plus a copy of the candidate, so it outlives the provider's
 // stored answer and the provider dropping the record. The offset is set against one candidate (provider and
@@ -26,10 +27,12 @@ export interface TrackPrefsRecord {
   pick: Candidate | null;
   offset: TrackOffset | null;
   updatedAt: number;
+  mark?: TrackMark;
 }
 
 interface Row extends TrackRow {
   pick_candidate: string | null;
+  mark: TrackMark | null;
   offset_ms: number | null;
   offset_provider: string | null;
   offset_id: string | null;
@@ -83,7 +86,7 @@ export class TrackPrefs {
   private row(query: TrackQuery): Row | null {
     const key = trackKey(query);
     const { where, params } = trackMatch(key);
-    const rows = this.db.prepare(`SELECT id, duration_ms, isrc, spotify_id, pick_candidate, offset_ms, offset_provider, offset_id, updated_at FROM track_prefs WHERE ${where}`)
+    const rows = this.db.prepare(`SELECT id, duration_ms, isrc, spotify_id, pick_candidate, mark, offset_ms, offset_provider, offset_id, updated_at FROM track_prefs WHERE ${where}`)
       .all(...params) as unknown as Row[];
     const [row] = rankRows(rows, key);
     if (row) rememberIds(this.database, 'track_prefs', row, key);
@@ -98,7 +101,8 @@ export class TrackPrefs {
       offset: row.offset_ms !== null && row.offset_provider && row.offset_id
         ? { ms: row.offset_ms, provider: row.offset_provider, id: row.offset_id }
         : null,
-      updatedAt: row.updated_at
+      updatedAt: row.updated_at,
+      ...(row.mark ? { mark: row.mark } : {})
     };
   }
 
@@ -116,7 +120,7 @@ export class TrackPrefs {
       }
       const assignments = Object.keys(columns).map(name => `${name} = ?`).join(', ');
       this.db.prepare(`UPDATE track_prefs SET ${assignments}, updated_at = ? WHERE id = ?`).run(...Object.values(columns), this.now(), existing.id);
-      this.db.prepare('DELETE FROM track_prefs WHERE id = ? AND pick_candidate IS NULL AND offset_ms IS NULL').run(existing.id);
+      this.db.prepare('DELETE FROM track_prefs WHERE id = ? AND pick_candidate IS NULL AND mark IS NULL AND offset_ms IS NULL').run(existing.id);
       return true;
     });
   }
@@ -124,13 +128,24 @@ export class TrackPrefs {
   // Shows this candidate for the track from now on
   setPick(query: TrackQuery, candidate: Candidate): void {
     const ref = refOf(candidate);
-    this.update(query, { pick_provider: ref.provider, pick_id: ref.id, pick_candidate: JSON.stringify(snapshot(candidate)) });
+    this.update(query, { pick_provider: ref.provider, pick_id: ref.id, pick_candidate: JSON.stringify(snapshot(candidate)), mark: null });
   }
 
-  // Back to the ranking; returns whether there was a pick
+  // Shows nothing for the track from now on, in place of any pick
+  setMark(query: TrackQuery, mark: TrackMark): void {
+    this.update(query, { pick_provider: null, pick_id: null, pick_candidate: null, mark });
+  }
+
+  // Back to the ranking; returns whether there was a pick or a mark
   clearPick(query: TrackQuery): boolean {
-    if (!this.get(query)?.pick) return false;
-    return this.update(query, { pick_provider: null, pick_id: null, pick_candidate: null });
+    const record = this.get(query);
+    if (!record?.pick && !record?.mark) return false;
+    return this.update(query, { pick_provider: null, pick_id: null, pick_candidate: null, mark: null });
+  }
+
+  // How many tracks are marked: a run over the library looks each file's track up only when some are
+  markCount(): number {
+    return (this.db.prepare('SELECT COUNT(*) AS count FROM track_prefs WHERE mark IS NOT NULL').get() as { count: number }).count;
   }
 
   // Shifts the candidate's lyrics by ms (positive: later) whenever it is the one shown for the track

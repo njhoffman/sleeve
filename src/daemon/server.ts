@@ -23,7 +23,7 @@ import { CLOSE, handshakeProblem, refuseUpgrade, upgrade, type WebSocketOptions 
 // hello, then the playback, lyrics and players messages, then every change as it happens; see
 // src/protocol/messages.ts and docs/protocol.md.
 
-export type DaemonSession = Pick<NowPlaying, 'current' | 'onChange' | 'line' | 'position' | 'nudge' | 'setOffset' | 'pick' | 'unpick' | 'refresh' | 'candidates'>
+export type DaemonSession = Pick<NowPlaying, 'current' | 'onChange' | 'line' | 'position' | 'nudge' | 'setOffset' | 'pick' | 'mark' | 'unpick' | 'refresh' | 'candidates'>
   & Partial<Pick<NowPlaying, 'prefetching'>>;
 
 export interface DaemonOptions {
@@ -257,6 +257,10 @@ export class SleeveDaemon {
         this.log(`pick: ${formatRef(candidate)}`);
         return { data: { ref: formatRef(candidate) } };
       }
+      case 'mark':
+        await this.session.mark(command.mark);
+        this.log(`mark: ${command.mark}`);
+        return { data: { mark: command.mark } };
       case 'unpick': {
         const removed = await this.session.unpick();
         if (removed) this.log('pick: removed');

@@ -1,4 +1,4 @@
-import type { LyricLine, LyricsResult, ScoredCandidate } from '../core/types.ts';
+import type { LyricLine, LyricsResult, ScoredCandidate, TrackMark } from '../core/types.ts';
 import { nextLineTime, wordFill, wordTexts, wordTimings } from '../now/lines.ts';
 import type { NowState } from '../now/state.ts';
 import { Connection } from './connection.ts';
@@ -316,11 +316,20 @@ async function pick(entry: CandidateEntry): Promise<void> {
   showToast(reply.ok ? `Picked ${entry.ref}` : reply.error ?? 'Failed');
 }
 
+async function markTrack(which: TrackMark): Promise<void> {
+  picker.hidden = true;
+  const reply = await connection.send({ type: 'mark', mark: which });
+  showToast(reply.ok ? (which === 'none' ? 'Marked: no correct lyrics' : 'Marked: instrumental') : reply.error ?? 'Failed');
+}
+
 async function simple(type: 'refresh' | 'unpick', done: (data: unknown) => string): Promise<void> {
   if (type === 'refresh') showToast('Looking it up again');
   const reply = await connection.send({ type });
   showToast(reply.ok ? done(reply.data) : reply.error ?? 'Failed');
 }
+
+element<HTMLElement>('mark-none').addEventListener('click', () => void markTrack('none'));
+element<HTMLElement>('mark-instrumental').addEventListener('click', () => void markTrack('instrumental'));
 
 document.addEventListener('keydown', event => {
   if (event.ctrlKey || event.metaKey || event.altKey) return;
@@ -328,6 +337,8 @@ document.addEventListener('keydown', event => {
   if (!picker.hidden) {
     if (key === 'Escape' || key === 'p') picker.hidden = true;
     else if (/^[1-9]$/.test(key) && entries[Number(key) - 1]) void pick(entries[Number(key) - 1]);
+    else if (key === 'n') void markTrack('none');
+    else if (key === 'i') void markTrack('instrumental');
     else if (key === 'u') {
       picker.hidden = true;
       void simple('unpick', data => (data as { removed: boolean }).removed ? 'Back to the ranking' : 'No pick for this track');

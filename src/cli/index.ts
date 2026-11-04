@@ -98,7 +98,7 @@ export function buildProgram(io: Io, setExit: (code: number) => void): Command {
 
   program.command('ctl')
     .description('Tell the running sleeved what to do with what plays, e.g. from an i3 binding: nudge <ms>, offset <ms>, pick <provider:id|n>, unpick, refresh, candidates')
-    .argument('<action>', 'nudge, offset, pick, unpick, refresh or candidates')
+    .argument('<action>', 'nudge, offset, pick, mark, unpick, refresh or candidates')
     .argument('[args...]', 'milliseconds for nudge and offset (+100, -250; offset 0 removes it), a candidate for pick')
     .option('--socket <path>', 'sleeved\'s Unix socket (default: $XDG_RUNTIME_DIR/sleeve/sleeved.sock)')
     .option('--json', 'with candidates, print them all as JSON')
@@ -109,7 +109,9 @@ export function buildProgram(io: Io, setExit: (code: number) => void): Command {
   trackOptions(program.command('pick'))
     .description('Show these lyrics for a track from now on, even if they score under the threshold')
     .argument('[args...]', '[file] <candidate>: provider:id, or the number sleeve lyrics --all gives it')
-    .option('--reset', 'forget the pick, so the ranking decides again')
+    .option('--none', 'no lyrics are right for this track: show and write none, whatever is found')
+    .option('--instrumental', 'the track has no words: show and write none, whatever is found')
+    .option('--reset', 'forget the pick or mark, so the ranking decides again')
     .action(async (args: string[], options: TrackCommandOptions) => {
       setExit(await pickCommand(args, options, io));
     });

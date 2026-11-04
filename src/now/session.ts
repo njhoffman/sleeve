@@ -2,7 +2,7 @@ import { DURATION_WINDOW_MS } from '../core/db.ts';
 import { DEFAULT_PROVIDERS, fetchLyrics, queryForFile, type FetchOptions } from '../core/fetchLyrics.ts';
 import type { TagReader } from '../core/tags/reader.ts';
 import { formatRef, sameCandidate, type CandidateRef } from '../core/prefs.ts';
-import type { LyricsResult, ScoredCandidate, TrackQuery } from '../core/types.ts';
+import type { LyricsResult, ScoredCandidate, TrackMark, TrackQuery } from '../core/types.ts';
 import { positionAt } from '../players/clock.ts';
 import type { PlaybackSource } from '../players/hub.ts';
 import type { MusicmanLibrary } from '../players/musicman.ts';
@@ -353,7 +353,16 @@ export class NowPlaying {
     return candidate;
   }
 
-  // Forgets the pick for the current track, so the ranking decides again; whether there was one
+  // Shows nothing for the current track from now on (saved as `sleeve pick --none` saves it)
+  async mark(mark: TrackMark): Promise<void> {
+    const prefs = this.requirePrefs();
+    const query = this.state.query;
+    if (!query) throw new Error(this.state.playback?.track ? 'The track has no artist and title to look up' : 'Nothing playing');
+    prefs.setMark(query, mark);
+    await this.reload();
+  }
+
+  // Forgets the pick or mark for the current track, so the ranking decides again; whether there was one
   async unpick(): Promise<boolean> {
     const prefs = this.requirePrefs();
     const query = this.state.query;

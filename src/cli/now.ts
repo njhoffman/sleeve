@@ -64,6 +64,7 @@ function failures(result: LyricsResult | null): string[] {
 }
 
 function sourceLine(result: LyricsResult | null): string {
+  if (result?.marked) return result.marked === 'none' ? 'marked as having no correct lyrics' : 'marked as instrumental';
   if (!result?.best) return 'no lyrics found';
   const decided = `${result.pinned ? ', pinned' : ''}${result.offsetMs ? `, offset ${formatOffset(result.offsetMs)}` : ''}`;
   return `${describeCandidate(result.best)}${decided}`;

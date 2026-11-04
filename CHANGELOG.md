@@ -6,6 +6,16 @@ All notable changes to sleeve are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.25.0] - 2026-11-03
+
+### Added
+
+- Mark a track as having no correct lyrics, or as instrumental, so nothing shows for it instead of the ranking's
+  wrong choice: `sleeve pick --none` or `--instrumental`, `sleeve ctl mark none` or `instrumental`, or `n` and `i` in
+  the renderer's pick panel. No provider is asked, the file's own lyrics included. `sleeve tag` never writes a marked
+  track, and says so when its file still has lyrics, which stay there. A pick replaces a mark; `sleeve pick --reset`
+  and `sleeve ctl unpick` forget it.
+
 ## [0.24.0] - 2026-11-03
 
 ### Added

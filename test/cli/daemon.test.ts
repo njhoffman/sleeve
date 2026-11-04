@@ -125,6 +125,11 @@ describe('sleeve daemon', () => {
       expect(out[0]).to.match(/^Picked lrclib:\d+$/);
       expect(await ctlCommand('unpick', [], { socket }, io)).to.equal(0);
       expect(out.at(-1)).to.equal('Removed the pick');
+      expect(await ctlCommand('mark', ['none'], { socket }, io)).to.equal(0);
+      expect(out.at(-1)).to.equal('Marked: no correct lyrics');
+      expect(await ctlCommand('unpick', [], { socket }, io)).to.equal(0);
+      expect(out.at(-1)).to.equal('Removed the pick');
+      await ctlCommand('mark', ['nope'], { socket }, io).then(() => expect.fail('marked'), error => expect(error.message).to.equal('Invalid mark: nope (none or instrumental)'));
       expect(await ctlCommand('pick', ['9'], { socket }, io)).to.equal(1);
       expect(err.at(-1)).to.equal('No candidate 9; list them with sleeve ctl candidates');
       expect(await ctlCommand('pick', ['nope:1'], { socket }, io)).to.equal(1);
@@ -134,7 +139,7 @@ describe('sleeve daemon', () => {
     it('says when there is nothing to move, and refuses bad usage and a missing daemon', async () => {
       const failure = async (action: string, args: string[]) => (await ctlCommand(action, args, { socket }, io).catch(error => error)).message;
       expect(await failure('nudge', ['+100'])).to.equal(`sleeved is not running (nothing answers at ${socket})`);
-      expect(await failure('jump', [])).to.equal('Unknown action: jump (nudge, offset, pick, unpick, refresh, candidates)');
+      expect(await failure('jump', [])).to.equal('Unknown action: jump (nudge, offset, pick, mark, unpick, refresh, candidates)');
       expect(await failure('nudge', [])).to.equal('Usage: sleeve ctl nudge <ms>');
       expect(await failure('refresh', ['x'])).to.equal('Usage: sleeve ctl refresh');
       expect(await failure('offset', ['soon'])).to.match(/^Invalid offset: soon/);

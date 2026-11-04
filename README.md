@@ -200,7 +200,9 @@ bindsym $mod+r     exec --no-startup-id sleeve ctl refresh
 ```
 
 `sleeve ctl candidates` lists every provider's lyrics for what plays, numbered, and `sleeve ctl pick 2` (or
-`pick provider:id`) shows one of them from then on; `sleeve ctl unpick` goes back to the ranking.
+`pick provider:id`) shows one of them from then on. `sleeve ctl mark none` (or `instrumental`) says none of them is
+right, so nothing shows from then on, and `sleeve tag` writes nothing for the track; lyrics already in its file stay.
+`sleeve ctl unpick` goes back to the ranking.
 
 While sleeved runs, `sleeve now` shows its session instead of opening the players itself, so a nudge in the
 terminal moves the lyrics in every display. Any player, provider or store option (`--mpd`, `-p`,

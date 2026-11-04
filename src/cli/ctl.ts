@@ -1,5 +1,5 @@
 import { formatRef, parseRef } from '../core/prefs.ts';
-import type { LyricsResult, ScoredCandidate } from '../core/types.ts';
+import type { LyricsResult, ScoredCandidate, TrackMark } from '../core/types.ts';
 import { DaemonClient } from '../daemon/client.ts';
 import { defaultSocketPath } from '../daemon/paths.ts';
 import type { ClientCommand } from '../protocol/messages.ts';
@@ -45,12 +45,14 @@ export async function ctlCommand(action: string, args: string[], options: CtlOpt
   switch (action) {
     case 'nudge': case 'offset': needs(1, '<ms>'); break;
     case 'pick': needs(1, '<provider:id | number>'); break;
+    case 'mark': needs(1, '<none | instrumental>'); break;
     case 'unpick': case 'refresh': case 'candidates': needs(0, ''); break;
-    default: throw new Error(`Unknown action: ${action} (nudge, offset, pick, unpick, refresh, candidates)`);
+    default: throw new Error(`Unknown action: ${action} (nudge, offset, pick, mark, unpick, refresh, candidates)`);
   }
   const ms = action === 'nudge' || action === 'offset' ? parseOffset(args[0]) : 0;
   const picked = action === 'pick' && !/^\d+$/.test(args[0]) ? parseRef(args[0]) : null;
   if (action === 'pick' && !picked && !/^\d+$/.test(args[0])) throw new Error(`Invalid candidate: ${args[0]} (provider:id, or a number from sleeve ctl candidates)`);
+  if (action === 'mark' && args[0] !== 'none' && args[0] !== 'instrumental') throw new Error(`Invalid mark: ${args[0]} (none or instrumental)`);
   const client = await connect(options);
   try {
     switch (action) {
@@ -65,6 +67,11 @@ export async function ctlCommand(action: string, args: string[], options: CtlOpt
         if (await send(client, { type: 'refresh' }, io) === undefined) return 1;
         const best = client.mirror.current().result?.best;
         io.out(best ? `Looked up again: ${describeCandidate(best)}` : 'Looked up again: no lyrics found');
+        return 0;
+      }
+      case 'mark': {
+        if (await send(client, { type: 'mark', mark: args[0] as TrackMark }, io) === undefined) return 1;
+        io.out(args[0] === 'none' ? 'Marked: no correct lyrics' : 'Marked: instrumental');
         return 0;
       }
       case 'unpick': {

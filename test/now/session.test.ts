@@ -190,6 +190,11 @@ describe('NowPlaying commands', () => {
     expect(await session.unpick()).to.equal(true);
     expect(session.current().result).to.deep.include({ pinned: false });
     expect(await session.unpick()).to.equal(false);
+
+    await session.mark('none');
+    expect(prefs.get(spotifyTrack as unknown as TrackQuery)!.mark).to.equal('none');
+    expect(await session.unpick()).to.equal(true);
+    expect(prefs.get(spotifyTrack as unknown as TrackQuery)).to.equal(null);
   });
 
   it('refuses picks without prefs and odd offsets, and removes an offset set to 0', async () => {

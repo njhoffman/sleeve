@@ -135,6 +135,10 @@ export async function lyricsCommand(file: string | undefined, options: LyricsOpt
     io.out(JSON.stringify({ query, ...result }, null, 2));
     return result.best ? 0 : 1;
   }
+  if (result.marked && !options.all) {
+    io.err(`${query.artist} - ${query.title} is marked as ${result.marked === 'none' ? 'having no correct lyrics' : 'instrumental'} (sleeve pick --reset to undo)`);
+    return 1;
+  }
   if (!result.best && !options.all) {
     io.err(`No lyrics found for ${query.artist} - ${query.title}`);
     for (const candidate of result.rejected.slice(0, 3)) io.err(`  under ${THRESHOLD}: ${describeCandidate(candidate)}`);

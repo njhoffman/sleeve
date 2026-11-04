@@ -85,7 +85,8 @@ back. Replies may come after the broadcasts the command caused.
 | `offset`     | `ms` (integer)      | sets the offset; `0` removes it                                                              | `{ offsetMs }`         |
 | `candidates` |                     | asks every provider for the track (the cache still answers for online ones)                  | a `LyricsResult`       |
 | `pick`       | `ref` (`provider:id`)| shows that candidate for the track from now on, like `sleeve pick`, and reloads              | `{ ref }`              |
-| `unpick`     |                     | forgets the pick and reloads                                                                 | `{ removed }`          |
+| `mark`       | `mark` (`none`, `instrumental`) | shows nothing for the track from now on, like `sleeve pick --none`, and reloads  | `{ mark }`             |
+| `unpick`     |                     | forgets the pick or mark and reloads                                                         | `{ removed }`          |
 | `refresh`    |                     | looks the track up again, asking online providers instead of their stored answers            |                        |
 | `state`      |                     | sends `playback`, `lyrics` and `players` again (and `line`, to a subscriber)                 |                        |
 | `subscribe`  | `lines` (boolean)   | starts or stops `line` messages for this client                                              |                        |

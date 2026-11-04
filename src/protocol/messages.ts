@@ -1,4 +1,4 @@
-import type { LyricsResult, TrackQuery } from '../core/types.ts';
+import type { LyricsResult, TrackMark, TrackQuery } from '../core/types.ts';
 import type { PlaybackState, PlayingTrack } from '../players/types.ts';
 
 // The messages between sleeved and its clients, the same over the WebSocket (one per text frame) and the Unix
@@ -97,6 +97,7 @@ interface Command {
 export interface NudgeCommand extends Command { type: 'nudge'; ms: number }
 export interface OffsetCommand extends Command { type: 'offset'; ms: number }
 export interface PickCommand extends Command { type: 'pick'; ref: string }
+export interface MarkCommand extends Command { type: 'mark'; mark: TrackMark }
 export interface UnpickCommand extends Command { type: 'unpick' }
 export interface RefreshCommand extends Command { type: 'refresh' }
 export interface CandidatesCommand extends Command { type: 'candidates' }
@@ -104,10 +105,10 @@ export interface CandidatesCommand extends Command { type: 'candidates' }
 export interface StateCommand extends Command { type: 'state' }
 export interface SubscribeCommand extends Command { type: 'subscribe'; lines: boolean }
 
-export type ClientCommand = NudgeCommand | OffsetCommand | PickCommand | UnpickCommand | RefreshCommand | CandidatesCommand
+export type ClientCommand = NudgeCommand | OffsetCommand | PickCommand | MarkCommand | UnpickCommand | RefreshCommand | CandidatesCommand
   | StateCommand | SubscribeCommand;
 
-export const COMMANDS: ReadonlyArray<ClientCommand['type']> = ['nudge', 'offset', 'pick', 'unpick', 'refresh', 'candidates', 'state', 'subscribe'];
+export const COMMANDS: ReadonlyArray<ClientCommand['type']> = ['nudge', 'offset', 'pick', 'mark', 'unpick', 'refresh', 'candidates', 'state', 'subscribe'];
 
 // A command from untrusted JSON text, or why it is not one
 export function parseCommand(text: string): { command: ClientCommand } | { error: string; id?: string | number } {
@@ -126,6 +127,7 @@ export function parseCommand(text: string): { command: ClientCommand } | { error
   if (typeof type !== 'string' || !(COMMANDS as string[]).includes(type)) return failed(`Unknown command: ${String(type)}`);
   if ((type === 'nudge' || type === 'offset') && !Number.isInteger(record.ms)) return failed(`${type} needs ms, whole milliseconds`);
   if (type === 'pick' && (typeof record.ref !== 'string' || !record.ref)) return failed('pick needs ref, as provider:id');
+  if (type === 'mark' && record.mark !== 'none' && record.mark !== 'instrumental') return failed('mark needs mark, none or instrumental');
   if (type === 'subscribe' && typeof record.lines !== 'boolean') return failed('subscribe needs lines, true or false');
   return { command: record as unknown as ClientCommand };
 }

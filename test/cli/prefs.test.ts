@@ -37,6 +37,21 @@ describe('sleeve pick and sleeve offset', function () {
     expect(() => parseOffset('1.5s')).to.throw('Invalid offset: 1.5s');
   });
 
+  it('marks a track, so sleeve lyrics finds nothing however much there is, and --reset undoes it', async () => {
+    const local = ['-p', 'sidecar,embedded'];
+    expect(await main(['pick', '--none', file], io)).to.equal(0);
+    expect(out.at(-1)).to.equal('Marked A - T as having no correct lyrics; lyrics already in its file stay there');
+    expect(await main(['lyrics', file, ...local], io)).to.equal(1);
+    expect(err.at(-1)).to.equal('A - T is marked as having no correct lyrics (sleeve pick --reset to undo)');
+    expect(await main(['pick', '--instrumental', file], io)).to.equal(0);
+    expect(out.at(-1)).to.equal('Marked A - T as instrumental; lyrics already in its file stay there');
+    expect(await main(['pick', '--reset', file], io)).to.equal(0);
+    expect(await main(['lyrics', file, ...local], io)).to.equal(0);
+    err.length = 0;
+    expect(await main(['pick', '--none', '--reset', file], io)).to.equal(2);
+    expect(err.at(-1)).to.match(/Give only one of --reset, --none/);
+  });
+
   it('numbers candidates in sleeve lyrics --all and picks one by number, then shows it from then on', async () => {
     expect(await main(['lyrics', file, '--all', ...local], io)).to.equal(0);
     expect(out[0]).to.match(new RegExp(`^1 sidecar:${dir}/song\\.lrc {2}sidecar: A - T`));
