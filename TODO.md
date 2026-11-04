@@ -235,7 +235,7 @@ build items that depend on it, listed in the later projects.
       (public, safe to ship) and about 180 requests a minute instead of 90, and a way for them to reach us.
       sleeve would send the header when one is configured. LRCLIB still answered 429 about 180 times in the
       fourth dry run at about 85 requests a minute, below the 90 its docs give; the registered allowance would
-      cover that.
+      cover that. 0.29.0 sends the header when `~/.config/sleeve/lrclib-app-id` holds an id; registering is left.
 - [x] **Waited-out fallbacks.** (p3) [feature] Files written from NetEase after LRCLIB failed for a day (0.17.0) keep
       those lyrics even once LRCLIB answers. Could record them (their report says "failing since") and offer a
       run that asks LRCLIB again for just those, replacing the lyrics when LRCLIB's fit.

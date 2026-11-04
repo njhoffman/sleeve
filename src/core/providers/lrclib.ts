@@ -1,3 +1,6 @@
+import { readFileSync } from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import { parseLrc } from '../lrc.ts';
 import type { Candidate, Lyrics, TrackQuery } from '../types.ts';
 import { ProviderHttpError, type Provider, type ProviderContext, type RateLimit } from './provider.ts';
@@ -12,7 +15,9 @@ import { ProviderHttpError, type Provider, type ProviderContext, type RateLimit 
 //
 // Its rate limit (https://lrclib.net/docs, "Rate Limiting") is about 90 requests a minute per IP for a client
 // that names itself in its User-Agent, and it asks batch clients to send requests one at a time with a pause
-// between them: rateLimit keeps a library run to about 85 a minute.
+// between them: rateLimit keeps a library run to about 85 a minute. A registered client-side application
+// (https://lrclib.net/developers) names itself with the public Lrclib-App-Id header and gets about 180 a minute; the
+// pace stays the same with one, so its allowance is headroom, since 429s came even at 85 a minute.
 
 const BASE = 'https://lrclib.net/api';
 const RETRIES = 1;
@@ -21,6 +26,20 @@ const RETRY_DELAY_MS = 1000;
 // failing every lookup during it would defer a run's files by the dozen without asking. Half the provider timeout.
 export const MAX_HOLD_WAIT_MS = 5000;
 export const LRCLIB_RATE_LIMIT: RateLimit = { host: 'lrclib.net', gapMs: 700, serial: true };
+
+// Where the application's id is kept, for sleeved and the commands alike
+export function lrclibAppIdFile(env: NodeJS.ProcessEnv = process.env): string {
+  return path.join(env.XDG_CONFIG_HOME || path.join(os.homedir(), '.config'), 'sleeve', 'lrclib-app-id');
+}
+
+// The id from the file's first line; null without one
+export function readLrclibAppId(file: string = lrclibAppIdFile()): string | null {
+  try {
+    return readFileSync(file, 'utf8').split('\n')[0].trim() || null;
+  } catch {
+    return null;
+  }
+}
 
 // One LRCLIB record, as /api/get and /api/search return it
 export interface LrclibRecord {
@@ -111,13 +130,14 @@ interface Hold {
 // either is honored, as LRCLIB's docs require: nothing is sent until it has run out (plus up to 30% jitter, so
 // throttled clients do not come back all at once), and a retry waits at least that long. A lookup made during a
 // hold waits for its end when that is at most MAX_HOLD_WAIT_MS away, and fails without asking otherwise.
-async function request(path: string, params: Record<string, string>, context: ProviderContext, retry: Retry, clock: Clock, hold: Hold): Promise<unknown> {
-  const url = `${BASE}${path}?${new URLSearchParams(params)}`;
+async function request(endpoint: string, params: Record<string, string>, context: ProviderContext, retry: Retry, clock: Clock, hold: Hold, appId: string | null): Promise<unknown> {
+  const url = `${BASE}${endpoint}?${new URLSearchParams(params)}`;
+  const headers = { 'User-Agent': context.userAgent, Accept: 'application/json', ...(appId ? { 'Lrclib-App-Id': appId } : {}) };
   for (let attempt = 0; ; attempt++) {
     const left = hold.until - clock.now();
     if (left > MAX_HOLD_WAIT_MS) throw new LrclibHeldError(hold.until);
     if (left > 0) await clock.sleep(left, context.signal);
-    const response = await context.fetch(url, { headers: { 'User-Agent': context.userAgent, Accept: 'application/json' }, signal: context.signal });
+    const response = await context.fetch(url, { headers, signal: context.signal });
     if (response.status === 404) return null;
     if (response.ok) return response.json();
     if (response.status === 503 || response.status === 429) {
@@ -141,7 +161,10 @@ async function request(path: string, params: Record<string, string>, context: Pr
 }
 
 // Retries wait retryDelayMs, then twice that, and so on, or longer when LRCLIB says how long
-export function createLrclib({ retries = RETRIES, retryDelayMs = RETRY_DELAY_MS, now = Date.now, random = Math.random, sleep = wait }: Partial<Retry & Clock> = {}): Provider {
+export function createLrclib({ retries = RETRIES, retryDelayMs = RETRY_DELAY_MS, now = Date.now, random = Math.random, sleep = wait, appId = readLrclibAppId }: Partial<Retry & Clock> & { appId?: () => string | null } = {}): Provider {
+  // Read at the first lookup, so importing the provider touches no file
+  let id: string | null | undefined;
+  const application = () => (id === undefined ? (id = appId()) : id);
   const retry = { retries, retryDelayMs };
   const clock = { now, random, sleep };
   const hold: Hold = { until: 0 };
@@ -157,11 +180,11 @@ export function createLrclib({ retries = RETRIES, retryDelayMs = RETRY_DELAY_MS,
           track_name: query.title,
           ...(query.album ? { album_name: query.album } : {}),
           duration: String(Math.round(query.durationMs / 1000))
-        }, context, retry, clock, hold) as LrclibRecord | null;
+        }, context, retry, clock, hold, application()) as LrclibRecord | null;
         const candidate = record && toCandidate(record);
         if (candidate) return [candidate];
       }
-      const records = await request('/search', { artist_name: query.artist, track_name: query.title }, context, retry, clock, hold) as LrclibRecord[] | null;
+      const records = await request('/search', { artist_name: query.artist, track_name: query.title }, context, retry, clock, hold, application()) as LrclibRecord[] | null;
       return (records ?? []).map(toCandidate).filter((candidate): candidate is Candidate => candidate !== null);
     }
   };

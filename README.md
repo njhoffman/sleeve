@@ -295,6 +295,12 @@ names itself, as sleeve does, and asks batch clients to send them one at a time
 are deferred. Files LRCLIB has to be asked about take about a second each; those the cache answers go at once.
 More jobs gain little. `--limit` stops after that many files.
 
+To register with LRCLIB, create a client-side application at <https://lrclib.net/developers> and put its public id
+in `~/.config/sleeve/lrclib-app-id`; restart sleeved to have it read. sleeve then sends it as `Lrclib-App-Id`, which
+raises the limit to about 180 requests a minute. sleeve keeps its pace, so this only spares it 429s; it does nothing
+for the 503s LRCLIB sends when it is overloaded. An id LRCLIB does not know gets a 401 for every lookup, reported like
+any other failure.
+
 ## Development
 
 ```bash

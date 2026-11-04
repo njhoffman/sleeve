@@ -1,6 +1,9 @@
 import { expect } from 'chai';
-import { createLrclib, LrclibHeldError, MAX_HOLD_WAIT_MS, retryAfterMs, toCandidate, type LrclibRecord } from '../../src/core/providers/lrclib.ts';
+import { createLrclib, lrclibAppIdFile, LrclibHeldError, MAX_HOLD_WAIT_MS, readLrclibAppId, retryAfterMs, toCandidate, type LrclibRecord } from '../../src/core/providers/lrclib.ts';
 import type { ProviderContext } from '../../src/core/providers/provider.ts';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
 import { fakeFetch, fixture, type Route } from '../helpers/fetch.ts';
 
 const deathCab = fixture('lrclib/get-death-cab-interior-decorator.json') as LrclibRecord;
@@ -8,7 +11,38 @@ const search = fixture('lrclib/search-radiohead-right-place.json') as LrclibReco
 const overloaded = fixture('lrclib/overloaded.json');
 
 describe('LRCLIB provider', () => {
-  const provider = createLrclib({ retryDelayMs: 1 });
+  const provider = createLrclib({ retryDelayMs: 1, appId: () => null });
+
+  describe('the application id', () => {
+    it('is sent on every request when there is one, and read once', async () => {
+      let reads = 0;
+      const named = createLrclib({ appId: () => { reads++; return 'app-1'; } });
+      const { context: ctx, calls } = context([{ match: /\/api\/get\?/, status: 404 }, { match: /\/api\/search\?/, body: search }]);
+      await named.search(query, ctx);
+      await named.search(query, ctx);
+      expect(calls.map(call => call.headers['Lrclib-App-Id'])).to.deep.equal(['app-1', 'app-1', 'app-1', 'app-1']);
+      expect(reads).to.equal(1);
+    });
+
+    it('is left out when there is none', async () => {
+      const { context: ctx, calls } = context([{ match: /\/api\/get\?/, body: deathCab }]);
+      await provider.search(query, ctx);
+      expect(calls[0].headers).to.not.have.property('Lrclib-App-Id');
+    });
+
+    it('comes from the first line of a file in the config directory', async () => {
+      const folder = await mkdtemp(path.join(os.tmpdir(), 'sleeve-lrclib-'));
+      const file = lrclibAppIdFile({ XDG_CONFIG_HOME: folder });
+      expect(file).to.equal(path.join(folder, 'sleeve', 'lrclib-app-id'));
+      expect(readLrclibAppId(file)).to.equal(null);
+      await mkdir(path.dirname(file));
+      await writeFile(file, '  app-2  \nanything else\n');
+      expect(readLrclibAppId(file)).to.equal('app-2');
+      await writeFile(file, '\n');
+      expect(readLrclibAppId(file)).to.equal(null);
+      await rm(folder, { recursive: true });
+    });
+  });
 
   function context(routes: Route[]) {
     const fake = fakeFetch(routes);

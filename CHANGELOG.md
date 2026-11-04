@@ -6,6 +6,13 @@ All notable changes to sleeve are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.29.0] - 2026-11-03
+
+### Added
+
+- sleeve sends LRCLIB an application id when `~/.config/sleeve/lrclib-app-id` holds one, for the higher rate limit of
+  a registered client-side application. Without the file nothing changes.
+
 ## [0.28.0] - 2026-11-03
 
 ### Added
