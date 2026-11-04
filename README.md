@@ -314,3 +314,7 @@ npm test             # mocha, offline, spec reporter
 Tests never reach the network, MPD or D-Bus: provider tests replay recorded responses from `test/fixtures/`,
 tagged mp3s are built by `test/helpers/id3.ts`, MPD is a local fake server (`test/helpers/fakeMpd.ts`) and
 MPRIS players a fake bus.
+
+## License
+
+Mozilla Public License 2.0; see [LICENSE](LICENSE).

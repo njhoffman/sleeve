@@ -14,8 +14,6 @@ Reviewed: 2026-11-02
       when it runs; without backdrop, sleeve stacks its own overlay; in window mode backdrop is not involved.
 - [x] **Decide which Sunamu features to drop.** (p2) [chore] Decided 2026-11-02: drop Discord RPC, Last.fm play
       counts, Spotify links, track logging, i18n and Windows support.
-- [ ] **Decide on OBS mode.** (p3) [chore] In Sunamu it is only a preset scene picked when `window.obsstudio`
-      exists (widget, non-interactive, no lyrics). With scenes selectable by URL it costs nothing to keep.
 - [x] **Salvage the uncommitted fork work.** (p2) [chore] `~/git/Sunamu` (origin njhoffman/lyricist) has 24 modified files
       (leveled logger, MPRIS fixes, provider logging) that are not committed or pushed; `~/git/lyricist`
       is a stale clone with only lockfile changes. Commit or stash them before they are lost, so they
@@ -32,8 +30,10 @@ Reviewed: 2026-11-02
       so Spotify tracks get their library file. Tag writing is still open (see Batch-write lyrics).
       Tag writing settled 2026-11-02 in the contract's "Lyrics in the library's tags" (musicman 1.55.1):
       sleeve writes `USLT`/`SYLT` itself, not through musicman, and musicman's node-id3 rewrites carry both over.
-- [ ] **Check license obligations.** (p3) [docs] Sunamu is MPL-2.0: any file copied or closely ported from it
+- [x] **Check license obligations.** (p3) [docs] Sunamu is MPL-2.0: any file copied or closely ported from it
       (LRC parser, Musixmatch client) stays MPL-2.0 with its notice. Pick sleeve's license with that in mind.
+      Done 2026-11-04 in 0.29.2: MPL-2.0 for the whole project. Comparing every file with Sunamu's found at most
+      2% of lines shared, all incidental, so no file needed its own notice.
 
 ## 2. Plan gaps (address later)
 
@@ -70,8 +70,9 @@ build items that depend on it, listed in the later projects.
       (Android) plays Spotify so far, not the library. SYLT stays a possible option (see Write SYLT too).
 - [ ] **Write SYLT too.** (p3) [feature] `sleeve tag --sylt`: a SYLT frame next to the USLT, for players that read
       only synced frames. musicman's contract already allows it (node-id3 keeps several). Wait for a player that needs it.
-- [ ] **MPL-2.0 obligations from Sunamu.** (p3) [docs] Files ported closely from Sunamu stay MPL-2.0 with their
+- [x] **MPL-2.0 obligations from Sunamu.** (p3) [docs] Files ported closely from Sunamu stay MPL-2.0 with their
       notice. Decide sleeve's license and mark ported files.
+      Done 2026-11-04 in 0.29.2, with the item above.
 
 ## 3. Lyrics fetching
 
@@ -332,7 +333,8 @@ build items that depend on it, listed in the later projects.
 - [x] **Click a line to seek.** (p3) [feature] A `seek` protocol message (messages.ts and docs/protocol.md; an
       addition, so PROTOCOL_VERSION stays), sent to the active player: MPD `seekcur`, MPRIS `SetPosition`
       (Spotify supports it). Then a click on a line in the renderer seeks to its time, offset applied.
-      Done in 0.28.0; tried in the renderer with a fake player and against the fake MPD, not yet against a real MPD or Spotify.
+      Done in 0.28.0; tried in the renderer with a fake player and against the fake MPD, and on real Spotify
+      and MPD on 2026-11-04 (both work).
 - [x] **Three window modes.** (p2) [feature] `overlay` under backdrop: backdrop places and stacks the window like a
       GLava instance. `overlay` without backdrop: sleeve stacks its own transparent, click-through,
       desktop-type window above the root. `window`: borderless, focusable, resizable, remembers its

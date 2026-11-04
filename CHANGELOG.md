@@ -6,6 +6,13 @@ All notable changes to sleeve are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.29.2] - 2026-11-04
+
+### Changed
+
+- sleeve is now licensed under MPL-2.0 (see `LICENSE`).
+- `src/cli/index.ts` is executable, so it can be linked onto your PATH as `sleeve`.
+
 ## [0.29.1] - 2026-11-04
 
 ### Fixed
