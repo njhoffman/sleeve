@@ -115,6 +115,14 @@ describe('renderer view', () => {
       expect(lyricsInsets('center-right', { top: 400, right: 480, bottom: 600, left: 300 }, { left: 100, top: 0, width: 400, height: 1000 }).right).to.equal(216);
     });
 
+    it('counts the empty strip above the lyrics, however wide it is set', () => {
+      const area = { width: 1000, height: 1000 };
+      const panel = { top: 18, right: 200, bottom: 60, left: 24 };
+      expect(lyricsInsets('top-left', panel, area, 0.08).top).to.equal(0);
+      expect(lyricsInsets('top-left', panel, area, 0).top).to.equal(76);
+      expect(lyricsInsets('top-left', panel, area, 0.02).top).to.equal(56);
+    });
+
     it('keeps the lyrics clear of it: a strip at the top or bottom, a column at a side, nothing without one', () => {
       const view = { width: 1000, height: 1000 };
       const none = { top: 0, right: 0, bottom: 0, left: 0 };

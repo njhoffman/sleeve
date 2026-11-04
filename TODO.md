@@ -379,24 +379,29 @@ build items that depend on it, listed in the later projects.
       (`follow` in `src/renderer/view.ts`); the line highlight is still a CSS transition.
       Done in 0.30.0 for `sleeve-art-flow`: `style.css` is watched by the page and values glide. CSS keyframes still
       restart when edited, and the line highlight is still a CSS transition; no dev panel.
+- [x] **Control how quickly the lyrics fade toward the edges.** (p3) [feature] Asked for 2026-11-04: `--lyrics-fade-top`, `--lyrics-fade-bottom`,
+      `--lyrics-clear-top` and `--lyrics-clear-bottom` in `style.css`, applied live. Done in 0.38.0.
 - [x] **Lyric colors by contrast against what is actually behind them.** (p2) [feature] Sunamu picks from the cover
       palette; in overlay mode the background is the wallpaper. Choose text color by APCA/WCAG contrast
       against the wallpaper region (from backdrop) or the cover, with a shadow as fallback.
       The overlay half is done in 0.11.0 (`src/renderer/contrast.ts`); the cover half in 0.23.0, from the cover
       as it shows (faded and dimmed, `coverColors` in view.ts).
 - [x] **Areas inside the window, for running as backdrop's wallpaper layer.** (p2) [feature] Asked for 2026-11-04: backdrop wants to give sleeve a whole
-      monitor and have the lyrics only in part of it (the left third, say), leaving the rest for GLava and whatever else. Spec in `docs/backdrop.md`:
+      monitor and have the lyrics only in part of it (the left third, say), leaving the rest for GLava and whatever else. Spec in backdrop's `docs/specs/sleeve.md`:
       `--lyrics-area` and `--now-area` (`WxH+X+Y`, pixels or percent of the window) on `sleeve shell` and `sleeve ctl display`, text sized to its area.
       Done in 0.34.0.
 - [x] **A background for the window.** (p2) [feature] `--background transparent|#rrggbb|#rrggbbaa|cover|cover@0.6`, on the shell and over `ctl`, so sleeve can be the
       wallpaper with no mpv behind it, or a see-through layer over mpv with GLava above it. The alpha is the background's alone, text stays solid. `--hide` hides the content and keeps the
-      background. Text colors follow it, blended over the stdin line when see-through. `docs/backdrop.md`.
+      background. Text colors follow it, blended over the stdin line when see-through. In backdrop's `docs/specs/sleeve.md`.
       Done in 0.35.0.
 - [x] **`--map-below`.** (p2) [feature] A full-monitor opaque window mapped on top covers every other window for the 2 s until backdrop places it. Map it at
-      the bottom of the stack once, as GLava does for itself, and still never restack after. `docs/backdrop.md`, Stacking.
+      the bottom of the stack once, as GLava does for itself, and still never restack after. In backdrop's `docs/specs/sleeve.md`, Stacking.
       Done in 0.36.0.
 - [x] **Measure a full-monitor transparent window.** (p3) [perf] It runs all day under the compositor. Measure on Iris Xe, repaint only the areas if it matters, and
       put the figures in the contract in `~/git/backdrop/docs/specs/sleeve.md`.
-      Measured 2026-11-04: figures in `docs/backdrop.md`, Cost, until backdrop's spec is free to take them. Electron's share is small;
+      Measured 2026-11-04: figures in backdrop's `docs/specs/sleeve.md`, Cost; `just bench-gpu` measures them again. Electron's share is small;
       picom's could not be told from its noise.
+- [ ] **A window the size of the screen comes out 1 px short.** (p3) [bug] Found from backdrop 2026-11-04 under Xvfb at 1280x720: `sleeve shell --managed --geometry 1280x720+0+0` gives a
+      1279x719 window (xwininfo), while 858x720+422+0 beside it is exact. Nothing in `shell/main.ts` shrinks it, so it may be Electron treating it as fullscreen. An opaque window as the wallpaper would
+      leave a 1 px seam on the right and bottom. Check on the real desktop first, since this was seen only under Xvfb, with no window manager.
 

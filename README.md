@@ -162,6 +162,8 @@ seek bar you can click, and the times. The overlay shows `lyrics` and a window `
   --now-position: bottom-left;   /* top-left (default), top-center, top-right, center-left, center-right, bottom-left, bottom-center, bottom-right */
   --lyrics-align: center;        /* left (default), center or right */
   --now-scale: 1;                /* the panel's size; also --now-margin */
+  --lyrics-fade-top: 20%;        /* how far the lyrics take to fade out toward the top, in percent of their height; lower is quicker */
+  --lyrics-fade-bottom: 24%;     /* the same toward the bottom; also --lyrics-clear-top (8%) and --lyrics-clear-bottom (0%), the empty strips past them */
 }
 ```
 

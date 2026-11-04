@@ -36,6 +36,10 @@
   --now-area:      the area the panel stands in, --now-position placing it inside; unset: the whole window
   --background:    what fills the window: transparent, #rrggbb, #rrggbbaa, cover or cover@0.6, the alpha the background's alone so
                    text stays solid; unset: nothing on the overlay, the cover in a window (--art-background: off for none) */
+  --lyrics-fade-top: 20%;        /* how far the lyrics take to fade out toward the top, in percent of their height: lower is a quicker, harder edge, 0% none */
+  --lyrics-fade-bottom: 24%;     /* the same toward the bottom */
+  --lyrics-clear-top: 8%;        /* the empty strip above that fade */
+  --lyrics-clear-bottom: 0%;     /* and below the other */
   --now-scale: 1;                /* size of the panel */
   --now-margin: 24px;            /* its distance from the window's edge */
 
@@ -185,7 +189,13 @@ html:not(.art) #art::after { display: none; }
   position: absolute;
   inset: var(--reserve-top, 0px) var(--reserve-right, 0px) var(--reserve-bottom, 0px) var(--reserve-left, 0px);
   overflow: hidden;
-  mask-image: linear-gradient(to bottom, transparent 0, transparent 8%, #000 28%, #000 76%, transparent 100%);
+  mask-image: linear-gradient(to bottom,
+    transparent 0,
+    transparent var(--lyrics-clear-top),
+    #000 calc(var(--lyrics-clear-top) + var(--lyrics-fade-top)),
+    #000 calc(100% - var(--lyrics-clear-bottom) - var(--lyrics-fade-bottom)),
+    transparent calc(100% - var(--lyrics-clear-bottom)),
+    transparent 100%);
 }
 
 #lines {

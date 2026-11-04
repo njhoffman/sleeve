@@ -245,7 +245,7 @@ addEventListener('resize', () => placeAreas());
 function reservePanel(): void {
   if (!display) return;
   const rect = display.preset === 'lyrics' ? null : statusPanel.getBoundingClientRect();
-  const insets = lyricsInsets(display.position, rect, resolveArea(display.lyricsArea, { width: innerWidth, height: innerHeight }));
+  const insets = lyricsInsets(display.position, rect, resolveArea(display.lyricsArea, { width: innerWidth, height: innerHeight }), number('--lyrics-clear-top', 8) / 100);
   const { style } = document.documentElement;
   style.setProperty('--reserve-top', `${insets.top}px`);
   style.setProperty('--reserve-right', `${insets.right}px`);
@@ -298,6 +298,7 @@ async function checkUserCss(): Promise<void> {
       userStyle.textContent = text;
       settingsReadAt = -Infinity;
       artKey = undefined;
+      reservePanel();
     }
     userCssText = text;
   } catch {

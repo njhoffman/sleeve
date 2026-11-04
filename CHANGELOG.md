@@ -6,6 +6,14 @@ All notable changes to sleeve are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.38.0] - 2026-11-04
+
+### Added
+
+- `--lyrics-fade-top` and `--lyrics-fade-bottom` in `~/.config/sleeve/style.css` set how quickly the lyrics fade out from the center
+  toward the top and bottom, and `--lyrics-clear-top` and `--lyrics-clear-bottom` the empty strips past that. The defaults are the
+  fade as it was.
+
 ## [0.37.0] - 2026-11-04
 
 ### Added

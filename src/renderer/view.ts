@@ -161,19 +161,18 @@ export interface Insets {
 }
 
 // How far the lyrics keep off the window's edges so the panel never covers them: the strip it stands in at the top or
-// bottom, the column at a side. The top of the lyrics is faded out over TOP_FADE of their height anyway, so a panel
-// that fits in there costs them nothing.
-const TOP_FADE = 0.08;
+// bottom, the column at a side. The top of the lyrics is empty over clearTop of their height anyway (--lyrics-clear-top), so
+// a panel that fits in there costs them nothing.
 const PANEL_GAP = 16;
 
-export function lyricsInsets(position: NowPosition, panel: { top: number; right: number; bottom: number; left: number } | null, area: { left?: number; top?: number; width: number; height: number }): Insets {
+export function lyricsInsets(position: NowPosition, panel: { top: number; right: number; bottom: number; left: number } | null, area: { left?: number; top?: number; width: number; height: number }, clearTop = 0.08): Insets {
   const insets: Insets = { top: 0, right: 0, bottom: 0, left: 0 };
   if (!panel) return insets;
   const areaLeft = area.left ?? 0;
   const areaTop = area.top ?? 0;
   // A panel standing elsewhere leaves the lyrics alone
   if (panel.right <= areaLeft || panel.left >= areaLeft + area.width || panel.bottom <= areaTop || panel.top >= areaTop + area.height) return insets;
-  if (position.startsWith('top')) insets.top = Math.max(0, panel.bottom - areaTop + PANEL_GAP - area.height * TOP_FADE);
+  if (position.startsWith('top')) insets.top = Math.max(0, panel.bottom - areaTop + PANEL_GAP - area.height * clearTop);
   else if (position.startsWith('bottom')) insets.bottom = Math.max(0, areaTop + area.height - panel.top + PANEL_GAP);
   else if (position === 'center-left') insets.left = Math.max(0, panel.right - areaLeft + PANEL_GAP);
   else insets.right = Math.max(0, areaLeft + area.width - panel.left + PANEL_GAP);
