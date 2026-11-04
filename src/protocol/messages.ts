@@ -41,6 +41,27 @@ export function parseArea(text: string): Area | null {
   return width.value > 0 && height.value > 0 ? { width, height, x, y } : null;
 }
 
+// What fills the window behind the content. A color's alpha, or the cover's, is the background's alone: text stays solid.
+export type PageBackground =
+  | { kind: 'transparent' }
+  | { kind: 'color'; color: string; alpha: number }
+  // alpha null: the cover over the page's own color, as a window draws it; a number: at that opacity, over what is behind the window
+  | { kind: 'cover'; alpha: number | null };
+
+// transparent, #rrggbb, #rrggbbaa, cover or cover@0.6; null for anything else
+export function parseBackground(text: string): PageBackground | null {
+  const value = text.trim().toLowerCase();
+  if (value === 'transparent') return { kind: 'transparent' };
+  if (value === 'cover') return { kind: 'cover', alpha: null };
+  const cover = /^cover@(\d*\.?\d+)$/.exec(value);
+  if (cover) {
+    const alpha = Number(cover[1]);
+    return alpha <= 1 ? { kind: 'cover', alpha } : null;
+  }
+  const color = /^(#[0-9a-f]{6})([0-9a-f]{2})?$/.exec(value);
+  return color ? { kind: 'color', color: color[1], alpha: color[2] ? Number.parseInt(color[2], 16) / 255 : 1 } : null;
+}
+
 // Changes to how pages look, over what their URL and stylesheet say, until sleeved restarts
 export interface DisplayChange {
   preset?: NowPreset;
@@ -49,7 +70,9 @@ export interface DisplayChange {
   // Where the lyrics lay out, and where the now-playing panel stands, inside the window (see parseArea)
   lyricsArea?: string;
   nowArea?: string;
-  // false hides the page without closing it
+  // What fills the window behind the content (see parseBackground)
+  background?: string;
+  // false hides the lyrics and the panel without closing the page; the background stays
   visible?: boolean;
 }
 // For every page, and by the instance a page names (?instance=); an instance's change wins for it
@@ -193,9 +216,10 @@ export function parseCommand(text: string): { command: ClientCommand } | { error
     for (const name of ['lyricsArea', 'nowArea']) {
       if (record[name] !== undefined && (typeof record[name] !== 'string' || !parseArea(record[name] as string))) return failed(`display needs ${name} to be WxH+X+Y, in pixels or percent, not ${String(record[name])}`);
     }
+    if (record.background !== undefined && (typeof record.background !== 'string' || !parseBackground(record.background))) return failed(`display needs background to be transparent, #rrggbb, #rrggbbaa, cover or cover@0.6, not ${String(record.background)}`);
     if (record.visible !== undefined && typeof record.visible !== 'boolean') return failed('display needs visible to be true or false');
     if (record.reset !== undefined && typeof record.reset !== 'boolean') return failed('display needs reset to be true or false');
-    if (['preset', 'position', 'align', 'lyricsArea', 'nowArea', 'visible', 'reset'].every(key => record[key] === undefined)) return failed('display needs something to change');
+    if (['preset', 'position', 'align', 'lyricsArea', 'nowArea', 'background', 'visible', 'reset'].every(key => record[key] === undefined)) return failed('display needs something to change');
   }
   if (type === 'subscribe' && typeof record.lines !== 'boolean') return failed('subscribe needs lines, true or false');
   return { command: record as unknown as ClientCommand };

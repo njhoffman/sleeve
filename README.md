@@ -165,7 +165,11 @@ seek bar you can click, and the times. The overlay shows `lyrics` and a window `
 }
 ```
 
-`?now=full&now-position=bottom-left&lyrics-align=center` in the URL does the same for one page and wins over the
+`--lyrics-area` and `--now-area` (`WxH+X+Y`, in pixels or percent of the window, so `33%x100%+0+0` is the left third) put them in
+part of the window, with text wrapped and sized to its area. `--background` fills the window: `transparent`, `#rrggbb`, `#rrggbbaa`,
+`cover` or `cover@0.6`, where the alpha is the background's alone and text stays solid.
+
+`?now=full&now-position=bottom-left&lyrics-align=center&lyrics-area=...&background=...` in the URL does the same for one page and wins over the
 stylesheet. On the overlay the seek bar only shows, since the overlay takes no mouse.
 
 `src/renderer/style.css` lists every variable with its default; `?background=none` in the URL turns the cover off
@@ -214,7 +218,7 @@ home, so it survives moving the checkout and reinstalling Electron (it asks for 
 `sleeve shell` opens the same window from anywhere once `sleeve` is on your `PATH`, with the same options, plus `--now`,
 `--now-position` and `--lyrics-align` for its look. `sleeve shell --managed` is for a program that places the window itself:
 backdrop's planned sleeve engine, as promised in its `docs/specs/sleeve.md`. `sleeve ctl display` changes a page's look
-live (`--preset`, `--position`, `--align`, `--hide`, `--show`, `--reset`), for one `--instance` or for every page.
+live (`--preset`, `--position`, `--align`, `--lyrics-area`, `--now-area`, `--background`, `--hide`, `--show`, `--reset`), for one `--instance` or for every page.
 
 The overlay takes no keys, since clicks and keys go to the windows under it. `sleeve ctl` sends sleeved one
 command and prints the outcome, for i3 bindings:

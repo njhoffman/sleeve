@@ -87,6 +87,16 @@ describe('renderer view', () => {
       expect(displaySettings(css, params(), true, { nowArea: '100x100+0+0' }).nowArea).to.equal('100x100+0+0');
     });
 
+    it('takes a background like the rest, with the old ?background=none meaning none', () => {
+      const css = reading({ '--background': 'cover' });
+      expect(displaySettings(reading(), params(), true).background).to.equal(null);
+      expect(displaySettings(css, params(), true).background).to.equal('cover');
+      expect(displaySettings(css, params('background=none'), false).background).to.equal('transparent');
+      expect(displaySettings(css, params('background=%2310203099'), false).background).to.equal('#10203099');
+      expect(displaySettings(css, params('background=clear'), false).background).to.equal('cover');
+      expect(displaySettings(css, params('background=none'), false, { background: 'cover@0.5' }).background).to.equal('cover@0.5');
+    });
+
     it('resolves an area in pixels or percent, clipped to the window', () => {
       const window = { width: 2000, height: 1000 };
       expect(resolveArea(null, window)).to.deep.equal({ left: 0, top: 0, width: 2000, height: 1000 });

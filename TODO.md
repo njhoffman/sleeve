@@ -388,9 +388,10 @@ build items that depend on it, listed in the later projects.
       monitor and have the lyrics only in part of it (the left third, say), leaving the rest for GLava and whatever else. Spec in `docs/backdrop.md`:
       `--lyrics-area` and `--now-area` (`WxH+X+Y`, pixels or percent of the window) on `sleeve shell` and `sleeve ctl display`, text sized to its area.
       Done in 0.34.0.
-- [ ] **A background for the window.** (p2) [feature] `--background transparent|#rrggbb|#rrggbbaa|cover|cover@0.6`, on the shell and over `ctl`, so sleeve can be the
+- [x] **A background for the window.** (p2) [feature] `--background transparent|#rrggbb|#rrggbbaa|cover|cover@0.6`, on the shell and over `ctl`, so sleeve can be the
       wallpaper with no mpv behind it, or a see-through layer over mpv with GLava above it. The alpha is the background's alone, text stays solid. `--hide` hides the content and keeps the
       background. Text colors follow it, blended over the stdin line when see-through. `docs/backdrop.md`.
+      Done in 0.35.0.
 - [ ] **`--map-below`.** (p2) [feature] A full-monitor opaque window mapped on top covers every other window for the 2 s until backdrop places it. Map it at
       the bottom of the stack once, as GLava does for itself, and still never restack after. `docs/backdrop.md`, Stacking.
 - [ ] **Measure a full-monitor transparent window.** (p3) [perf] It runs all day under the compositor. Measure on Iris Xe, repaint only the areas if it matters, and

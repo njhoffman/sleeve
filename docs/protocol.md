@@ -30,7 +30,7 @@ echo '{"type":"subscribe","lines":true}' | socat -t 86400 - UNIX-CONNECT:$XDG_RU
 For a status bar, `sleeve line` prints the current line's text each time it changes, and survives sleeved restarting.
 
 After a `display` command, every client gets `{ "type": "display", "displays": { "*": { ... }, "<instance>": { ... } } }`, each
-entry holding `preset`, `position`, `align` and `visible` as changed; a client that connects later gets it too, before
+entry holding `preset`, `position`, `align`, `lyricsArea`, `nowArea`, `background` and `visible` as changed; a client that connects later gets it too, before
 `players`, when there are any. An instance's entry wins over `*`. They last until sleeved restarts.
 
 ## Timing
@@ -92,7 +92,7 @@ back. Replies may come after the broadcasts the command caused.
 | `pick`       | `ref` (`provider:id`)| shows that candidate for the track from now on, like `sleeve pick`, and reloads              | `{ ref }`              |
 | `mark`       | `mark` (`none`, `instrumental`) | shows nothing for the track from now on, like `sleeve pick --none`, and reloads  | `{ mark }`             |
 | `seek`       | `ms`                | plays from `ms` into the track, kept within it, in the player playing it                     | `{ positionMs }`       |
-| `display`    | any of `instance`, `preset`, `position`, `align`, `visible`, `reset` | changes how a page looks without a reload: the one that named this instance (`?instance=`), or all without one; `reset` forgets the changes | `{ displays }` |
+| `display`    | any of `instance`, `preset`, `position`, `align`, `lyricsArea`, `nowArea`, `background`, `visible`, `reset` | changes how a page looks without a reload: the one that named this instance (`?instance=`), or all without one; `reset` forgets the changes | `{ displays }` |
 | `unpick`     |                     | forgets the pick or mark and reloads                                                         | `{ removed }`          |
 | `refresh`    |                     | looks the track up again, asking online providers instead of their stored answers            |                        |
 | `state`      |                     | sends `playback`, `lyrics` and `players` again (and `line`, to a subscriber)                 |                        |

@@ -1,6 +1,6 @@
 import { expect } from 'chai';
 import type { LyricsResult, ScoredCandidate } from '../../src/core/types.ts';
-import { parseCommand } from '../../src/protocol/messages.ts';
+import { parseBackground, parseCommand } from '../../src/protocol/messages.ts';
 import { fromWire, SessionMirror } from '../../src/protocol/mirror.ts';
 
 const best: ScoredCandidate = {
@@ -24,6 +24,14 @@ describe('parseCommand', () => {
       const parsed = parseCommand(JSON.stringify({ type: 'display', lyricsArea: area })) as { error: string };
       expect(parsed.error, String(area)).to.include('lyricsArea').and.include(String(area));
     }
+    for (const fill of ['transparent', '#102030', '#10203099', 'cover', 'cover@0.6', 'cover@1', 'COVER']) expect(parseCommand(JSON.stringify({ type: 'display', background: fill })), fill).to.have.property('command');
+    for (const fill of ['clear', '#12', '#1020309', 'cover@2', 'cover@', 5]) {
+      expect((parseCommand(JSON.stringify({ type: 'display', background: fill })) as { error: string }).error, String(fill)).to.include('background').and.include(String(fill));
+    }
+    expect(parseBackground('#10203080')).to.deep.include({ kind: 'color', color: '#102030' });
+    expect((parseBackground('#10203080') as { alpha: number }).alpha).to.be.closeTo(0.5, 0.01);
+    expect(parseBackground('cover')).to.deep.equal({ kind: 'cover', alpha: null });
+    expect(parseBackground('cover@.6')).to.deep.equal({ kind: 'cover', alpha: 0.6 });
     expect(parseCommand('{"type":"display"}')).to.deep.equal({ error: 'display needs something to change' });
     for (const bad of ['{"preset":"huge"}', '{"position":"middle"}', '{"align":"up"}', '{"visible":"no"}', '{"reset":1}', '{"instance":"","preset":"full"}']) {
       expect(parseCommand(JSON.stringify({ type: 'display', ...JSON.parse(bad) })), bad).to.have.property('error');

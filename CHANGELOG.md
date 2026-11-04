@@ -6,6 +6,18 @@ All notable changes to sleeve are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.35.0] - 2026-11-04
+
+### Added
+
+- `--background` sets what fills the window: `transparent`, `#rrggbb`, `#rrggbbaa`, `cover` or `cover@0.6`, on `sleeve shell`,
+  `sleeve ctl display`, `?background=` and in `~/.config/sleeve/style.css`. The alpha is the background's alone, so text stays
+  solid, and text colors follow what it stands on. `cover` is the same blurred cover a window shows, moving background included.
+
+### Changed
+
+- `sleeve ctl display --hide` hides the lyrics and the panel but keeps the background, which goes on moving.
+
 ## [0.34.0] - 2026-11-04
 
 ### Added

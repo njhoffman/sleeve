@@ -1,3 +1,5 @@
+import type { PageBackground } from '../protocol/messages.ts';
+
 // Text colors for the overlay from the wallpaper behind it. backdrop samples what its wallpaper shows under each
 // overlay (after its dim) and gives the average and the main colors with their shares; the Electron shell passes
 // them on. Light or dark text is chosen by WCAG contrast against every color that covers a real part of the area,
@@ -58,6 +60,28 @@ export function validColors(value: unknown): OverlayColors | null {
   const entries = main.filter((entry): entry is { color: string; share: number } =>
     !!entry && typeof entry.color === 'string' && !!parseHex(entry.color) && typeof entry.share === 'number' && entry.share >= 0);
   return { background, main: entries };
+}
+
+// top at this alpha over under, as #rrggbb
+function over(top: string, alpha: number, under: string): string {
+  const a = parseHex(top), b = parseHex(under);
+  if (!a || !b) return top;
+  return `#${a.map((value, at) => Math.round(value * alpha + b[at] * (1 - alpha)).toString(16).padStart(2, '0')).join('')}`;
+}
+
+// What the text stands on, given the page's background, the cover's colors as shown (when there is a cover), and the
+// colors behind the window (when told, on stdin or from backdrop); null when nothing is known. Opaque: its own. See-through:
+// blended over those behind, or itself when they are not known.
+export function pageTheme(background: PageBackground | null, cover: OverlayColors | null, behind: OverlayColors | null): OverlayColors | null {
+  if (background?.kind === 'color') {
+    if (background.alpha >= 1 || !behind) return { background: background.color, main: [] };
+    return { background: over(background.color, background.alpha, behind.background), main: behind.main.map(entry => ({ ...entry, color: over(background.color, background.alpha, entry.color) })) };
+  }
+  if (background?.kind === 'transparent') return behind;
+  if (!cover) return behind;
+  const alpha = background?.kind === 'cover' ? background.alpha : null;
+  if (alpha === null || alpha >= 1 || !behind) return cover;
+  return { background: over(cover.background, alpha, behind.background), main: cover.main.map(entry => ({ ...entry, color: over(entry.color, alpha, behind.background) })) };
 }
 
 const triplet = (rgb: [number, number, number]) => rgb.join(', ');

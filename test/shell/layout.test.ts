@@ -25,6 +25,8 @@ describe('the shell\'s managed mode', () => {
 
   it('refuses a preset or place it does not know', () => {
     expect(() => parseShellArgs(['--lyrics-area', 'rubbish'])).to.throw('Invalid --lyrics-area: rubbish');
+    expect(() => parseShellArgs(['--background', 'clear'])).to.throw('Invalid --background: clear');
+    expect(parseShellArgs(['--background', 'cover@0.6']).background).to.equal('cover@0.6');
     expect(() => parseShellArgs(['--now-area', '0x10+0+0'])).to.throw('Invalid --now-area: 0x10+0+0');
     expect(parseShellArgs(['--lyrics-area', '33%x100%+0+0'])).to.deep.include({ lyricsArea: '33%x100%+0+0', nowArea: null });
     expect(() => parseShellArgs(['--now', 'huge'])).to.throw('Invalid --now: huge');

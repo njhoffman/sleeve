@@ -2,8 +2,9 @@ import type { LyricLine, LyricsResult, ScoredCandidate, TrackMark } from '../cor
 import { nextLineTime, wordFill, wordTexts, wordTimings } from '../now/lines.ts';
 import type { NowState } from '../now/state.ts';
 import { Connection } from './connection.ts';
-import { parseHex, textTheme, themeVariables, validColors } from './contrast.ts';
+import { pageTheme, parseHex, textTheme, themeVariables, validColors, type OverlayColors } from './contrast.ts';
 import { CoverFlow } from './flow.ts';
+import { parseBackground, type PageBackground } from '../protocol/messages.ts';
 import { candidateEntries, coverColors, displaySettings, flowSettings, flowStep, follow, formatOffset, formatTime, lineStart, lyricsInsets, NO_SCROLL_BACK, nowText, resolveArea, progress, scrollBackOffset, status, wheel, type CandidateEntry, type DisplaySettings, type FlowSettings, type FlowView, type ScrollBack } from './view.ts';
 
 // The renderer: sleeved's session as scrolling lyrics. The current line is worked out every frame from the
@@ -42,8 +43,6 @@ const art = element<HTMLDivElement>('art');
 const overlay = new URLSearchParams(location.search).get('mode') === 'overlay';
 // ?words=estimate: fill lines without word times word by word too, their timing estimated from the line's
 const estimateWords = new URLSearchParams(location.search).get('words') === 'estimate';
-// ?background=none: no cover behind the lyrics, whatever the stylesheets say
-const noBackground = new URLSearchParams(location.search).get('background') === 'none';
 document.documentElement.classList.toggle('overlay', overlay);
 
 // The Electron shell's one-way channel (shell/preload.cjs): the wallpaper colors behind the overlay, from backdrop
@@ -52,10 +51,12 @@ declare global {
     sleeveShell?: { onColors(listener: (colors: unknown) => void): void };
   }
 }
+let colorsBehind: OverlayColors | null = null;
 window.sleeveShell?.onColors(value => {
   const colors = validColors(value);
   if (!colors) return;
-  for (const [name, setting] of Object.entries(themeVariables(textTheme(colors)))) document.documentElement.style.setProperty(name, setting);
+  colorsBehind = colors;
+  applyTheme();
 });
 
 // The cover behind the lyrics
@@ -68,7 +69,43 @@ const number = (name: string, fallback: number) => {
   const value = Number.parseFloat(setting(name));
   return Number.isFinite(value) ? value : fallback;
 };
-const artWanted = () => !overlay && !noBackground && setting('--art-background') !== 'off';
+// What fills the window (?background=, sleeve ctl display --background, --background in the stylesheet); null: the mode's
+// default, nothing on the overlay and the cover in a window
+let background: PageBackground | null = null;
+let coverColorsShown: OverlayColors | null = null;
+const artWanted = () => (background ? background.kind === 'cover' : !overlay && setting('--art-background') !== 'off');
+
+// The text's colors for what it stands on
+function applyTheme(): void {
+  const colors = pageTheme(background, coverColorsShown, colorsBehind);
+  setTheme(colors ? themeVariables(textTheme(colors)) : null);
+}
+
+function applyBackground(text: string | null): void {
+  background = text ? parseBackground(text) : null;
+  const root = document.documentElement;
+  const kind = background?.kind;
+  root.classList.toggle('solid', kind === 'color');
+  // On the overlay the page is see-through unless the background says otherwise
+  root.classList.toggle('cover-page', background?.kind === 'cover' && background.alpha === null);
+  root.classList.toggle('see-through', background?.kind === 'cover' && background.alpha !== null);
+  if (background?.kind === 'color') root.style.setProperty('--page-background', pageColor(background.color, background.alpha));
+  if (background?.kind === 'cover' && background.alpha !== null) {
+    // The layer fades whole, cover and dim together, so the colors under the text can be worked out from the cover as shown
+    root.style.setProperty('--art-layer-opacity', String(background.alpha));
+    root.style.setProperty('--art-opacity', '1');
+  } else {
+    root.style.removeProperty('--art-layer-opacity');
+    root.style.removeProperty('--art-opacity');
+  }
+  artKey = undefined;
+  applyTheme();
+}
+
+const pageColor = (color: string, alpha: number) => {
+  const [red, green, blue] = parseHex(color)!;
+  return `rgba(${red}, ${green}, ${blue}, ${alpha})`;
+};
 
 function setTheme(variables: Record<string, string> | null): void {
   const names = ['--overlay-text', '--overlay-shadow', '--overlay-shadow-alpha', '--overlay-upcoming-alpha', '--overlay-past-alpha'];
@@ -95,7 +132,8 @@ function clearArt(): void {
   latestCover = null;
   flow?.forgetCover();
   document.documentElement.classList.remove('art');
-  setTheme(null);
+  coverColorsShown = null;
+  applyTheme();
 }
 
 // The cover drawn small and blurred (cropped to a square), faded in over the last, and the text colored for it
@@ -117,13 +155,11 @@ function showArt(image: HTMLImageElement): void {
   latestCover = canvas;
   if (flowOn) flow?.setCover(canvas, performance.now(), artFadeMs());
   const base = parseHex(setting('--bg')) ?? [15, 18, 24];
-  const colors = coverColors(context.getImageData(0, 0, ART_SIZE, ART_SIZE).data, { opacity: number('--art-opacity', 0.6), dim: number('--art-dim', 0.45), base });
-  setTheme(themeVariables(textTheme(colors)));
+  coverColorsShown = coverColors(context.getImageData(0, 0, ART_SIZE, ART_SIZE).data, { opacity: number('--art-opacity', 0.6), dim: number('--art-dim', 0.45), base });
+  applyTheme();
 }
 
 function updateArt(state: NowState): void {
-  // The overlay's colors come from the wallpaper (the shell), never from a cover
-  if (overlay) return;
   const key = state.playback?.track?.key ?? null;
   if (key === artKey) return;
   artKey = key;
@@ -157,7 +193,6 @@ function readFlow(now: number): void {
 }
 
 function updateFlow(now: number, dt: number): void {
-  if (overlay) return;
   if (!flowOn || !flowTarget || !flowView || !document.documentElement.classList.contains('art')) return;
   flowView = flowStep(flowView, flowTarget, dt);
   flow!.draw(now, flowView);
@@ -168,16 +203,21 @@ function updateFlow(now: number, dt: number): void {
 const pageParams = new URLSearchParams(location.search);
 const instance = pageParams.get('instance');
 let display: DisplaySettings | null = null;
+let backgroundShown: string | null | undefined = undefined;
 let displaysSeen = 0;
 let thumbnailKey: string | null | undefined = undefined;
 let shownTimes = '';
 
 function readDisplay(): void {
   const next = displaySettings(setting, pageParams, overlay, connection.mirror.displayFor(instance));
-  if (display && next.preset === display.preset && next.position === display.position && next.align === display.align && next.lyricsArea === display.lyricsArea && next.nowArea === display.nowArea && next.visible === display.visible) return;
+  if (display && next.preset === display.preset && next.position === display.position && next.align === display.align && next.lyricsArea === display.lyricsArea && next.nowArea === display.nowArea && next.background === display.background && next.visible === display.visible) return;
   if (display && !display.visible && next.visible) snap = true;
   display = next;
   document.documentElement.classList.toggle('page-hidden', !next.visible);
+  if (next.background !== backgroundShown) {
+    backgroundShown = next.background;
+    applyBackground(next.background);
+  }
   const { dataset } = document.documentElement;
   dataset.now = next.preset;
   dataset.nowPosition = next.position;
@@ -380,15 +420,15 @@ function render(now: number): void {
     settingsReadAt = now;
     displaysSeen = connection.mirror.displaysSeen;
     readDisplay();
-    if (!overlay) readFlow(now);
+    readFlow(now);
   }
-  // Told to hide by whatever places this page: nothing to draw until it shows again
+  updateArt(state);
+  updateFlow(now, dt);
+  // Told to hide by whatever places this page: the background goes on, and no text to work out until it shows again
   if (!display!.visible) {
     requestAnimationFrame(render);
     return;
   }
-  updateArt(state);
-  updateFlow(now, dt);
   const view = status(state, connection.connected);
   const shown = nowText(state, display!.preset, view.title);
   const text = `${shown.title}\n${shown.artist}\n${shown.album}\n${view.source}`;

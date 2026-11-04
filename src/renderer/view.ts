@@ -1,6 +1,6 @@
 import type { LyricsResult, ScoredCandidate } from '../core/types.ts';
 import type { NowState } from '../now/state.ts';
-import { LYRICS_ALIGNS, NOW_POSITIONS, NOW_PRESETS, parseArea, type AreaLength, type DisplayChange, type LyricsAlign, type NowPosition, type NowPreset } from '../protocol/messages.ts';
+import { LYRICS_ALIGNS, NOW_POSITIONS, NOW_PRESETS, parseArea, parseBackground, type AreaLength, type DisplayChange, type LyricsAlign, type NowPosition, type NowPreset } from '../protocol/messages.ts';
 import type { OverlayColors } from './contrast.ts';
 
 // What the renderer shows, worked out without the DOM, so it is tested in Node.
@@ -92,6 +92,8 @@ export interface DisplaySettings {
   // As given, whole window when null; see resolveArea
   lyricsArea: string | null;
   nowArea: string | null;
+  // As given; null: the default for the mode (nothing on the overlay, the cover in a window)
+  background: string | null;
   visible: boolean;
 }
 
@@ -100,7 +102,11 @@ export function displaySettings(read: (name: string) => string, params: { get(na
   const choose = <T extends string>(known: readonly T[], fallback: T, ...values: Array<string | null | undefined>): T =>
     values.map(value => value?.trim()).find((value): value is T => (known as readonly string[]).includes(value ?? '')) ?? fallback;
   const area = (...values: Array<string | null | undefined>) => values.map(value => value?.trim()).find(value => !!value && parseArea(value)) ?? null;
+  const fill = (...values: Array<string | null | undefined>) => values.map(value => value?.trim()).find(value => !!value && parseBackground(value)) ?? null;
+  // ?background=none predates the others, and meant no cover
+  const urlBackground = params.get('background') === 'none' ? 'transparent' : params.get('background');
   return {
+    background: fill(given.background, urlBackground, read('--background')),
     lyricsArea: area(given.lyricsArea, params.get('lyrics-area'), read('--lyrics-area')),
     nowArea: area(given.nowArea, params.get('now-area'), read('--now-area')),
     preset: choose(NOW_PRESETS, overlay ? 'lyrics' : 'minimal', given.preset, params.get('now'), read('--now-preset')),

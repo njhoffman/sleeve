@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { parseArgs } from 'node:util';
 import { DEFAULT_HOST, DEFAULT_PORT } from '../daemon/paths.ts';
-import { LYRICS_ALIGNS, NOW_POSITIONS, NOW_PRESETS, parseArea } from '../protocol/messages.ts';
+import { LYRICS_ALIGNS, NOW_POSITIONS, NOW_PRESETS, parseArea, parseBackground } from '../protocol/messages.ts';
 import { validColors, type OverlayColors } from '../renderer/contrast.ts';
 
 // What the Electron shell (shell/main.ts) decides before it opens a window: its options, whether backdrop runs,
@@ -37,6 +37,8 @@ export interface ShellOptions {
   // The page's ?lyrics-area= and ?now-area=: where each goes inside the window
   lyricsArea: string | null;
   nowArea: string | null;
+  // The page's ?background=: what fills the window behind the content
+  background: string | null;
   url: string;
   // An explicit overlay geometry; otherwise the band above the visualizer
   geometry: Geometry | null;
@@ -119,7 +121,8 @@ export function parseShellArgs(argv: string[]): ShellOptions {
       'now-position': { type: 'string' },
       'lyrics-align': { type: 'string' },
       'lyrics-area': { type: 'string' },
-      'now-area': { type: 'string' }
+      'now-area': { type: 'string' },
+      background: { type: 'string' }
     }
   });
   const text = (name: string): string | undefined => (typeof values[name] === 'string' ? values[name] as string : undefined);
@@ -154,7 +157,9 @@ export function parseShellArgs(argv: string[]): ShellOptions {
     if (value !== null && !parseArea(value)) throw new Error(`Invalid --${name}: ${value} (WxH+X+Y, in pixels or percent)`);
     return value;
   };
-  const page = { lyricsArea: area('lyrics-area'), nowArea: area('now-area'), title: text('title') ?? null, instance: text('instance') ?? null, now: known('now', NOW_PRESETS), nowPosition: known('now-position', NOW_POSITIONS), lyricsAlign: known('lyrics-align', LYRICS_ALIGNS) };
+  const fill = text('background') ?? null;
+  if (fill !== null && !parseBackground(fill)) throw new Error(`Invalid --background: ${fill} (transparent, #rrggbb, #rrggbbaa, cover or cover@0.6)`);
+  const page = { background: fill, lyricsArea: area('lyrics-area'), nowArea: area('now-area'), title: text('title') ?? null, instance: text('instance') ?? null, now: known('now', NOW_PRESETS), nowPosition: known('now-position', NOW_POSITIONS), lyricsAlign: known('lyrics-align', LYRICS_ALIGNS) };
   return { managed, ...page, mode, url, geometry, monitor: text('monitor') ?? null, position, stack, waitBackdropS, estimateWords: values['estimate-words'] === true };
 }
 
@@ -244,7 +249,7 @@ export function overlayGeometry(monitor: BackdropMonitor, gap = 12): Geometry {
 }
 
 // The renderer's URL for a mode (the overlay draws on a transparent page) and the options the page takes
-export function rendererUrl(base: string, mode: ShellMode, estimateWords = false, page: Partial<Pick<ShellOptions, 'instance' | 'now' | 'nowPosition' | 'lyricsAlign' | 'lyricsArea' | 'nowArea'>> = {}): string {
+export function rendererUrl(base: string, mode: ShellMode, estimateWords = false, page: Partial<Pick<ShellOptions, 'instance' | 'now' | 'nowPosition' | 'lyricsAlign' | 'lyricsArea' | 'nowArea' | 'background'>> = {}): string {
   const url = new URL(base);
   if (mode === 'overlay') url.searchParams.set('mode', 'overlay');
   if (estimateWords) url.searchParams.set('words', 'estimate');
@@ -254,6 +259,7 @@ export function rendererUrl(base: string, mode: ShellMode, estimateWords = false
   if (page.lyricsAlign) url.searchParams.set('lyrics-align', page.lyricsAlign);
   if (page.lyricsArea) url.searchParams.set('lyrics-area', page.lyricsArea);
   if (page.nowArea) url.searchParams.set('now-area', page.nowArea);
+  if (page.background) url.searchParams.set('background', page.background);
   return url.toString();
 }
 

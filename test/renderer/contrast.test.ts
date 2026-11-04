@@ -1,5 +1,5 @@
 import { expect } from 'chai';
-import { contrastRatio, DARK, LIGHT, luminance, parseHex, textTheme, themeVariables, validColors } from '../../src/renderer/contrast.ts';
+import { pageTheme, contrastRatio, DARK, LIGHT, luminance, parseHex, textTheme, themeVariables, validColors } from '../../src/renderer/contrast.ts';
 
 const rgb = (hex: string) => parseHex(hex)!;
 
@@ -50,5 +50,33 @@ describe('overlay contrast', () => {
       '--overlay-text': '244, 246, 251', '--overlay-shadow': '18, 21, 28', '--overlay-shadow-alpha': '0.45',
       '--overlay-upcoming-alpha': '0.5', '--overlay-past-alpha': '0.32'
     });
+  });
+});
+
+describe('pageTheme', () => {
+  const behind = { background: '#000000', main: [{ color: '#ffffff', share: 0.5 }] };
+  const cover = { background: '#ff0000', main: [{ color: '#00ff00', share: 0.5 }] };
+
+  it('goes by what is behind the window when the page itself is see-through', () => {
+    expect(pageTheme({ kind: 'transparent' }, null, behind)).to.equal(behind);
+    expect(pageTheme(null, null, behind)).to.equal(behind);
+    expect(pageTheme(null, null, null)).to.equal(null);
+  });
+
+  it('goes by an opaque color alone, ignoring what is behind', () => {
+    expect(pageTheme({ kind: 'color', color: '#102030', alpha: 1 }, null, behind)).to.deep.equal({ background: '#102030', main: [] });
+  });
+
+  it('blends a see-through color over what is behind, or takes it alone when that is not known', () => {
+    expect(pageTheme({ kind: 'color', color: '#ffffff', alpha: 0.5 }, null, behind)).to.deep.equal({ background: '#808080', main: [{ color: '#ffffff', share: 0.5 }] });
+    expect(pageTheme({ kind: 'color', color: '#102030', alpha: 0.5 }, null, null)).to.deep.equal({ background: '#102030', main: [] });
+  });
+
+  it('goes by the cover when opaque, and blends it when it has an alpha', () => {
+    expect(pageTheme(null, cover, behind)).to.equal(cover);
+    expect(pageTheme({ kind: 'cover', alpha: null }, cover, behind)).to.equal(cover);
+    expect(pageTheme({ kind: 'cover', alpha: 0.5 }, cover, behind)).to.deep.equal({ background: '#800000', main: [{ color: '#008000', share: 0.5 }] });
+    expect(pageTheme({ kind: 'cover', alpha: 0.5 }, cover, null)).to.equal(cover);
+    expect(pageTheme({ kind: 'cover', alpha: null }, null, behind)).to.equal(behind);
   });
 });

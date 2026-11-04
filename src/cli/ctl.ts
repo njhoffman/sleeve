@@ -20,6 +20,7 @@ export interface CtlOptions {
   align?: string;
   lyricsArea?: string;
   nowArea?: string;
+  background?: string;
   hide?: boolean;
   show?: boolean;
   reset?: boolean;
@@ -93,6 +94,7 @@ export async function ctlCommand(action: string, args: string[], options: CtlOpt
           ...(options.align ? { align: options.align as LyricsAlign } : {}),
           ...(options.lyricsArea ? { lyricsArea: options.lyricsArea } : {}),
           ...(options.nowArea ? { nowArea: options.nowArea } : {}),
+          ...(options.background ? { background: options.background } : {}),
           ...(options.hide ? { visible: false } : options.show ? { visible: true } : {}),
           ...(options.reset ? { reset: true } : {})
         };
