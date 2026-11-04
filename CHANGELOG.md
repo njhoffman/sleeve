@@ -6,6 +6,13 @@ All notable changes to sleeve are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.36.0] - 2026-11-04
+
+### Added
+
+- `sleeve shell --managed --map-below` maps the window at the bottom of the stack, so a program placing a whole-monitor window
+  does not have it cover everything first.
+
 ## [0.35.0] - 2026-11-04
 
 ### Added

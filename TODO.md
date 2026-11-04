@@ -392,8 +392,11 @@ build items that depend on it, listed in the later projects.
       wallpaper with no mpv behind it, or a see-through layer over mpv with GLava above it. The alpha is the background's alone, text stays solid. `--hide` hides the content and keeps the
       background. Text colors follow it, blended over the stdin line when see-through. `docs/backdrop.md`.
       Done in 0.35.0.
-- [ ] **`--map-below`.** (p2) [feature] A full-monitor opaque window mapped on top covers every other window for the 2 s until backdrop places it. Map it at
+- [x] **`--map-below`.** (p2) [feature] A full-monitor opaque window mapped on top covers every other window for the 2 s until backdrop places it. Map it at
       the bottom of the stack once, as GLava does for itself, and still never restack after. `docs/backdrop.md`, Stacking.
-- [ ] **Measure a full-monitor transparent window.** (p3) [perf] It runs all day under the compositor. Measure on Iris Xe, repaint only the areas if it matters, and
+      Done in 0.36.0.
+- [x] **Measure a full-monitor transparent window.** (p3) [perf] It runs all day under the compositor. Measure on Iris Xe, repaint only the areas if it matters, and
       put the figures in the contract in `~/git/backdrop/docs/specs/sleeve.md`.
+      Measured 2026-11-04: figures in `docs/backdrop.md`, Cost, until backdrop's spec is free to take them. Electron's share is small;
+      picom's could not be told from its noise.
 

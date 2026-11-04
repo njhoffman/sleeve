@@ -1,9 +1,10 @@
 # Running as backdrop's wallpaper layer
 
-Proposed 2026-11-04, not built yet. backdrop runs sleeve as a visualizer engine under the contract in
-`~/git/backdrop/docs/specs/sleeve.md` (`sleeve shell --managed`, `sleeve ctl display`, shipped in 0.33.0). That contract
-assumes the window and the page are the same size. This note asks for what it takes to separate them. Add to the
-options below freely; once shipped, changing or removing one needs a version note in both CHANGELOGs, as for the rest.
+Built on sleeve's side 2026-11-04: areas in 0.34.0, the background in 0.35.0, `--map-below` in 0.36.0 (`sleeve --version`).
+backdrop runs sleeve as a visualizer engine under the contract in `~/git/backdrop/docs/specs/sleeve.md` (`sleeve shell
+--managed`, `sleeve ctl display`, shipped in 0.33.0). That contract assumes the window and the page are the same size, and
+this adds what it takes to separate them; it is written here until that file is free to take it. Add to the options below
+freely; changing or removing one needs a version note in both CHANGELOGs, as for the rest.
 
 ## The ways the user runs it
 
@@ -33,8 +34,11 @@ fills the rest, so a new neighbour on the desktop asks nothing more of it.
 
 - `AREA` is `WxH+X+Y` relative to the window, each part pixels or a percentage of the window: `33%x100%+0+0` is the left
   third, `67%x100%+33%+0` the rest.
-- `BG` is `transparent`, `#rrggbb`, `#rrggbbaa`, or `cover` (the current track's cover, as window mode draws it), with
-  `cover@0.6` for a cover at that opacity. The alpha applies to the background alone: text and the panel stay solid.
+- `BG` is `transparent`, `#rrggbb`, `#rrggbbaa`, or `cover`, with `cover@0.6` for a cover at that opacity, over what is behind
+  the window. `cover` is the blurred treatment a window shows, not the plain picture, which looks poor at the size of a
+  monitor: it follows the user's `--art-*` settings, `--art-animation: sleeve-art-flow` and its `--flow-*` included. Without
+  `--background`, the default is by mode: nothing on the overlay (so `--managed`), the cover in a window. The page's older
+  `?background=none` still works, as `transparent`. The alpha applies to the background alone: text and the panel stay solid.
   `_NET_WM_WINDOW_OPACITY`, which backdrop sets, fades the whole window, so it cannot do this.
 - The same fields go over the socket, as `lyricsArea`, `nowArea` and `background` on the `display` command, with the
   instance rules and `--reset` as they are for `preset`, `position` and `align` now.
@@ -46,6 +50,8 @@ Behaviour to hold to:
 - When both areas are the default, or overlap, the lyrics keep clear of the panel as they do now. Apart, they ignore it.
 - An area partly outside the window is clipped to it. One with no size, or a form it cannot read, is a bad option:
   status 2 at the start and status 1 from `ctl`, naming the value, as for other values.
+- `--now-area` and `--lyrics-area` count as overlapping when the panel actually stands inside the lyrics' area; two areas that
+  overlap with the panel elsewhere leave the lyrics alone.
 - Any geometry works, including one spanning monitors. backdrop will normally run one window per monitor rather than cover
   the whole X root, but that is its choice.
 - `--hide` hides the lyrics and the panel and keeps the background, since on an opaque window that background is the
@@ -58,7 +64,8 @@ window now being able to cover a monitor and be opaque: a window mapped on top h
 finds and places it, about 2 s later.
 
 `--map-below` asks sleeve to map the window at the bottom of the stack, once, as GLava does for itself. backdrop then
-places it from there. Without the option nothing changes.
+places it from there. Without the option nothing changes. It needs `--managed`. Checked 2026-11-04 by polling the root's
+stack every 30 ms or so: with it, the window was at the very bottom in every sample once mapped; without it, on top.
 
 ## Colors
 
@@ -70,9 +77,22 @@ background composited over the line's colors at that alpha. GLava above sleeve d
 
 ## Cost
 
-A full-monitor transparent window costs the compositor more than a small one, and that cost runs all day. Worth
-measuring on Iris Xe when this is built, as the 2 s start was, and repainting only the areas if it matters. Note the
-figures in the contract.
+Measured 2026-11-04 on Iris Xe at 2560x1440, with the lyrics in the left third and music playing: render engine time of
+Electron's GPU process from fdinfo, over 16 s each, while mpv's wallpaper and GLava ran as usual.
+
+| Window | Electron |
+| --- | --- |
+| A band, 2560x1000, transparent, as the overlay is today | 0.0% |
+| The whole monitor, transparent | 0.4% |
+| The whole monitor, see-through `#10203099` | 2.2% |
+| The whole monitor, `cover` with `sleeve-art-flow` | 7.6% |
+
+The compositor's share could not be told from its noise: picom alone read 14.7% to 20.9% across three runs with no sleeve
+window, and 20.3% to 26.5% with one. The last two were measured at the bottom of the stack, because they would otherwise have
+covered the desktop, so they say nothing of picom. Repainting only the areas has not been built, since nothing here calls
+for it. `--flow-resolution` is the lever for the last row.
+
+A start measured 2 s before, and 3.7 s to 4.1 s while a stack-polling test and a library run were going, so allow for more.
 
 ## What backdrop does once this ships
 
@@ -112,6 +132,8 @@ visualizer:
       placement: {anchor: bottom, width: 100%, height: 25%}
 ```
 
-## Open questions for this side
+## Hiding, and what to copy across
 
-- Does `cover` mean the plain cover, or the blurred treatment window mode uses? Whichever looks right at full monitor.
+`--hide` keeps the background and whatever moves in it: hiding a `cover` window does not stop its GPU use, so a window that
+is only there for its lyrics should use `--background transparent`. When backdrop's session is free, this note's contract
+parts and figures belong in `docs/specs/sleeve.md`, replacing its "Planned" section.

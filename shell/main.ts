@@ -8,7 +8,7 @@ import {
   backdropRunning, backdropStatePath, chooseMonitor, chooseOverlay, formatGeometry, overlayColors, overlayGeometry, parseMonitors,
   parseShellArgs, readBackdropState, rendererUrl, waitForBackdrop, type BackdropMonitor, type BackdropState, type Geometry, type ShellOptions
 } from '../src/shell/layout.ts';
-import { compositorRunning, markOverlay, stackSelf } from './x11.ts';
+import { compositorRunning, lowerWindow, markOverlay, stackSelf } from './x11.ts';
 import { validColors } from '../src/renderer/contrast.ts';
 
 // sleeve's window: the renderer sleeved serves, either as an overlay on the desktop (transparent, click-through,
@@ -215,6 +215,11 @@ async function openManaged(options: ShellOptions): Promise<BrowserWindow> {
     }
   });
   load(window, rendererUrl(options.url, 'overlay', options.estimateWords, options));
+  if (options.mapBelow) {
+    // Before it maps, and again as it does, since Chromium may raise it then; after that it is the other program's to stack
+    await lowerWindow(windowId(window));
+    window.once('show', () => { lowerWindow(windowId(window)).catch(error => log(`cannot lower the window: ${error instanceof Error ? error.message : String(error)}`)); });
+  }
   window.showInactive();
   log(`managed overlay at ${formatGeometry(options.geometry!)}${options.title ? `, titled ${options.title}` : ''}`);
   return window;

@@ -59,6 +59,13 @@ export async function markOverlay(window: number, mark: Position | null): Promis
   });
 }
 
+// Puts the window at the bottom of the stack, once: for a window that may cover the monitor and is about to be placed
+export async function lowerWindow(window: number): Promise<void> {
+  await withClient(async client => {
+    client.ConfigureWindow(window, { stackMode: STACK_BELOW });
+  });
+}
+
 // Whether a compositor runs on the screen: one owns the _NET_WM_CM_S0 selection (EWMH). Without one, a
 // transparent window shows black.
 export async function compositorRunning(): Promise<boolean> {

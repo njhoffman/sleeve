@@ -26,6 +26,8 @@ export interface ShellOptions {
   mode: ShellMode;
   // A program starts, places and stops this window
   managed: boolean;
+  // Map it at the bottom of the stack, for that program to place it from there
+  mapBelow: boolean;
   // The window's title, for that program to find it
   title: string | null;
   // What `sleeve ctl display --instance` calls this page (the page's ?instance=)
@@ -115,6 +117,7 @@ export function parseShellArgs(argv: string[]): ShellOptions {
       'wait-backdrop': { type: 'string' },
       'estimate-words': { type: 'boolean' },
       managed: { type: 'boolean' },
+      'map-below': { type: 'boolean' },
       title: { type: 'string' },
       instance: { type: 'string' },
       now: { type: 'string' },
@@ -147,6 +150,8 @@ export function parseShellArgs(argv: string[]): ShellOptions {
   const managed = values.managed === true;
   if (managed && !geometry) throw new Error('--managed needs --geometry');
   if (managed && mode === 'window') throw new Error('--managed is an overlay, not a --window');
+  const mapBelow = values['map-below'] === true;
+  if (mapBelow && !managed) throw new Error('--map-below is for --managed');
   const known = (name: string, values: readonly string[]) => {
     const value = text(name) ?? null;
     if (value !== null && !values.includes(value)) throw new Error(`Invalid --${name}: ${value} (${values.join(', ')})`);
@@ -160,7 +165,7 @@ export function parseShellArgs(argv: string[]): ShellOptions {
   const fill = text('background') ?? null;
   if (fill !== null && !parseBackground(fill)) throw new Error(`Invalid --background: ${fill} (transparent, #rrggbb, #rrggbbaa, cover or cover@0.6)`);
   const page = { background: fill, lyricsArea: area('lyrics-area'), nowArea: area('now-area'), title: text('title') ?? null, instance: text('instance') ?? null, now: known('now', NOW_PRESETS), nowPosition: known('now-position', NOW_POSITIONS), lyricsAlign: known('lyrics-align', LYRICS_ALIGNS) };
-  return { managed, ...page, mode, url, geometry, monitor: text('monitor') ?? null, position, stack, waitBackdropS, estimateWords: values['estimate-words'] === true };
+  return { managed, mapBelow, ...page, mode, url, geometry, monitor: text('monitor') ?? null, position, stack, waitBackdropS, estimateWords: values['estimate-words'] === true };
 }
 
 // backdrop's state, or null when it has none or it cannot be read

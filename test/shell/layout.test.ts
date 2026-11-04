@@ -23,6 +23,12 @@ describe('the shell\'s managed mode', () => {
     expect(parseShellArgs([])).to.deep.include({ managed: false, title: null, instance: null, now: null });
   });
 
+  it('maps below only when managed', () => {
+    expect(parseShellArgs(['--managed', '--geometry', '800x600+0+0', '--map-below']).mapBelow).to.equal(true);
+    expect(parseShellArgs(['--managed', '--geometry', '800x600+0+0']).mapBelow).to.equal(false);
+    expect(() => parseShellArgs(['--map-below'])).to.throw('--map-below is for --managed');
+  });
+
   it('refuses a preset or place it does not know', () => {
     expect(() => parseShellArgs(['--lyrics-area', 'rubbish'])).to.throw('Invalid --lyrics-area: rubbish');
     expect(() => parseShellArgs(['--background', 'clear'])).to.throw('Invalid --background: clear');
