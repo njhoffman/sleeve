@@ -2,7 +2,7 @@ import { formatRef, parseRef } from '../core/prefs.ts';
 import type { LyricsResult, ScoredCandidate, TrackMark } from '../core/types.ts';
 import { DaemonClient } from '../daemon/client.ts';
 import { defaultSocketPath } from '../daemon/paths.ts';
-import type { ClientCommand } from '../protocol/messages.ts';
+import type { ClientCommand, DisplayCommand, LyricsAlign, NowPosition, NowPreset } from '../protocol/messages.ts';
 import { describeCandidate, formatOffset, type Io } from './lyrics.ts';
 import { parseOffset } from './prefs.ts';
 
@@ -13,6 +13,14 @@ import { parseOffset } from './prefs.ts';
 export interface CtlOptions {
   socket?: string;
   json?: boolean;
+  // display
+  instance?: string;
+  preset?: string;
+  position?: string;
+  align?: string;
+  hide?: boolean;
+  show?: boolean;
+  reset?: boolean;
 }
 
 type Unsent = ClientCommand extends infer T ? T extends unknown ? Omit<T, 'id'> : never : never;
@@ -46,8 +54,8 @@ export async function ctlCommand(action: string, args: string[], options: CtlOpt
     case 'nudge': case 'offset': needs(1, '<ms>'); break;
     case 'pick': needs(1, '<provider:id | number>'); break;
     case 'mark': needs(1, '<none | instrumental>'); break;
-    case 'unpick': case 'refresh': case 'candidates': needs(0, ''); break;
-    default: throw new Error(`Unknown action: ${action} (nudge, offset, pick, mark, unpick, refresh, candidates)`);
+    case 'unpick': case 'refresh': case 'candidates': case 'display': needs(0, ''); break;
+    default: throw new Error(`Unknown action: ${action} (nudge, offset, pick, mark, unpick, refresh, candidates, display)`);
   }
   const ms = action === 'nudge' || action === 'offset' ? parseOffset(args[0]) : 0;
   const picked = action === 'pick' && !/^\d+$/.test(args[0]) ? parseRef(args[0]) : null;
@@ -72,6 +80,20 @@ export async function ctlCommand(action: string, args: string[], options: CtlOpt
       case 'mark': {
         if (await send(client, { type: 'mark', mark: args[0] as TrackMark }, io) === undefined) return 1;
         io.out(args[0] === 'none' ? 'Marked: no correct lyrics' : 'Marked: instrumental');
+        return 0;
+      }
+      case 'display': {
+        const command: Omit<DisplayCommand, 'id'> = {
+          type: 'display',
+          ...(options.instance ? { instance: options.instance } : {}),
+          ...(options.preset ? { preset: options.preset as NowPreset } : {}),
+          ...(options.position ? { position: options.position as NowPosition } : {}),
+          ...(options.align ? { align: options.align as LyricsAlign } : {}),
+          ...(options.hide ? { visible: false } : options.show ? { visible: true } : {}),
+          ...(options.reset ? { reset: true } : {})
+        };
+        if (await send(client, command, io) === undefined) return 1;
+        io.out(`Display of ${options.instance ?? 'every page'} changed`);
         return 0;
       }
       case 'unpick': {

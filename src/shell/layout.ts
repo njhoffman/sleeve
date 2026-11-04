@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { parseArgs } from 'node:util';
 import { DEFAULT_HOST, DEFAULT_PORT } from '../daemon/paths.ts';
+import { LYRICS_ALIGNS, NOW_POSITIONS, NOW_PRESETS } from '../protocol/messages.ts';
 import { validColors, type OverlayColors } from '../renderer/contrast.ts';
 
 // What the Electron shell (shell/main.ts) decides before it opens a window: its options, whether backdrop runs,
@@ -9,7 +10,8 @@ import { validColors, type OverlayColors } from '../renderer/contrast.ts';
 //
 // Three modes: an overlay stacked by backdrop (when it runs), an overlay sleeve stacks itself (no backdrop, but a
 // compositor to make it transparent: just above the root, or with --position above over every window), and a
-// plain window.
+// plain window. --managed is the overlay for a program that does it all (backdrop's sleeve engine, its
+// docs/specs/sleeve.md): it opens at the geometry given, named as given, and stacks and marks nothing.
 //
 // backdrop's contract (Overlays in its docs/specs/visualizer.md): sleeve marks its window _BACKDROP_OVERLAY
 // below|above and runs `backdrop restack` when the window maps and whenever backdrop's daemon pid in state.json
@@ -22,6 +24,16 @@ export type OverlayStack = 'auto' | 'backdrop' | 'self';
 
 export interface ShellOptions {
   mode: ShellMode;
+  // A program starts, places and stops this window
+  managed: boolean;
+  // The window's title, for that program to find it
+  title: string | null;
+  // What `sleeve ctl display --instance` calls this page (the page's ?instance=)
+  instance: string | null;
+  // The page's ?now=, ?now-position= and ?lyrics-align=
+  now: string | null;
+  nowPosition: string | null;
+  lyricsAlign: string | null;
   url: string;
   // An explicit overlay geometry; otherwise the band above the visualizer
   geometry: Geometry | null;
@@ -96,7 +108,13 @@ export function parseShellArgs(argv: string[]): ShellOptions {
       position: { type: 'string' },
       stack: { type: 'string' },
       'wait-backdrop': { type: 'string' },
-      'estimate-words': { type: 'boolean' }
+      'estimate-words': { type: 'boolean' },
+      managed: { type: 'boolean' },
+      title: { type: 'string' },
+      instance: { type: 'string' },
+      now: { type: 'string' },
+      'now-position': { type: 'string' },
+      'lyrics-align': { type: 'string' }
     }
   });
   const text = (name: string): string | undefined => (typeof values[name] === 'string' ? values[name] as string : undefined);
@@ -118,7 +136,16 @@ export function parseShellArgs(argv: string[]): ShellOptions {
   } catch {
     throw new Error(`Invalid --url: ${url}`);
   }
-  return { mode, url, geometry, monitor: text('monitor') ?? null, position, stack, waitBackdropS, estimateWords: values['estimate-words'] === true };
+  const managed = values.managed === true;
+  if (managed && !geometry) throw new Error('--managed needs --geometry');
+  if (managed && mode === 'window') throw new Error('--managed is an overlay, not a --window');
+  const known = (name: string, values: readonly string[]) => {
+    const value = text(name) ?? null;
+    if (value !== null && !values.includes(value)) throw new Error(`Invalid --${name}: ${value} (${values.join(', ')})`);
+    return value;
+  };
+  const page = { title: text('title') ?? null, instance: text('instance') ?? null, now: known('now', NOW_PRESETS), nowPosition: known('now-position', NOW_POSITIONS), lyricsAlign: known('lyrics-align', LYRICS_ALIGNS) };
+  return { managed, ...page, mode, url, geometry, monitor: text('monitor') ?? null, position, stack, waitBackdropS, estimateWords: values['estimate-words'] === true };
 }
 
 // backdrop's state, or null when it has none or it cannot be read
@@ -207,10 +234,14 @@ export function overlayGeometry(monitor: BackdropMonitor, gap = 12): Geometry {
 }
 
 // The renderer's URL for a mode (the overlay draws on a transparent page) and the options the page takes
-export function rendererUrl(base: string, mode: ShellMode, estimateWords = false): string {
+export function rendererUrl(base: string, mode: ShellMode, estimateWords = false, page: Partial<Pick<ShellOptions, 'instance' | 'now' | 'nowPosition' | 'lyricsAlign'>> = {}): string {
   const url = new URL(base);
   if (mode === 'overlay') url.searchParams.set('mode', 'overlay');
   if (estimateWords) url.searchParams.set('words', 'estimate');
+  if (page.instance) url.searchParams.set('instance', page.instance);
+  if (page.now) url.searchParams.set('now', page.now);
+  if (page.nowPosition) url.searchParams.set('now-position', page.nowPosition);
+  if (page.lyricsAlign) url.searchParams.set('lyrics-align', page.lyricsAlign);
   return url.toString();
 }
 

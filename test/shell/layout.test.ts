@@ -10,6 +10,31 @@ import {
 const dp3: BackdropMonitor = { name: 'DP-3', x: 0, y: 0, width: 1920, height: 1080, primary: true, visualizer: { geometry: '1920x270+0+810', running: true } };
 const hdmi: BackdropMonitor = { name: 'HDMI-1', x: 1920, y: 0, width: 2560, height: 1440 };
 
+describe('the shell\'s managed mode', () => {
+  it('needs a geometry, and is not a window', () => {
+    expect(() => parseShellArgs(['--managed'])).to.throw('--managed needs --geometry');
+    expect(() => parseShellArgs(['--managed', '--geometry', '800x600+0+0', '--window'])).to.throw('not a --window');
+  });
+
+  it('takes what a program gives it', () => {
+    const options = parseShellArgs(['--managed', '--geometry', '800x600+10+20', '--title', 'backdrop-visualizer-DP-3-lyrics', '--instance', 'DP-3-lyrics', '--now', 'full', '--now-position', 'bottom-left', '--lyrics-align', 'center']);
+    expect(options).to.deep.include({ managed: true, mode: 'overlay', title: 'backdrop-visualizer-DP-3-lyrics', instance: 'DP-3-lyrics', now: 'full', nowPosition: 'bottom-left', lyricsAlign: 'center' });
+    expect(options.geometry).to.deep.equal({ x: 10, y: 20, width: 800, height: 600 });
+    expect(parseShellArgs([])).to.deep.include({ managed: false, title: null, instance: null, now: null });
+  });
+
+  it('refuses a preset or place it does not know', () => {
+    expect(() => parseShellArgs(['--now', 'huge'])).to.throw('Invalid --now: huge');
+    expect(() => parseShellArgs(['--now-position', 'middle'])).to.throw('Invalid --now-position: middle');
+    expect(() => parseShellArgs(['--lyrics-align', 'up'])).to.throw('Invalid --lyrics-align: up');
+  });
+
+  it('hands the page its instance and look in the URL', () => {
+    const url = new URL(rendererUrl('http://127.0.0.1:6620/', 'overlay', false, { instance: 'DP-3 lyrics', now: 'full', nowPosition: 'top-right', lyricsAlign: 'right' }));
+    expect(Object.fromEntries(url.searchParams)).to.deep.equal({ mode: 'overlay', instance: 'DP-3 lyrics', now: 'full', 'now-position': 'top-right', 'lyrics-align': 'right' });
+  });
+});
+
 describe('shell layout', () => {
   it('parses and formats X geometries', () => {
     expect(parseGeometry('1920x636+0+162')).to.deep.equal({ x: 0, y: 162, width: 1920, height: 636 });
@@ -19,7 +44,7 @@ describe('shell layout', () => {
   });
 
   it('takes its own options and lets Chromium\'s through', () => {
-    expect(parseShellArgs([])).to.deep.equal({ mode: 'overlay', url: DEFAULT_URL, geometry: null, monitor: null, position: 'below', stack: 'auto', waitBackdropS: 0, estimateWords: false });
+    expect(parseShellArgs([])).to.deep.include({ mode: 'overlay', url: DEFAULT_URL, geometry: null, monitor: null, position: 'below', stack: 'auto', waitBackdropS: 0, estimateWords: false });
     expect(parseShellArgs(['--no-sandbox', '--window', '--url', 'http://127.0.0.1:7000/'])).to.deep.include({ mode: 'window', url: 'http://127.0.0.1:7000/' });
     expect(parseShellArgs(['--estimate-words']).estimateWords).to.equal(true);
     expect(parseShellArgs(['--mode=overlay', '--geometry', '800x400+10+20', '--monitor', 'HDMI-1', '--position', 'above']))

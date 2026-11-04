@@ -53,16 +53,16 @@ describe('renderer view', () => {
     const reading = (values: Record<string, string> = {}) => (name: string) => values[name] ?? '';
 
     it('shows only lyrics on the overlay and a line in a window unless told otherwise', () => {
-      expect(displaySettings(reading(), params(), true)).to.deep.equal({ preset: 'lyrics', position: 'top-left', align: 'left' });
-      expect(displaySettings(reading(), params(), false)).to.deep.equal({ preset: 'minimal', position: 'top-left', align: 'left' });
+      expect(displaySettings(reading(), params(), true)).to.deep.equal({ preset: 'lyrics', position: 'top-left', align: 'left', visible: true });
+      expect(displaySettings(reading(), params(), false)).to.deep.equal({ preset: 'minimal', position: 'top-left', align: 'left', visible: true });
     });
 
     it('takes a live change over the URL over the stylesheet, passing over what it does not know', () => {
       const css = reading({ '--now-preset': ' full ', '--now-position': 'bottom-right', '--lyrics-align': 'center' });
-      expect(displaySettings(css, params(), true)).to.deep.equal({ preset: 'full', position: 'bottom-right', align: 'center' });
-      expect(displaySettings(css, params('now=minimal&now-position=center-left&lyrics-align=right'), true)).to.deep.equal({ preset: 'minimal', position: 'center-left', align: 'right' });
+      expect(displaySettings(css, params(), true)).to.deep.equal({ preset: 'full', position: 'bottom-right', align: 'center', visible: true });
+      expect(displaySettings(css, params('now=minimal&now-position=center-left&lyrics-align=right'), true)).to.deep.equal({ preset: 'minimal', position: 'center-left', align: 'right', visible: true });
       expect(displaySettings(css, params('now=huge&now-position=middle'), true)).to.deep.include({ preset: 'full', position: 'bottom-right' });
-      expect(displaySettings(css, params('now=minimal'), true, { preset: 'lyrics' }).preset).to.equal('lyrics');
+      expect(displaySettings(css, params('now=minimal'), true, { preset: 'lyrics', visible: false })).to.deep.include({ preset: 'lyrics', visible: false });
     });
 
     it('gives the full panel lines of its own, and the others one line', () => {

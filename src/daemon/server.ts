@@ -10,7 +10,7 @@ import { nextLineTime } from '../now/lines.ts';
 import { monotonic, positionAt } from '../players/clock.ts';
 import type { Playback } from '../players/types.ts';
 import {
-  parseCommand, PROTOCOL_VERSION, type ClientCommand, type LyricsMessage, type PlayerProblem, type ReplyMessage,
+  ALL_INSTANCES, parseCommand, PROTOCOL_VERSION, type ClientCommand, type DisplayChange, type Displays, type LyricsMessage, type PlayerProblem, type ReplyMessage,
   type ServerMessage, type WireLine, type WirePlayback
 } from '../protocol/messages.ts';
 import { DEFAULT_HOST, DEFAULT_PORT, defaultSocketPath, WEBSOCKET_PATH } from './paths.ts';
@@ -85,6 +85,7 @@ export class SleeveDaemon {
   private options: DaemonOptions;
   private clients = new Set<Client>();
   private nextId = 1;
+  private displays: Displays = {};
   private last: NowState;
   private lastProblems = '[]';
   private lastPrefetch: string | null = null;
@@ -158,6 +159,7 @@ export class SleeveDaemon {
     const state = this.session.current();
     client.send({ type: 'playback', playback: this.wirePlayback(state.playback) });
     client.send(this.lyricsMessage(state));
+    if (Object.keys(this.displays).length) client.send({ type: 'display', displays: this.displays });
     client.send({ type: 'players', problems: this.problems() });
     if (client.lines) this.sendLine(client, true);
   }
@@ -271,6 +273,18 @@ export class SleeveDaemon {
       }
       case 'seek':
         return { data: { positionMs: await this.session.seek(command.ms) } };
+      case 'display': {
+        const { instance = ALL_INSTANCES, preset, position, align, visible, reset } = command;
+        const change: DisplayChange = { ...(preset ? { preset } : {}), ...(position ? { position } : {}), ...(align ? { align } : {}), ...(visible === undefined ? {} : { visible }) };
+        const displays = { ...this.displays };
+        // Without an instance, a reset forgets every page's changes
+        if (reset && instance === ALL_INSTANCES) for (const name of Object.keys(displays)) delete displays[name];
+        if (reset) delete displays[instance];
+        if (Object.keys(change).length) displays[instance] = { ...displays[instance], ...change };
+        this.displays = displays;
+        this.broadcast({ type: 'display', displays });
+        return { data: { displays } };
+      }
       case 'refresh':
         await this.session.refresh();
         return {};

@@ -211,6 +211,11 @@ Ubuntu's AppArmor blocks the user namespaces Electron's sandbox needs, so `just 
 home, so it survives moving the checkout and reinstalling Electron (it asks for sudo, once); `just shell
 --no-sandbox` runs without the sandbox instead.
 
+`sleeve shell` opens the same window from anywhere once `sleeve` is on your `PATH`, with the same options, plus `--now`,
+`--now-position` and `--lyrics-align` for its look. `sleeve shell --managed` is for a program that places the window itself:
+backdrop's planned sleeve engine, as promised in its `docs/specs/sleeve.md`. `sleeve ctl display` changes a page's look
+live (`--preset`, `--position`, `--align`, `--hide`, `--show`, `--reset`), for one `--instance` or for every page.
+
 The overlay takes no keys, since clicks and keys go to the windows under it. `sleeve ctl` sends sleeved one
 command and prints the outcome, for i3 bindings:
 

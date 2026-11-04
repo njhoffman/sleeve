@@ -174,6 +174,31 @@ describe('sleeved', () => {
     expect(client.messages.at(-1)).to.deep.equal({ type: 'reply', id: 'p', ok: true, data: { ref: 'netease:9' } });
   });
 
+  it('passes display changes to every client, keeps them for those who connect later, and forgets them on a reset', async () => {
+    await start();
+    const client = await unixClient();
+    const displays = () => (client.messages.filter(message => message.type === 'display') as Array<Extract<ServerMessage, { type: 'display' }>>).at(-1)?.displays;
+    await until(() => client.messages.some(message => message.type === 'players'));
+    expect(displays()).to.equal(undefined);
+    client.send({ type: 'display', instance: 'one', preset: 'full', id: 1 });
+    await until(() => displays()?.one?.preset === 'full');
+    client.send({ type: 'display', instance: 'one', position: 'bottom-left', visible: false, id: 2 });
+    client.send({ type: 'display', align: 'center', id: 3 });
+    await until(() => displays()?.['*']?.align === 'center');
+    expect(displays()).to.deep.equal({ one: { preset: 'full', position: 'bottom-left', visible: false }, '*': { align: 'center' } });
+
+    const later = await unixClient();
+    await until(() => later.messages.some(message => message.type === 'players'));
+    const greeting = later.messages.map(message => message.type);
+    expect(greeting.indexOf('display')).to.be.lessThan(greeting.indexOf('players')).and.greaterThan(-1);
+
+    client.send({ type: 'display', instance: 'one', reset: true, id: 4 });
+    await until(() => displays()?.one === undefined);
+    expect(displays()).to.deep.equal({ '*': { align: 'center' } });
+    client.send({ type: 'display', reset: true, id: 5 });
+    await until(() => Object.keys(displays()!).length === 0);
+  });
+
   it('seeks in the player for a client, and replies with the failure when it cannot', async () => {
     await start();
     const client = await unixClient();

@@ -9,6 +9,7 @@ import { DEFAULT_DELAY_MS, DEFAULT_JOBS } from '../core/tagger.ts';
 import { DEFAULT_HOST, DEFAULT_PORT } from '../daemon/paths.ts';
 import { ctlCommand, type CtlOptions } from './ctl.ts';
 import { lineCommand, type LineOptions } from './line.ts';
+import { shellCommand } from './shell.ts';
 import { daemonCommand, type DaemonCommandOptions } from './daemon.ts';
 import { FORMATS, lyricsCommand, type Io, type LyricsOptions } from './lyrics.ts';
 import { nowCommand, type NowOptions } from './now.ts';
@@ -98,13 +99,29 @@ export function buildProgram(io: Io, setExit: (code: number) => void): Command {
     });
 
   program.command('ctl')
-    .description('Tell the running sleeved what to do with what plays, e.g. from an i3 binding: nudge <ms>, offset <ms>, pick <provider:id|n>, unpick, refresh, candidates')
-    .argument('<action>', 'nudge, offset, pick, mark, unpick, refresh or candidates')
+    .description('Tell the running sleeved what to do with what plays, e.g. from an i3 binding: nudge <ms>, offset <ms>, pick <provider:id|n>, unpick, refresh, candidates, display')
+    .argument('<action>', 'nudge, offset, pick, mark, unpick, refresh, candidates or display')
     .argument('[args...]', 'milliseconds for nudge and offset (+100, -250; offset 0 removes it), a candidate for pick')
     .option('--socket <path>', 'sleeved\'s Unix socket (default: $XDG_RUNTIME_DIR/sleeve/sleeved.sock)')
     .option('--json', 'with candidates, print them all as JSON')
+    .option('--instance <name>', 'with display: only the page of this instance (the shell\'s --instance); otherwise every page')
+    .option('--preset <name>', 'with display: lyrics, minimal or full')
+    .option('--position <place>', 'with display: where the panel goes, e.g. bottom-left')
+    .option('--align <side>', 'with display: left, center or right, for the lyrics')
+    .option('--hide', 'with display: hide the page without closing it')
+    .option('--show', 'with display: show it again')
+    .option('--reset', 'with display: forget the changes made, for this instance or for every page')
     .action(async (action: string, args: string[], options: CtlOptions) => {
       setExit(await ctlCommand(action, args, options, io));
+    });
+
+  program.command('shell')
+    .description('Open the Electron window: an overlay, --window, or --managed for a program that places it (see docs/ for backdrop). Its options follow, and go to the shell')
+    .allowUnknownOption()
+    .allowExcessArguments()
+    .helpOption(false)
+    .action(async (_options: unknown, command: Command) => {
+      setExit(await shellCommand(command.args, io));
     });
 
   program.command('line')

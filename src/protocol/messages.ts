@@ -10,6 +10,26 @@ import type { PlaybackState, PlayingTrack } from '../players/types.ts';
 
 export const PROTOCOL_VERSION = 1;
 
+// What a page shows besides the lyrics, and where
+export const NOW_PRESETS = ['lyrics', 'minimal', 'full'] as const;
+export const NOW_POSITIONS = ['top-left', 'top-center', 'top-right', 'center-left', 'center-right', 'bottom-left', 'bottom-center', 'bottom-right'] as const;
+export const LYRICS_ALIGNS = ['left', 'center', 'right'] as const;
+export type NowPreset = typeof NOW_PRESETS[number];
+export type NowPosition = typeof NOW_POSITIONS[number];
+export type LyricsAlign = typeof LYRICS_ALIGNS[number];
+
+// Changes to how pages look, over what their URL and stylesheet say, until sleeved restarts
+export interface DisplayChange {
+  preset?: NowPreset;
+  position?: NowPosition;
+  align?: LyricsAlign;
+  // false hides the page without closing it
+  visible?: boolean;
+}
+// For every page, and by the instance a page names (?instance=); an instance's change wins for it
+export const ALL_INSTANCES = '*';
+export type Displays = Record<string, DisplayChange>;
+
 // Where playback is: positionMs at `at`, a wall-clock time (epoch milliseconds, Date.now()), running on at
 // `rate` while playing. Daemon and clients share the machine and so its wall clock, which makes the position
 // exact whatever the message's delay.
@@ -77,6 +97,12 @@ export interface LineMessage {
   line: WireLine;
 }
 
+// Every change in force, sent when one is made, and on connecting when there are any
+export interface DisplayMessage {
+  type: 'display';
+  displays: Displays;
+}
+
 export interface ReplyMessage {
   type: 'reply';
   // The command's id, when it gave one
@@ -86,7 +112,7 @@ export interface ReplyMessage {
   data?: unknown;
 }
 
-export type ServerMessage = HelloMessage | PlaybackMessage | LyricsMessage | OffsetMessage | PlayersMessage | LineMessage | ReplyMessage;
+export type ServerMessage = HelloMessage | PlaybackMessage | LyricsMessage | OffsetMessage | PlayersMessage | LineMessage | DisplayMessage | ReplyMessage;
 
 // Client to daemon. Every command is answered with a reply carrying its id.
 
@@ -101,16 +127,18 @@ export interface MarkCommand extends Command { type: 'mark'; mark: TrackMark }
 export interface UnpickCommand extends Command { type: 'unpick' }
 // Plays from ms into the track playing, in the player playing it
 export interface SeekCommand extends Command { type: 'seek'; ms: number }
+// Changes how one instance's page looks, or every page's without one; reset forgets the changes made for it
+export interface DisplayCommand extends Command, DisplayChange { type: 'display'; instance?: string; reset?: boolean }
 export interface RefreshCommand extends Command { type: 'refresh' }
 export interface CandidatesCommand extends Command { type: 'candidates' }
 // Sends the playback, lyrics and players messages again (and the line, to a subscriber)
 export interface StateCommand extends Command { type: 'state' }
 export interface SubscribeCommand extends Command { type: 'subscribe'; lines: boolean }
 
-export type ClientCommand = NudgeCommand | OffsetCommand | PickCommand | MarkCommand | UnpickCommand | SeekCommand | RefreshCommand | CandidatesCommand
+export type ClientCommand = NudgeCommand | OffsetCommand | PickCommand | MarkCommand | UnpickCommand | SeekCommand | DisplayCommand | RefreshCommand | CandidatesCommand
   | StateCommand | SubscribeCommand;
 
-export const COMMANDS: ReadonlyArray<ClientCommand['type']> = ['nudge', 'offset', 'pick', 'mark', 'unpick', 'seek', 'refresh', 'candidates', 'state', 'subscribe'];
+export const COMMANDS: ReadonlyArray<ClientCommand['type']> = ['nudge', 'offset', 'pick', 'mark', 'unpick', 'seek', 'display', 'refresh', 'candidates', 'state', 'subscribe'];
 
 // A command from untrusted JSON text, or why it is not one
 export function parseCommand(text: string): { command: ClientCommand } | { error: string; id?: string | number } {
@@ -131,6 +159,15 @@ export function parseCommand(text: string): { command: ClientCommand } | { error
   if (type === 'pick' && (typeof record.ref !== 'string' || !record.ref)) return failed('pick needs ref, as provider:id');
   if (type === 'mark' && record.mark !== 'none' && record.mark !== 'instrumental') return failed('mark needs mark, none or instrumental');
   if (type === 'seek' && (!Number.isInteger(record.ms) || (record.ms as number) < 0)) return failed('seek needs ms, whole milliseconds, not negative');
+  if (type === 'display') {
+    if (record.instance !== undefined && (typeof record.instance !== 'string' || !record.instance)) return failed('display needs instance to be a name');
+    if (record.preset !== undefined && !(NOW_PRESETS as readonly unknown[]).includes(record.preset)) return failed(`display needs preset to be ${NOW_PRESETS.join(', ')}`);
+    if (record.position !== undefined && !(NOW_POSITIONS as readonly unknown[]).includes(record.position)) return failed(`display needs position to be ${NOW_POSITIONS.join(', ')}`);
+    if (record.align !== undefined && !(LYRICS_ALIGNS as readonly unknown[]).includes(record.align)) return failed(`display needs align to be ${LYRICS_ALIGNS.join(', ')}`);
+    if (record.visible !== undefined && typeof record.visible !== 'boolean') return failed('display needs visible to be true or false');
+    if (record.reset !== undefined && typeof record.reset !== 'boolean') return failed('display needs reset to be true or false');
+    if (['preset', 'position', 'align', 'visible', 'reset'].every(key => record[key] === undefined)) return failed('display needs something to change');
+  }
   if (type === 'subscribe' && typeof record.lines !== 'boolean') return failed('subscribe needs lines, true or false');
   return { command: record as unknown as ClientCommand };
 }

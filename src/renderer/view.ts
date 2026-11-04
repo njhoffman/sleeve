@@ -1,5 +1,6 @@
 import type { LyricsResult, ScoredCandidate } from '../core/types.ts';
 import type { NowState } from '../now/state.ts';
+import { LYRICS_ALIGNS, NOW_POSITIONS, NOW_PRESETS, type DisplayChange, type LyricsAlign, type NowPosition, type NowPreset } from '../protocol/messages.ts';
 import type { OverlayColors } from './contrast.ts';
 
 // What the renderer shows, worked out without the DOM, so it is tested in Node.
@@ -84,27 +85,22 @@ export function candidateEntries(result: LyricsResult, shown: ScoredCandidate | 
 
 // What the page shows besides the lyrics, and where: from the URL (?now=, ?now-position=, ?lyrics-align=), else from CSS
 // variables (--now-preset, --now-position, --lyrics-align). The overlay shows only lyrics unless told otherwise.
-export const NOW_PRESETS = ['lyrics', 'minimal', 'full'] as const;
-export const NOW_POSITIONS = ['top-left', 'top-center', 'top-right', 'center-left', 'center-right', 'bottom-left', 'bottom-center', 'bottom-right'] as const;
-export const LYRICS_ALIGNS = ['left', 'center', 'right'] as const;
-export type NowPreset = typeof NOW_PRESETS[number];
-export type NowPosition = typeof NOW_POSITIONS[number];
-export type LyricsAlign = typeof LYRICS_ALIGNS[number];
-
 export interface DisplaySettings {
   preset: NowPreset;
   position: NowPosition;
   align: LyricsAlign;
+  visible: boolean;
 }
 
 // Each setting from the first place that names a known value: given (a live change), the URL, then the variable
-export function displaySettings(read: (name: string) => string, params: { get(name: string): string | null }, overlay: boolean, given: Partial<DisplaySettings> = {}): DisplaySettings {
+export function displaySettings(read: (name: string) => string, params: { get(name: string): string | null }, overlay: boolean, given: DisplayChange = {}): DisplaySettings {
   const choose = <T extends string>(known: readonly T[], fallback: T, ...values: Array<string | null | undefined>): T =>
     values.map(value => value?.trim()).find((value): value is T => (known as readonly string[]).includes(value ?? '')) ?? fallback;
   return {
     preset: choose(NOW_PRESETS, overlay ? 'lyrics' : 'minimal', given.preset, params.get('now'), read('--now-preset')),
     position: choose(NOW_POSITIONS, 'top-left', given.position, params.get('now-position'), read('--now-position')),
-    align: choose(LYRICS_ALIGNS, 'left', given.align, params.get('lyrics-align'), read('--lyrics-align'))
+    align: choose(LYRICS_ALIGNS, 'left', given.align, params.get('lyrics-align'), read('--lyrics-align')),
+    visible: given.visible ?? true
   };
 }
 

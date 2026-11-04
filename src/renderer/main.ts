@@ -164,14 +164,18 @@ function updateFlow(now: number, dt: number): void {
 // The now-playing panel and the lyrics' alignment, read as often as the flow's settings
 
 const pageParams = new URLSearchParams(location.search);
+const instance = pageParams.get('instance');
 let display: DisplaySettings | null = null;
+let displaysSeen = 0;
 let thumbnailKey: string | null | undefined = undefined;
 let shownTimes = '';
 
 function readDisplay(): void {
-  const next = displaySettings(setting, pageParams, overlay);
-  if (display && next.preset === display.preset && next.position === display.position && next.align === display.align) return;
+  const next = displaySettings(setting, pageParams, overlay, connection.mirror.displayFor(instance));
+  if (display && next.preset === display.preset && next.position === display.position && next.align === display.align && next.visible === display.visible) return;
+  if (display && !display.visible && next.visible) snap = true;
   display = next;
+  document.documentElement.classList.toggle('page-hidden', !next.visible);
   const { dataset } = document.documentElement;
   dataset.now = next.preset;
   dataset.nowPosition = next.position;
@@ -356,12 +360,18 @@ function render(now: number): void {
   const dt = lastFrame ? Math.min(now - lastFrame, 250) : 0;
   lastFrame = now;
   const state: NowState = connection.mirror.current();
-  updateArt(state);
-  if (now - settingsReadAt >= SETTINGS_READ_MS) {
+  if (now - settingsReadAt >= SETTINGS_READ_MS || connection.mirror.displaysSeen !== displaysSeen) {
     settingsReadAt = now;
+    displaysSeen = connection.mirror.displaysSeen;
     readDisplay();
     if (!overlay) readFlow(now);
   }
+  // Told to hide by whatever places this page: nothing to draw until it shows again
+  if (!display!.visible) {
+    requestAnimationFrame(render);
+    return;
+  }
+  updateArt(state);
   updateFlow(now, dt);
   const view = status(state, connection.connected);
   const shown = nowText(state, display!.preset, view.title);

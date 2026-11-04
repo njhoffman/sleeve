@@ -45,6 +45,8 @@
 
 * { box-sizing: border-box; }
 
+html.page-hidden body { visibility: hidden; }
+
 html, body {
   margin: 0;
   height: 100%;

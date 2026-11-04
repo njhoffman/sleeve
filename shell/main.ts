@@ -3,11 +3,13 @@ import { execFile } from 'node:child_process';
 import { mkdirSync, readFileSync, watch, writeFileSync, type FSWatcher } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { createInterface } from 'node:readline';
 import {
   backdropRunning, backdropStatePath, chooseMonitor, chooseOverlay, formatGeometry, overlayColors, overlayGeometry, parseMonitors,
   parseShellArgs, readBackdropState, rendererUrl, waitForBackdrop, type BackdropMonitor, type BackdropState, type Geometry, type ShellOptions
 } from '../src/shell/layout.ts';
 import { compositorRunning, markOverlay, stackSelf } from './x11.ts';
+import { validColors } from '../src/renderer/contrast.ts';
 
 // sleeve's window: the renderer sleeved serves, either as an overlay on the desktop (transparent, click-through,
 // unmanaged; stacked by backdrop just above the wallpaper, or by sleeve itself when backdrop does not run) or as a
@@ -160,7 +162,7 @@ async function openOverlay(options: ShellOptions): Promise<BrowserWindow> {
   const window = await overlayWindow(bounds, options.position);
   const id = windowId(window);
   const onState = forwardColors(window, id, state!);
-  load(window, rendererUrl(options.url, 'overlay', options.estimateWords));
+  load(window, rendererUrl(options.url, 'overlay', options.estimateWords, options));
   window.once('show', () => {
     restack();
     // The compositor and Chromium may map in stages; once more after they settle
@@ -177,7 +179,7 @@ async function openOverlay(options: ShellOptions): Promise<BrowserWindow> {
 // keeps its shadowed text
 async function openSelfOverlay(options: ShellOptions, bounds: Geometry, where: string): Promise<BrowserWindow> {
   const window = await overlayWindow(bounds, null);
-  load(window, rendererUrl(options.url, 'overlay', options.estimateWords));
+  load(window, rendererUrl(options.url, 'overlay', options.estimateWords, options));
   window.once('show', () => {
     stackSelf(windowId(window), options.position, log).then(stacking => {
       setTimeout(() => stacking.restack(), 1000);
@@ -186,6 +188,35 @@ async function openSelfOverlay(options: ShellOptions, bounds: Geometry, where: s
   });
   window.showInactive();
   log(`overlay ${where}, stacked by sleeve ${options.position === 'above' ? 'over every window' : 'above the desktop'} (backdrop not used)`);
+  return window;
+}
+
+// The overlay for a program that places it (--managed): it finds the window by --title, stacks it, and sends the
+// wallpaper colors behind it down stdin, as one JSON object a line ({ background, main }). Nothing here touches stacking.
+async function openManaged(options: ShellOptions): Promise<BrowserWindow> {
+  const window = await overlayWindow(options.geometry!, null);
+  if (options.title) {
+    window.setTitle(options.title);
+    window.on('page-title-updated', event => event.preventDefault());
+  }
+  let colors: unknown = null;
+  const send = () => { if (colors && !window.isDestroyed()) window.webContents.send('sleeve:colors', colors); };
+  const wanted = () => send();
+  ipcMain.on('sleeve:colors-wanted', wanted);
+  window.on('closed', () => ipcMain.off('sleeve:colors-wanted', wanted));
+  createInterface({ input: process.stdin }).on('line', line => {
+    try {
+      const next = validColors(JSON.parse(line));
+      if (!next) throw new Error('no background and main colors');
+      colors = next;
+      send();
+    } catch (error) {
+      log(`colors on stdin: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  });
+  load(window, rendererUrl(options.url, 'overlay', options.estimateWords, options));
+  window.showInactive();
+  log(`managed overlay at ${formatGeometry(options.geometry!)}${options.title ? `, titled ${options.title}` : ''}`);
   return window;
 }
 
@@ -225,7 +256,7 @@ function openWindow(options: ShellOptions): BrowserWindow {
   };
   window.on('moved', save);
   window.on('resized', save);
-  load(window, rendererUrl(options.url, 'window', options.estimateWords));
+  load(window, rendererUrl(options.url, 'window', options.estimateWords, options));
   return window;
 }
 
@@ -239,7 +270,7 @@ app.whenReady().then(async () => {
     return;
   }
   try {
-    await (options.mode === 'overlay' ? openOverlay(options) : openWindow(options));
+    await (options.managed ? openManaged(options) : options.mode === 'overlay' ? openOverlay(options) : openWindow(options));
   } catch (error) {
     log(error instanceof Error ? error.message : String(error));
     app.exit(1);

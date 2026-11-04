@@ -6,6 +6,18 @@ All notable changes to sleeve are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.33.0] - 2026-11-04
+
+### Added
+
+- `sleeve shell` opens the Electron window from anywhere, with `--now`, `--now-position` and `--lyrics-align` for its look.
+- `sleeve shell --managed` opens it for a program that places it: at the geometry and with the title given, and it stacks and
+  marks nothing. It takes wallpaper colors on stdin. This is sleeve's side of running as a backdrop visualizer engine; the
+  contract is in backdrop's `docs/specs/sleeve.md`.
+- `sleeve ctl display` changes how a page looks without a reload (`--preset`, `--position`, `--align`, `--hide`, `--show`,
+  `--reset`), for one `--instance` or every page, through a new `display` protocol command (an addition; the protocol
+  version stays 1).
+
 ## [0.32.0] - 2026-11-04
 
 ### Added

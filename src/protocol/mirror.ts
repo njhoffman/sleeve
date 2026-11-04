@@ -2,7 +2,7 @@ import type { NowState } from '../now/state.ts';
 import { lineAt, type CurrentLine } from '../now/lines.ts';
 import { monotonic, positionAt } from '../players/clock.ts';
 import { Listeners, type Playback } from '../players/types.ts';
-import type { PlayerProblem, ServerMessage, WirePlayback } from './messages.ts';
+import { ALL_INSTANCES, type DisplayChange, type Displays, type PlayerProblem, type ServerMessage, type WirePlayback } from './messages.ts';
 
 // The daemon's session as a client sees it, rebuilt from the messages it sends: the same NowState, position and
 // current line NowPlaying gives in-process, so a display does not care which one it reads. Free of Node imports,
@@ -26,6 +26,9 @@ export class SessionMirror {
   private problemList: PlayerProblem[] = [];
   private listeners = new Listeners<NowState>();
   private clocks: MirrorClocks;
+  private displays: Displays = {};
+  // Bumped by every change to displays, for a page to notice
+  displaysSeen = 0;
   version: string | null = null;
   protocol: number | null = null;
 
@@ -33,11 +36,21 @@ export class SessionMirror {
     this.clocks = clocks;
   }
 
+  // The changes for a page naming this instance (null: none)
+  displayFor(instance: string | null): DisplayChange {
+    return { ...this.displays[ALL_INSTANCES], ...(instance ? this.displays[instance] : {}) };
+  }
+
   // Applies a message; whether it changed the state
   apply(message: ServerMessage): boolean {
     switch (message.type) {
       case 'hello':
         this.version = message.version;
+        // A daemon starting over has forgotten them
+        if (Object.keys(this.displays).length) {
+          this.displays = {};
+          this.displaysSeen++;
+        }
         this.protocol = message.protocol;
         return false;
       case 'playback':
@@ -52,6 +65,10 @@ export class SessionMirror {
         break;
       case 'players':
         this.problemList = message.problems;
+        return false;
+      case 'display':
+        this.displays = message.displays;
+        this.displaysSeen++;
         return false;
       default:
         return false;

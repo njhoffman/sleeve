@@ -17,6 +17,12 @@ describe('parseCommand', () => {
     expect(parseCommand('{"type":"subscribe","lines":true}')).to.deep.equal({ command: { type: 'subscribe', lines: true } });
     expect(parseCommand('{"type":"mark","mark":"instrumental"}')).to.deep.equal({ command: { type: 'mark', mark: 'instrumental' } });
     expect(parseCommand('{"type":"mark","mark":"maybe"}')).to.deep.equal({ error: 'mark needs mark, none or instrumental' });
+    expect(parseCommand('{"type":"display","instance":"DP-3-lyrics","preset":"full","position":"bottom-left","align":"center","visible":false}')).to.have.property('command');
+    expect(parseCommand('{"type":"display","reset":true}')).to.have.property('command');
+    expect(parseCommand('{"type":"display"}')).to.deep.equal({ error: 'display needs something to change' });
+    for (const bad of ['{"preset":"huge"}', '{"position":"middle"}', '{"align":"up"}', '{"visible":"no"}', '{"reset":1}', '{"instance":"","preset":"full"}']) {
+      expect(parseCommand(JSON.stringify({ type: 'display', ...JSON.parse(bad) })), bad).to.have.property('error');
+    }
     expect(parseCommand('{"type":"seek","ms":61500}')).to.deep.equal({ command: { type: 'seek', ms: 61_500 } });
     for (const ms of [-1, 1.5, '10', null]) expect(parseCommand(JSON.stringify({ type: 'seek', ms }))).to.deep.equal({ error: 'seek needs ms, whole milliseconds, not negative' });
     for (const type of ['unpick', 'refresh', 'candidates', 'state']) expect(parseCommand(JSON.stringify({ type }))).to.have.property('command');
@@ -35,6 +41,21 @@ describe('parseCommand', () => {
 });
 
 describe('SessionMirror', () => {
+  it('gives a page its instance\'s display changes over every page\'s, and forgets them when the daemon starts over', () => {
+    const mirror = new SessionMirror();
+    expect(mirror.displayFor('one')).to.deep.equal({});
+    const seen = mirror.displaysSeen;
+    mirror.apply({ type: 'display', displays: { '*': { preset: 'minimal', align: 'center' }, one: { preset: 'full' } } });
+    expect(mirror.displaysSeen).to.be.greaterThan(seen);
+    expect(mirror.displayFor('one')).to.deep.equal({ preset: 'full', align: 'center' });
+    expect(mirror.displayFor('two')).to.deep.equal({ preset: 'minimal', align: 'center' });
+    expect(mirror.displayFor(null)).to.deep.equal({ preset: 'minimal', align: 'center' });
+    const before = mirror.displaysSeen;
+    mirror.apply({ type: 'hello', protocol: 1, version: 'x' });
+    expect(mirror.displayFor('one')).to.deep.equal({});
+    expect(mirror.displaysSeen).to.be.greaterThan(before);
+  });
+
   it('puts the daemon\'s wall-clock stamp on the local monotonic clock', () => {
     // Sent 250 ms ago by the wall clock; locally that is monotonic 750
     const playback = fromWire({ player: 'mpd', state: 'playing', track, positionMs: 5000, at: 1_000_000, rate: 1 }, { wall: () => 1_000_250, monotonic: () => 1000 });
