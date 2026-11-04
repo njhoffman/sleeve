@@ -6,6 +6,12 @@ All notable changes to sleeve are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.30.1] - 2026-11-04
+
+### Fixed
+
+- With `sleeve-art-flow`, a track with a cover coming after one without no longer fades in from the older cover.
+
 ## [0.30.0] - 2026-11-04
 
 ### Added

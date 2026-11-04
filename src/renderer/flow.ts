@@ -116,6 +116,11 @@ export class CoverFlow {
     this.lastDraw = -Infinity;
   }
 
+  // No cover any more: the next one comes in by itself, with no fade from this one
+  forgetCover(): void {
+    this.cover = null;
+  }
+
   // Draws when the frame rate asks for one
   draw(now: number, view: FlowView): void {
     const gl = this.gl;

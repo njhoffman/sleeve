@@ -82,6 +82,8 @@ function fadeArt(keep: HTMLCanvasElement | null = null): void {
 
 function clearArt(): void {
   fadeArt();
+  latestCover = null;
+  flow?.forgetCover();
   document.documentElement.classList.remove('art');
   setTheme(null);
 }
