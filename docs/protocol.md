@@ -87,6 +87,7 @@ back. Replies may come after the broadcasts the command caused.
 | `candidates` |                     | asks every provider for the track (the cache still answers for online ones)                  | a `LyricsResult`       |
 | `pick`       | `ref` (`provider:id`)| shows that candidate for the track from now on, like `sleeve pick`, and reloads              | `{ ref }`              |
 | `mark`       | `mark` (`none`, `instrumental`) | shows nothing for the track from now on, like `sleeve pick --none`, and reloads  | `{ mark }`             |
+| `seek`       | `ms`                | plays from `ms` into the track, kept within it, in the player playing it                     | `{ positionMs }`       |
 | `unpick`     |                     | forgets the pick or mark and reloads                                                         | `{ removed }`          |
 | `refresh`    |                     | looks the track up again, asking online providers instead of their stored answers            |                        |
 | `state`      |                     | sends `playback`, `lyrics` and `players` again (and `line`, to a subscriber)                 |                        |

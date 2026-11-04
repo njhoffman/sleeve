@@ -174,6 +174,19 @@ describe('sleeved', () => {
     expect(client.messages.at(-1)).to.deep.equal({ type: 'reply', id: 'p', ok: true, data: { ref: 'netease:9' } });
   });
 
+  it('seeks in the player for a client, and replies with the failure when it cannot', async () => {
+    await start();
+    const client = await unixClient();
+    client.send({ type: 'seek', ms: 61_500, id: 1 });
+    await until(() => client.messages.some(message => message.type === 'reply' && message.id === 1));
+    expect(client.messages.find(message => message.type === 'reply' && message.id === 1)).to.deep.include({ ok: true, data: { positionMs: 61_500 } });
+    expect(player.seeks).to.deep.equal([61_500]);
+    player.seek = async () => { throw new Error('refused'); };
+    client.send({ type: 'seek', ms: 1, id: 2 });
+    await until(() => client.messages.some(message => message.type === 'reply' && message.id === 2));
+    expect(client.messages.find(message => message.type === 'reply' && message.id === 2)).to.deep.include({ ok: false, error: 'refused' });
+  });
+
   it('sends subscribers each line as it comes due, offset included', async () => {
     answer = { ...answer, best: candidate('lrclib', '1', [40, 80, 120]) };
     await start();

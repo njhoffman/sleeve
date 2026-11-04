@@ -252,6 +252,18 @@ export class MpdPlayer implements Player {
     });
   }
 
+  // On a connection of its own, since the other sits in idle, where any command but noidle ends it. MPD's idle
+  // then reports the move, so the position comes as any other change.
+  async seek(positionMs: number): Promise<void> {
+    const connection = await MpdConnection.open(this.options);
+    try {
+      if (this.options.password) await connection.command(`password ${quoteArgument(this.options.password)}`);
+      await connection.command(`seekcur ${(positionMs / 1000).toFixed(3)}`);
+    } finally {
+      connection.close();
+    }
+  }
+
   private update(playback: Playback | null): void {
     if (playback === null && this.playback === null) return;
     this.playback = playback;

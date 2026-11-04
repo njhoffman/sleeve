@@ -127,6 +127,37 @@ describe('NowPlaying', () => {
   });
 });
 
+describe('NowPlaying seek', () => {
+  const playback = (player: string, state: Playback['state']): Playback => ({ player, state, track: spotifyTrack, positionMs: 0, at: 0, rate: 1, changedAt: 0 });
+
+  it('seeks in the active player, kept within the track', async () => {
+    const mpd = fakePlayer('mpd', { playback: playback('mpd', 'paused') });
+    const spotify = fakePlayer('spotify', { playback: playback('spotify', 'playing') });
+    const session = new NowPlaying(new PlayerHub([mpd, spotify]), { lookup: async () => result() });
+    session.start();
+    await session.settled();
+    expect(await session.seek(61_500)).to.equal(61_500);
+    expect(await session.seek(999_000)).to.equal(200_000);
+    expect(spotify.seeks).to.deep.equal([61_500, 200_000]);
+    expect(mpd.seeks).to.deep.equal([]);
+    session.close();
+  });
+
+  it('refuses when nothing plays, and passes on a player\'s refusal', async () => {
+    const player = fakePlayer('spotify');
+    const session = new NowPlaying(new PlayerHub([player]), { lookup: async () => result() });
+    session.start();
+    await session.settled();
+    const refusal = () => session.seek(1000).then(() => '', error => String(error));
+    expect(await refusal()).to.include('Nothing playing');
+    player.seek = async () => { throw new Error('spotify cannot seek in this track'); };
+    (session as unknown as { state: NowState }).state = { ...session.current(), playback: playback('spotify', 'playing') };
+    player.current = () => playback('spotify', 'playing');
+    expect(await refusal()).to.include('cannot seek');
+    session.close();
+  });
+});
+
 describe('NowPlaying commands', () => {
   const playing = (track: PlayingTrack): Playback => ({ player: 'spotify', state: 'playing', track, positionMs: 0, at: 0, rate: 1, changedAt: 0 });
   const other: ScoredCandidate = { ...best, provider: 'netease', id: '9', score: 0.4 };

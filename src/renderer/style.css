@@ -117,6 +117,8 @@ html:not(.art) #art::after { display: none; }
   transition: color 220ms ease, transform 320ms cubic-bezier(0.2, 0.7, 0.2, 1);
 }
 
+#viewport:not(.unsynced) .line { cursor: pointer; }
+html.overlay #viewport .line { cursor: default; }
 .line.past { color: var(--past); }
 .line.current { color: var(--text); transform: scale(1); }
 .line.blank { min-height: 1em; }

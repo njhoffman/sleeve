@@ -3,13 +3,13 @@ import { nextLineTime, wordFill, wordTexts, wordTimings } from '../now/lines.ts'
 import type { NowState } from '../now/state.ts';
 import { Connection } from './connection.ts';
 import { parseHex, textTheme, themeVariables, validColors } from './contrast.ts';
-import { candidateEntries, coverColors, follow, formatOffset, NO_SCROLL_BACK, progress, scrollBackOffset, status, wheel, type CandidateEntry, type ScrollBack } from './view.ts';
+import { candidateEntries, coverColors, follow, formatOffset, lineStart, NO_SCROLL_BACK, progress, scrollBackOffset, status, wheel, type CandidateEntry, type ScrollBack } from './view.ts';
 
 // The renderer: sleeved's session as scrolling lyrics. The current line is worked out every frame from the
 // mirrored playback clock, so line changes land on the frame they are due whatever the socket does; the scroll
 // follows its target with a time constant rather than a CSS transition, so a new target (next line, seek, nudge)
 // carries on from where the scroll is instead of restarting. The wheel scrolls back through the lyrics for a few
-// seconds, and a click picks a candidate in the pick panel; the overlay takes no mouse at all. Outside the overlay
+// seconds, a click on a line plays from it, and a click picks a candidate in the pick panel; the overlay takes no mouse at all. Outside the overlay
 // the track's cover lies behind the lyrics (see #art in style.css for what /user.css can set).
 
 const NUDGE_MS = 100;
@@ -355,6 +355,18 @@ document.addEventListener('keydown', event => {
   else if (key === 'Escape') help.hidden = true;
   else return;
   event.preventDefault();
+});
+
+// A click on a line plays from it, and the view returns to playback. Dragging over text to select it does not count.
+linesBox.addEventListener('click', event => {
+  if (overlay || !picker.hidden || !getSelection()?.isCollapsed) return;
+  const line = (event.target as Element).closest('.line');
+  const ms = lineStart(shownMessage ? undefined : shownLyrics?.lyrics.lines[lineElements.indexOf(line as HTMLDivElement)], connection.mirror.current().result?.offsetMs ?? 0);
+  if (ms === null) return;
+  back = NO_SCROLL_BACK;
+  void connection.send({ type: 'seek', ms }).then(reply => {
+    if (!reply.ok) showToast(reply.error ?? 'Failed');
+  });
 });
 
 // The wheel scrolls back (or on) through the lyrics, as far as the first and last line

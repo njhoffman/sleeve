@@ -42,6 +42,8 @@ export interface Player {
   // null while the player is not running or cannot be reached
   current(): Playback | null;
   onChange(listener: (playback: Playback | null) => void): () => void;
+  // Moves playback within the track playing; rejects when the player refuses. The new position comes as a change.
+  seek(positionMs: number): Promise<void>;
   // Why the player is unreachable, when it is
   problem(): string | null;
   close(): Promise<void>;

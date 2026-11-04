@@ -73,6 +73,27 @@ describe('MpdPlayer', () => {
     expect(seen[2]).to.deep.include({ state: 'stopped', track: null });
   });
 
+  it('seeks on a connection of its own, leaving idle alone, and the new position comes as a change', async () => {
+    await open();
+    await player.seek(61_500);
+    expect(server.commands).to.include('seekcur 61.500');
+    await until(() => player.current()!.positionMs === 61_500);
+    await server.idling();
+  });
+
+  it('sends the password before seeking, and rejects when MPD refuses', async () => {
+    await server.close();
+    server = await fakeMpd(structuredClone(playing), { password: 'pw' });
+    await open({ password: 'pw' });
+    server.commands.length = 0;
+    await player.seek(1000);
+    expect(server.commands.slice(0, 2)).to.deep.equal(['password "pw"', 'seekcur 1.000']);
+    server.state.status.state = 'stop';
+    let failure: unknown;
+    await player.seek(1000).catch(error => { failure = error; });
+    expect(String(failure)).to.include('Not playing');
+  });
+
   it('reports a lost connection as no playback and reconnects', async () => {
     await open();
     const seen: Array<Playback | null> = [];

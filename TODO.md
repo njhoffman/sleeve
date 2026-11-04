@@ -329,9 +329,10 @@ build items that depend on it, listed in the later projects.
       Done in 0.21.0 without the seek (see Click a line to seek): candidates take a click, and the wheel shifts
       the scroll target (`wheel`, `scrollBackOffset` in view.ts), kept between first and last line, until 4 s
       after the last turn. Window mode and browsers only; the overlay stays click-through.
-- [ ] **Click a line to seek.** (p3) [feature] A `seek` protocol message (messages.ts and docs/protocol.md; an
+- [x] **Click a line to seek.** (p3) [feature] A `seek` protocol message (messages.ts and docs/protocol.md; an
       addition, so PROTOCOL_VERSION stays), sent to the active player: MPD `seekcur`, MPRIS `SetPosition`
       (Spotify supports it). Then a click on a line in the renderer seeks to its time, offset applied.
+      Done in 0.28.0; tried in the renderer with a fake player and against the fake MPD, not yet against a real MPD or Spotify.
 - [x] **Three window modes.** (p2) [feature] `overlay` under backdrop: backdrop places and stacks the window like a
       GLava instance. `overlay` without backdrop: sleeve stacks its own transparent, click-through,
       desktop-type window above the root. `window`: borderless, focusable, resizable, remembers its

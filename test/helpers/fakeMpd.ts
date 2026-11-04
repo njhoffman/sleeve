@@ -49,6 +49,15 @@ export async function fakeMpd(state: FakeMpdState, { password }: { password?: st
         else if (command === 'status') socket.write(reply(state.status));
         else if (command === 'currentsong') socket.write(reply(state.song));
         else if (command.startsWith('idle')) idlers.add(socket);
+        else if (command.startsWith('seekcur ')) {
+          if (state.status.state === 'stop') socket.write('ACK [55@0] {seekcur} Not playing\n');
+          else {
+            state.status.elapsed = command.slice('seekcur '.length);
+            socket.write('OK\n');
+            for (const idler of idlers) idler.write('changed: player\nOK\n');
+            idlers.clear();
+          }
+        }
         else if (/^playlistid \d+$/.test(command)) {
           const song = state.queue?.[command.slice('playlistid '.length)];
           socket.write(song ? reply(song) : 'ACK [50@0] {playlistid} No such song\n');

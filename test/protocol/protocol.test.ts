@@ -17,6 +17,8 @@ describe('parseCommand', () => {
     expect(parseCommand('{"type":"subscribe","lines":true}')).to.deep.equal({ command: { type: 'subscribe', lines: true } });
     expect(parseCommand('{"type":"mark","mark":"instrumental"}')).to.deep.equal({ command: { type: 'mark', mark: 'instrumental' } });
     expect(parseCommand('{"type":"mark","mark":"maybe"}')).to.deep.equal({ error: 'mark needs mark, none or instrumental' });
+    expect(parseCommand('{"type":"seek","ms":61500}')).to.deep.equal({ command: { type: 'seek', ms: 61_500 } });
+    for (const ms of [-1, 1.5, '10', null]) expect(parseCommand(JSON.stringify({ type: 'seek', ms }))).to.deep.equal({ error: 'seek needs ms, whole milliseconds, not negative' });
     for (const type of ['unpick', 'refresh', 'candidates', 'state']) expect(parseCommand(JSON.stringify({ type }))).to.have.property('command');
   });
 

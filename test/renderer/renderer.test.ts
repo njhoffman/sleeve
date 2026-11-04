@@ -13,7 +13,7 @@ import { NowPlaying } from '../../src/now/session.ts';
 import type { NowState } from '../../src/now/state.ts';
 import { PlayerHub } from '../../src/players/hub.ts';
 import { Connection } from '../../src/renderer/connection.ts';
-import { candidateEntries, coverColors, follow, formatOffset, NO_SCROLL_BACK, progress, reconnectDelay, SCROLL_BACK_MS, scrollBackOffset, status, wheel } from '../../src/renderer/view.ts';
+import { candidateEntries, coverColors, follow, formatOffset, lineStart, NO_SCROLL_BACK, progress, reconnectDelay, SCROLL_BACK_MS, scrollBackOffset, status, wheel } from '../../src/renderer/view.ts';
 import { until } from '../helpers/fakeMpd.ts';
 import { fakePlayer } from '../helpers/players.ts';
 
@@ -48,6 +48,14 @@ describe('renderer sources', () => {
 });
 
 describe('renderer view', () => {
+  it('plays from a line at its time with the offset applied, and only lines with a time', () => {
+    expect(lineStart({ time: 5000 }, 0)).to.equal(5000);
+    expect(lineStart({ time: 5000 }, 250)).to.equal(5250);
+    expect(lineStart({ time: 100 }, -250)).to.equal(0);
+    expect(lineStart({ time: null }, 0)).to.equal(null);
+    expect(lineStart(undefined, 0)).to.equal(null);
+  });
+
   it('follows a target the same at any frame rate, and settles on it', () => {
     let fast = 0;
     for (let frame = 0; frame < 6; frame++) fast = follow(fast, 100, 16, 110);

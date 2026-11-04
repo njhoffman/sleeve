@@ -22,6 +22,8 @@ export interface MprisProxy {
   properties(): Promise<Properties>;
   // In microseconds
   position(): Promise<number>;
+  // SetPosition: in the track with this mpris:trackid, in microseconds
+  setPosition(trackId: string, positionUs: number): Promise<void>;
   onChanged(listener: (changed: Properties) => void): void;
   onSeeked(listener: (positionUs: number) => void): void;
   close(): void;
@@ -260,6 +262,15 @@ export class MprisPlayer implements Player {
         this.listeners.emit(this.playback);
       }
     }, () => {});
+  }
+
+  // Players signal Seeked, and not all of them do it reliably, so the position is also read back
+  async seek(positionMs: number): Promise<void> {
+    const trackId = text((this.props.Metadata as Record<string, unknown> | undefined)?.['mpris:trackid']);
+    if (!this.proxy || !trackId) throw new Error(`${this.name} has no track to seek in`);
+    if (this.props.CanSeek === false) throw new Error(`${this.name} cannot seek in this track`);
+    await this.proxy.setPosition(trackId, Math.round(positionMs * 1000));
+    await this.resync();
   }
 
   async close(): Promise<void> {

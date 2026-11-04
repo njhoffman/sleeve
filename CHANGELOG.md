@@ -6,6 +6,13 @@ All notable changes to sleeve are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.28.0] - 2026-11-03
+
+### Added
+
+- A click on a line in the window plays from that line, with the track's offset applied, in MPD or Spotify. A new
+  `seek` protocol command does the same for any client (an addition; the protocol version stays 1).
+
 ## [0.27.0] - 2026-11-03
 
 ### Added

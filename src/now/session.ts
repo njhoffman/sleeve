@@ -372,6 +372,17 @@ export class NowPlaying {
     return had;
   }
 
+  // Moves playback to positionMs in the track playing, kept within the track; where it asked to go. The position
+  // comes back from the player as a change.
+  async seek(positionMs: number): Promise<number> {
+    const track = this.state.playback?.track;
+    if (!track) throw new Error('Nothing playing');
+    if (!this.source.seek) throw new Error('These players cannot seek');
+    const target = Math.max(0, track.durationMs ? Math.min(positionMs, track.durationMs) : positionMs);
+    await this.source.seek(target);
+    return target;
+  }
+
   // Moves the lyrics shown by deltaMs (positive: later) and remembers it for the track; the new offset, or null
   // when there are no lyrics to move
   nudge(deltaMs: number): number | null {

@@ -82,6 +82,11 @@ export function candidateEntries(result: LyricsResult, shown: ScoredCandidate | 
   }));
 }
 
+// Where a click on a line plays from (ms into the track, offset applied); null for a line without a time
+export function lineStart(line: { time: number | null } | undefined, offsetMs: number): number | null {
+  return typeof line?.time === 'number' ? Math.max(0, line.time + offsetMs) : null;
+}
+
 // Scrolling back through the lyrics by wheel: the wheel moves the view by offset pixels from where playback
 // would put it, until SCROLL_BACK_MS after the last turn, when it returns to the current line (the scroll follows its
 // target, so it glides back). The offset is kept between first and last line: some line always sits at the anchor.

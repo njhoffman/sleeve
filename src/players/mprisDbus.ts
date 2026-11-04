@@ -46,6 +46,7 @@ export function dbusMprisBus(bus: MessageBus = sessionBus()): MprisBus {
       return {
         properties: async () => unwrap(await properties.GetAll(PLAYER)) as Properties,
         position: async () => Number(unwrap(await properties.Get(PLAYER, 'Position'))),
+        setPosition: async (trackId, positionUs) => { await player.SetPosition(trackId, BigInt(positionUs)); },
         onChanged(listener) {
           properties.on('PropertiesChanged', (iface, changed) => {
             if (iface === PLAYER) listener(unwrap(changed) as Properties);

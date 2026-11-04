@@ -99,16 +99,18 @@ export interface OffsetCommand extends Command { type: 'offset'; ms: number }
 export interface PickCommand extends Command { type: 'pick'; ref: string }
 export interface MarkCommand extends Command { type: 'mark'; mark: TrackMark }
 export interface UnpickCommand extends Command { type: 'unpick' }
+// Plays from ms into the track playing, in the player playing it
+export interface SeekCommand extends Command { type: 'seek'; ms: number }
 export interface RefreshCommand extends Command { type: 'refresh' }
 export interface CandidatesCommand extends Command { type: 'candidates' }
 // Sends the playback, lyrics and players messages again (and the line, to a subscriber)
 export interface StateCommand extends Command { type: 'state' }
 export interface SubscribeCommand extends Command { type: 'subscribe'; lines: boolean }
 
-export type ClientCommand = NudgeCommand | OffsetCommand | PickCommand | MarkCommand | UnpickCommand | RefreshCommand | CandidatesCommand
+export type ClientCommand = NudgeCommand | OffsetCommand | PickCommand | MarkCommand | UnpickCommand | SeekCommand | RefreshCommand | CandidatesCommand
   | StateCommand | SubscribeCommand;
 
-export const COMMANDS: ReadonlyArray<ClientCommand['type']> = ['nudge', 'offset', 'pick', 'mark', 'unpick', 'refresh', 'candidates', 'state', 'subscribe'];
+export const COMMANDS: ReadonlyArray<ClientCommand['type']> = ['nudge', 'offset', 'pick', 'mark', 'unpick', 'seek', 'refresh', 'candidates', 'state', 'subscribe'];
 
 // A command from untrusted JSON text, or why it is not one
 export function parseCommand(text: string): { command: ClientCommand } | { error: string; id?: string | number } {
@@ -128,6 +130,7 @@ export function parseCommand(text: string): { command: ClientCommand } | { error
   if ((type === 'nudge' || type === 'offset') && !Number.isInteger(record.ms)) return failed(`${type} needs ms, whole milliseconds`);
   if (type === 'pick' && (typeof record.ref !== 'string' || !record.ref)) return failed('pick needs ref, as provider:id');
   if (type === 'mark' && record.mark !== 'none' && record.mark !== 'instrumental') return failed('mark needs mark, none or instrumental');
+  if (type === 'seek' && (!Number.isInteger(record.ms) || (record.ms as number) < 0)) return failed('seek needs ms, whole milliseconds, not negative');
   if (type === 'subscribe' && typeof record.lines !== 'boolean') return failed('subscribe needs lines, true or false');
   return { command: record as unknown as ClientCommand };
 }

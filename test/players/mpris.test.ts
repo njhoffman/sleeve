@@ -18,12 +18,17 @@ function fakeBus(initial: Properties) {
   let nameListener: (owned: boolean) => void = () => {};
   const changed: Array<(changed: Properties) => void> = [];
   const seeked: Array<(positionUs: number) => void> = [];
+  const setPositions: Array<{ trackId: string; us: number }> = [];
   const bus: MprisBus = {
     async watchName(_name, listener) { nameListener = listener; return owned; },
     async open(): Promise<MprisProxy> {
       return {
         properties: async () => ({ ...props, Position: positionUs }),
         position: async () => positionUs,
+        setPosition: async (trackId, us) => {
+          setPositions.push({ trackId, us });
+          positionUs = us;
+        },
         onChanged: listener => { changed.push(listener); },
         onSeeked: listener => { seeked.push(listener); },
         close: () => { changed.length = 0; seeked.length = 0; }
@@ -33,6 +38,7 @@ function fakeBus(initial: Properties) {
   };
   return {
     bus,
+    setPositions,
     setPosition(us: number) { positionUs = us; },
     change(values: Properties) { Object.assign(props, values); for (const listener of changed) listener(values); },
     seek(us: number) { positionUs = us; for (const listener of seeked) listener(us); },
@@ -59,6 +65,25 @@ describe('MprisPlayer', () => {
       player: 'spotify', state: 'playing', positionMs: 121_644, at: 100, rate: 1, changedAt: 100,
       track: { key: `/com/spotify/track/${ID1}`, artist: 'The Lagoons', title: 'California', album: 'California', durationMs: 258_004, spotifyId: ID1 }
     });
+  });
+
+  it('seeks with the track id in microseconds, and reads the position back', async () => {
+    const fake = fakeBus({ PlaybackStatus: 'Playing', Rate: 1, Metadata: metadata(ID1), Position: 1_000_000 });
+    await open(fake.bus);
+    time = 200;
+    await player.seek(61_500);
+    expect(fake.setPositions).to.deep.equal([{ trackId: `/com/spotify/track/${ID1}`, us: 61_500_000 }]);
+    expect(player.current()).to.include({ positionMs: 61_500, at: 200 });
+  });
+
+  it('refuses to seek when the player says it cannot, or has no track id', async () => {
+    const refused = async () => player.seek(1000).then(() => '', error => String(error));
+    const fake = fakeBus({ PlaybackStatus: 'Playing', Rate: 1, Metadata: metadata(ID1), CanSeek: false });
+    await open(fake.bus);
+    expect(await refused()).to.include('cannot seek');
+    fake.change({ CanSeek: true, Metadata: { 'xesam:title': 'No id' } });
+    expect(await refused()).to.include('no track to seek in');
+    expect(fake.setPositions).to.deep.equal([]);
   });
 
   it('follows seeks, pauses and new tracks, reading the position again', async () => {

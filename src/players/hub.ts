@@ -7,6 +7,7 @@ import { Listeners, type Playback, type Player } from './types.ts';
 export interface PlaybackSource {
   active(): Playback | null;
   onChange(listener: (active: Playback | null) => void): () => void;
+  seek?(positionMs: number): Promise<void>;
 }
 
 export function choosePlayback(playbacks: Array<Playback | null>): Playback | null {
@@ -44,6 +45,14 @@ export class PlayerHub implements PlaybackSource {
 
   onChange(listener: (active: Playback | null) => void): () => void {
     return this.listeners.add(listener);
+  }
+
+  // In the active player
+  async seek(positionMs: number): Promise<void> {
+    const name = this.active()?.player;
+    const player = this.players.find(candidate => candidate.name === name);
+    if (!player) throw new Error('Nothing playing');
+    await player.seek(positionMs);
   }
 
   // Players that cannot be reached, with why
