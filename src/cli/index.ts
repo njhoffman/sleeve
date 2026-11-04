@@ -8,6 +8,7 @@ import { DEFAULT_PROVIDERS } from '../core/fetchLyrics.ts';
 import { DEFAULT_DELAY_MS, DEFAULT_JOBS } from '../core/tagger.ts';
 import { DEFAULT_HOST, DEFAULT_PORT } from '../daemon/paths.ts';
 import { ctlCommand, type CtlOptions } from './ctl.ts';
+import { lineCommand, type LineOptions } from './line.ts';
 import { daemonCommand, type DaemonCommandOptions } from './daemon.ts';
 import { FORMATS, lyricsCommand, type Io, type LyricsOptions } from './lyrics.ts';
 import { nowCommand, type NowOptions } from './now.ts';
@@ -104,6 +105,13 @@ export function buildProgram(io: Io, setExit: (code: number) => void): Command {
     .option('--json', 'with candidates, print them all as JSON')
     .action(async (action: string, args: string[], options: CtlOptions) => {
       setExit(await ctlCommand(action, args, options, io));
+    });
+
+  program.command('line')
+    .description('Print the line playing each time it changes, for status bars (polybar, i3blocks); an empty line for none. Waits for sleeved, and comes back to it when it restarts')
+    .option('--socket <path>', 'sleeved\'s Unix socket (default: $XDG_RUNTIME_DIR/sleeve/sleeved.sock)')
+    .action(async (options: LineOptions) => {
+      setExit(await lineCommand(options, io));
     });
 
   trackOptions(program.command('pick'))

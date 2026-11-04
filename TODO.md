@@ -258,9 +258,10 @@ build items that depend on it, listed in the later projects.
       Done in 0.19.1: `ExecStart=/usr/bin/env node ...`, node from the user manager's PATH (imported at login,
       pnpm's included). Without that import the default PATH has no pnpm; add a wrapper if that ever happens.
       A moved checkout still needs `just install-service` again.
-- [ ] **`sleeve line` for status bars.** (p3) [feature] Print the current line each time it changes, from a
-      `subscribe` on the daemon's socket, so polybar/i3blocks need no socat and jq (docs/protocol.md shows
-      that pipeline today).
+- [x] **`sleeve line` for status bars.** (p3) [feature] Print the current line each time it changes, from a
+      `subscribe` on the daemon's socket, so polybar/i3blocks need no socat and jq (docs/protocol.md showed
+      that pipeline).
+      Done in 0.27.0; it waits for sleeved and survives its restarts.
 - [x] **Prefetch the next track's lyrics.** (p3) [perf] MPD's queue (`playlistinfo`) and Spotify's (no MPRIS
       queue; Web API only) could warm the cache, so lyrics are ready when a track starts. Lookups that wait
       on LRCLIB's "server busy" retries take several seconds today.

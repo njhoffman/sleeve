@@ -23,10 +23,11 @@ From the shell:
 ```sh
 # Everything, as it happens
 socat - UNIX-CONNECT:$XDG_RUNTIME_DIR/sleeve/sleeved.sock
-# The current line whenever it changes, for a status bar
-echo '{"type":"subscribe","lines":true}' | socat -t 86400 - UNIX-CONNECT:$XDG_RUNTIME_DIR/sleeve/sleeved.sock \
-  | jq --unbuffered -r 'select(.type == "line") | .line.text // ""'
+# Only the lines
+echo '{"type":"subscribe","lines":true}' | socat -t 86400 - UNIX-CONNECT:$XDG_RUNTIME_DIR/sleeve/sleeved.sock
 ```
+
+For a status bar, `sleeve line` prints the current line's text each time it changes, and survives sleeved restarting.
 
 ## Timing
 

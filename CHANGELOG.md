@@ -6,6 +6,14 @@ All notable changes to sleeve are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.27.0] - 2026-11-03
+
+### Added
+
+- `sleeve line` prints the line playing each time it changes, for status bars such as polybar and i3blocks, so they
+  no longer need socat and jq. An empty line stands for no line. It waits for sleeved and comes back to it when it
+  restarts.
+
 ## [0.26.0] - 2026-11-03
 
 ### Added

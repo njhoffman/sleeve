@@ -40,6 +40,7 @@ sleeve offset song.mp3                         # show the offset; 0 or --reset r
 sleeve now                                     # lyrics for what MPD or Spotify plays, line by line
 sleeve now --once                              # the track, where it is, and the current line
 sleeve now --once --json                       # the same with the lyrics, for scripts and status bars
+sleeve line                                    # the line playing, printed each time it changes, for status bars
 sleeved                                        # the daemon: serve what plays to displays (sleeve daemon)
 sleeve cache                                   # how many answers are stored, by provider (also --json)
 sleeve cache clear --not-found                 # forget "no lyrics" answers so those tracks are asked again
