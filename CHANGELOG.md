@@ -6,6 +6,12 @@ All notable changes to sleeve are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.39.1] - 2026-11-05
+
+### Changed
+
+- Notes on running under backdrop: since backdrop 2.50.1 it resizes a `--managed` window after finding it, and its `background: auto` changes the background on most new wallpapers (`docs/backdrop.md`).
+
 ## [0.39.0] - 2026-11-04
 
 ### Added

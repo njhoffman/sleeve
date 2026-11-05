@@ -408,5 +408,5 @@ build items that depend on it, listed in the later projects.
       picom's could not be told from its noise.
 - [ ] **A window the size of the screen comes out 1 px short.** (p3) [bug] Found from backdrop 2026-11-04 under Xvfb at 1280x720: `sleeve shell --managed --geometry 1280x720+0+0` gives a
       1279x719 window (xwininfo), while 858x720+422+0 beside it is exact. Nothing in `shell/main.ts` shrinks it, so it may be Electron treating it as fullscreen. An opaque window as the wallpaper would
-      leave a 1 px seam on the right and bottom. Check on the real desktop first, since this was seen only under Xvfb, with no window manager.
+      leave a 1 px seam on the right and bottom. Confirmed on the real desktop on 2026-11-05 (1919x1079 on a 1920x1080 monitor, 2559x1439 on 2560x1440); backdrop 2.50.1 works around it by sizing the window after it maps. When this is fixed, tell backdrop so it can drop the workaround (`resizes` in its `SleeveVisualizer.js`; its contract, `docs/specs/sleeve.md`, says so too).
 
