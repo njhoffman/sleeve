@@ -9,7 +9,7 @@ declare module 'x11' {
     }
     interface Client {
       ChangeWindowAttributes(window: number, values: { overrideRedirect?: number; eventMask?: number }): void;
-      ConfigureWindow(window: number, values: { stackMode?: number; sibling?: number }): void;
+      ConfigureWindow(window: number, values: { width?: number; height?: number; stackMode?: number; sibling?: number }): void;
       InternAtom(onlyIfExists: boolean, name: string, callback: (error: unknown, atom: number) => void): void;
       GetSelectionOwner(selection: number, callback: (error: unknown, owner: number) => void): void;
       ChangeProperty(mode: number, window: number, property: number, type: number, format: 8 | 16 | 32, data: string | Buffer | number[]): void;

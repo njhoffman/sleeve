@@ -61,7 +61,7 @@ build items that depend on it, listed in the later projects.
       prompted this item is Sunamu's; sleeve's default already costs next to nothing.
       Done in 0.30.0: `sleeve-art-flow`, the quarter-resolution warp, opt-in; the still cover stays the default.
 - [ ] **Weak lyrics sources and first-hit selection.** (p2) [chore] Musixmatch's token is unofficial, NetEase
-      mismatches, Genius has no timing, LRCLIB is missing, and Sunamu takes the first synced hit.
+      mismatches, LRCLIB is missing, and Sunamu takes the first synced hit.
       Settle the scoring rules and provider order before porting providers.
 - [x] **MPD protocol versus MPRIS.** (p2) [chore] MPD gives idle events, exact elapsed time and the file path
       (needed for sidecar LRC, embedded lyrics, tag IDs and cover art). Confirm MPD direct as the primary
@@ -156,8 +156,6 @@ build items that depend on it, listed in the later projects.
       Done in 0.39.0: `src/core/reports.ts`, schema 8; the `x` and `t` keys and the pick panel, `sleeve ctl wrong`,
       `mistimed`, `unreport`, `sleeve reports`, `sleeve tag --fix-reported`. Lyrics are caught by id and by content, since
       the file holds what LRCLIB gave. Nothing is sent to LRCLIB.
-- [ ] **Port the Genius provider.** (p3) [feature] Unsynced lyrics only, as the last fallback; Sunamu scrapes its
-      pages (`src/main/lyricproviders/genius.ts` there). Check whether its API gives lyrics without scraping.
 - [ ] **Look into Musixmatch again.** (p3) [feature] Wanted for word-level richsync and lookups by ISRC and
       Spotify id. Blocked 2026-11-02: `token.get` now gives anonymous clients a placeholder token of zeros,
       so Sunamu's approach no longer works, and getting past that by imitating the desktop app is out.
@@ -406,7 +404,8 @@ build items that depend on it, listed in the later projects.
       put the figures in the contract in `~/git/backdrop/docs/specs/sleeve.md`.
       Measured 2026-11-04: figures in backdrop's `docs/specs/sleeve.md`, Cost; `just bench-gpu` measures them again. Electron's share is small;
       picom's could not be told from its noise.
-- [ ] **A window the size of the screen comes out 1 px short.** (p3) [bug] Found from backdrop 2026-11-04 under Xvfb at 1280x720: `sleeve shell --managed --geometry 1280x720+0+0` gives a
+- [x] **A window the size of the screen comes out 1 px short.** (p3) [bug] Found from backdrop 2026-11-04 under Xvfb at 1280x720: `sleeve shell --managed --geometry 1280x720+0+0` gives a
       1279x719 window (xwininfo), while 858x720+422+0 beside it is exact. Nothing in `shell/main.ts` shrinks it, so it may be Electron treating it as fullscreen. An opaque window as the wallpaper would
       leave a 1 px seam on the right and bottom. Confirmed on the real desktop on 2026-11-05 (1919x1079 on a 1920x1080 monitor, 2559x1439 on 2560x1440); backdrop 2.50.1 works around it by sizing the window after it maps. When this is fixed, tell backdrop so it can drop the workaround (`resizes` in its `SleeveVisualizer.js`; its contract, `docs/specs/sleeve.md`, says so too).
+      Done in 0.39.2: Chromium asks for 1 px less than any monitor-sized or larger window, for window managers that would make it fullscreen, and `setBounds` and `setContentSize` go the same way, so `overlayWindow` sets the size over X before it maps. 1920x1080 exact on the real desktop; `test/shell/exactSize.test.ts` runs the real window under Xvfb. Still to tell backdrop.
 

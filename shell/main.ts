@@ -8,7 +8,7 @@ import {
   backdropRunning, backdropStatePath, chooseMonitor, chooseOverlay, formatGeometry, overlayColors, overlayGeometry, parseMonitors,
   parseShellArgs, readBackdropState, rendererUrl, waitForBackdrop, type BackdropMonitor, type BackdropState, type Geometry, type ShellOptions
 } from '../src/shell/layout.ts';
-import { compositorRunning, lowerWindow, markOverlay, stackSelf } from './x11.ts';
+import { compositorRunning, lowerWindow, markOverlay, sizeWindow, stackSelf } from './x11.ts';
 import { validColors } from '../src/renderer/contrast.ts';
 
 // sleeve's window: the renderer sleeved serves, either as an overlay on the desktop (transparent, click-through,
@@ -133,6 +133,7 @@ async function overlayWindow(bounds: Geometry, mark: ShellOptions['position'] | 
   });
   window.setIgnoreMouseEvents(true);
   await markOverlay(windowId(window), mark);
+  await sizeWindow(windowId(window), bounds.width, bounds.height);
   return window;
 }
 

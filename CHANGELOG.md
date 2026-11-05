@@ -6,6 +6,12 @@ All notable changes to sleeve are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.39.2] - 2026-11-05
+
+### Fixed
+
+- An overlay or `--managed` window the size of a monitor is exactly that size, not 1 px short each way, which left a line of wallpaper at the right and bottom under an opaque or veiled background.
+
 ## [0.39.1] - 2026-11-05
 
 ### Changed

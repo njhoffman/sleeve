@@ -1,8 +1,8 @@
 import x11 from 'x11';
 
 // The X requests Electron has no API for, made over connections of our own (the pure-JS x11 package, as backdrop
-// uses): making the window unmanaged, marking it for backdrop, telling whether a compositor runs, and stacking the
-// overlay when backdrop does not.
+// uses): making the window unmanaged, marking it for backdrop, giving it its exact size, telling whether a compositor
+// runs, and stacking the overlay when backdrop does not.
 //
 // Override-redirect keeps i3 from managing the window at all, as GLava's and xwinwrap's windows are: no tiling,
 // no frame, on every workspace, and left where it is stacked. It only counts if set before the window first maps,
@@ -63,6 +63,15 @@ export async function markOverlay(window: number, mark: Position | null): Promis
 export async function lowerWindow(window: number): Promise<void> {
   await withClient(async client => {
     client.ConfigureWindow(window, { stackMode: STACK_BELOW });
+  });
+}
+
+// Sets the window's size past Chromium, which takes 1 px off each way when asked for a window the size of a monitor, or
+// larger, and has no option against it (setBounds goes the same way): some window managers would make that window
+// fullscreen, but i3 never sees this one. Chromium follows a resize from outside, so it holds.
+export async function sizeWindow(window: number, width: number, height: number): Promise<void> {
+  await withClient(async client => {
+    client.ConfigureWindow(window, { width, height });
   });
 }
 
