@@ -256,6 +256,14 @@ outlives the stored answer, and a local one (`sidecar`, `embedded`) is read from
 an `.lrc` count. If that file is gone, the ranking decides and stderr says so. `--all` still asks everyone and
 lists the pick first; `-p` without the pick's provider leaves it out.
 
+When the lyrics shown are simply wrong, say so: `x` in the window (or `sleeve ctl wrong`) never shows them for this track
+again and shows the next best, or nothing when none is left. `t` (or `sleeve ctl mistimed`) is for the right words at the
+wrong times: other timing is tried, else the words stay up without times. The same lyrics are caught whoever offers them,
+so a file holding what LRCLIB gave is passed over too. `sleeve reports` lists what you reported; picking those lyrics,
+`sleeve ctl unreport` (what plays) or `sleeve reports --reset` (a file, `--artist` and `--title`, or `--all`) takes it back.
+Reporting does not change files: `sleeve tag <paths> --fix-reported --write` replaces reported lyrics in the files that hold
+them, when something else fits, and leaves them otherwise. Nothing is sent to LRCLIB.
+
 When lyrics run ahead of or behind the music, `sleeve offset` shifts them, in milliseconds: positive shows
 them later, negative sooner. (LRC's own `[offset:]` tag runs the other way.) An offset belongs to the
 candidate it was set for, so picking other lyrics leaves it stored but unused. `sleeve lyrics` prints the

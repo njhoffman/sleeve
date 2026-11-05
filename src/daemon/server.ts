@@ -10,8 +10,8 @@ import { nextLineTime } from '../now/lines.ts';
 import { monotonic, positionAt } from '../players/clock.ts';
 import type { Playback } from '../players/types.ts';
 import {
-  ALL_INSTANCES, parseCommand, PROTOCOL_VERSION, type ClientCommand, type DisplayChange, type Displays, type LyricsMessage, type PlayerProblem, type ReplyMessage,
-  type ServerMessage, type WireLine, type WirePlayback
+  ALL_INSTANCES, describeReport, parseCommand, PROTOCOL_VERSION, type ClientCommand, type DisplayChange, type Displays, type LyricsMessage, type PlayerProblem, type ReplyMessage,
+  type ReportReply, type ServerMessage, type WireLine, type WirePlayback
 } from '../protocol/messages.ts';
 import { DEFAULT_HOST, DEFAULT_PORT, defaultSocketPath, WEBSOCKET_PATH } from './paths.ts';
 import { CoverArt } from './art.ts';
@@ -23,7 +23,7 @@ import { CLOSE, handshakeProblem, refuseUpgrade, upgrade, type WebSocketOptions 
 // hello, then the playback, lyrics and players messages, then every change as it happens; see
 // src/protocol/messages.ts and docs/protocol.md.
 
-export type DaemonSession = Pick<NowPlaying, 'current' | 'onChange' | 'line' | 'position' | 'nudge' | 'setOffset' | 'pick' | 'mark' | 'unpick' | 'seek' | 'refresh' | 'candidates'>
+export type DaemonSession = Pick<NowPlaying, 'current' | 'onChange' | 'line' | 'position' | 'nudge' | 'setOffset' | 'pick' | 'mark' | 'unpick' | 'report' | 'unreport' | 'seek' | 'refresh' | 'candidates'>
   & Partial<Pick<NowPlaying, 'prefetching'>>;
 
 export interface DaemonOptions {
@@ -269,6 +269,20 @@ export class SleeveDaemon {
       case 'unpick': {
         const removed = await this.session.unpick();
         if (removed) this.log('pick: removed');
+        return { data: { removed } };
+      }
+      case 'report': {
+        const { reported, next } = await this.session.report(command.kind);
+        const data: ReportReply = {
+          kind: command.kind, ref: formatRef(reported), next: next ? formatRef(next) : null,
+          untimed: Boolean(next && next.reported === 'mistimed' && !next.lyrics.synced)
+        };
+        this.log(`report: ${describeReport(data)}`);
+        return { data };
+      }
+      case 'unreport': {
+        const removed = await this.session.unreport();
+        if (removed) this.log('report: forgotten');
         return { data: { removed } };
       }
       case 'seek':

@@ -6,6 +6,19 @@ All notable changes to sleeve are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.39.0] - 2026-11-04
+
+### Added
+
+- Say the lyrics shown are wrong or mistimed: the `x` and `t` keys, the pick panel's buttons, `sleeve ctl wrong` and
+  `sleeve ctl mistimed`, and the `report` command. Wrong lyrics are never shown for that track again and the next best
+  shows, or nothing when none is left, without marking the track. For mistimed lyrics other timing is tried, else the
+  words stay up without times. The same lyrics are caught from any provider, including the copy in the file.
+- `sleeve reports` lists what you reported. Picking those lyrics, `sleeve ctl unreport` or `sleeve reports --reset` takes
+  it back.
+- `sleeve tag --fix-reported` replaces reported lyrics in the files that hold them, when something else fits. A usual
+  `sleeve tag` run leaves a file's lyrics alone, reported or not, and never writes reported ones.
+
 ## [0.38.0] - 2026-11-04
 
 ### Added

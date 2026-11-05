@@ -1,14 +1,15 @@
 import { readdir, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { DEFAULT_PROVIDERS, fetchLyrics, queryForFile, type FetchOptions } from './fetchLyrics.ts';
-import { formatLrc, looksLikeLrc, plainText } from './lrc.ts';
+import { formatLrc, looksLikeLrc, parseLrc, plainText } from './lrc.ts';
 import { formatRef } from './prefs.ts';
+import { reportFor } from './reports.ts';
 import { gaveUp, lyricsHash, type TagFallbacks, type TagRetries } from './retries.ts';
 import { Id3Error } from './tags/id3.ts';
 import { FileChangedError, readLyricsTag, writeLyricsTag } from './tags/lyricsTag.ts';
 import { throttledFetch } from './throttle.ts';
 import { shiftLyrics } from './timing.ts';
-import type { ScoredCandidate, TrackMark, TrackQuery } from './types.ts';
+import type { Lyrics, ScoredCandidate, TrackMark, TrackQuery } from './types.ts';
 
 // `sleeve tag`: lyrics written into mp3 files' USLT frame as LRC text, the user's offset applied, word times left
 // out (most players would show them as text). Synced lyrics replace unsynced ones in the USLT (beets' lyrics plugin
@@ -24,6 +25,9 @@ import type { ScoredCandidate, TrackMark, TrackQuery } from './types.ts';
 // so a run while LRCLIB is overloaded does not fill the library with NetEase's lyrics. A file that has waited a day
 // and three tries (gaveUp, src/core/retries.ts) takes the later provider's answer, and its report says so. Such a
 // write is recorded (TagFallbacks), and a recheck run asks the providers it waited for again, about just those files.
+
+// Lyrics the user reported (src/core/reports.ts) are not written, but a run leaves the file's own lyrics alone, reported or
+// not: fixReported is what replaces them.
 
 // The gap between requests to one service, and the files looked up at once
 export const DEFAULT_DELAY_MS = 300;
@@ -62,6 +66,8 @@ export interface TagOptions extends Pick<FetchOptions, 'providers' | 'timeoutMs'
   fallbacks?: TagFallbacks;
   // Ask the providers those writes gave up on again, and do nothing else (see recheckFile)
   recheck?: boolean;
+  // Replace lyrics the user reported in the files that hold them, and do nothing else (see fixReportedFile)
+  fixReported?: boolean;
   // Ask about deferred files now, whatever their pause
   retryNow?: boolean;
   // The gap between requests to one service
@@ -223,7 +229,7 @@ async function recheckFile(file: string, options: TagOptions & { fetch: typeof f
   if (!providers.length) return report('skipped', `${record.waitedFor.join(', ')} not among the providers`);
   const result = await fetchLyrics(query, {
     providers, fetch,
-    ...(timeoutMs !== undefined ? { timeoutMs } : {}), ...(cache ? { cache } : {}),
+    ...(timeoutMs !== undefined ? { timeoutMs } : {}), ...(cache ? { cache } : {}), ...(prefs ? { prefs } : {}),
     ...(userAgent ? { userAgent } : {}), ...(tags ? { tags } : {}), ...(signal ? { signal } : {})
   });
   if (signal?.aborted) return report('failed', 'interrupted');
@@ -244,8 +250,79 @@ async function recheckFile(file: string, options: TagOptions & { fetch: typeof f
   return done('written', source);
 }
 
+// What a file's lyrics text says, as the lyrics a provider would give
+function lyricsInFile(text: string): Lyrics {
+  if (looksLikeLrc(text)) return parseLrc(text);
+  return { synced: false, instrumental: false, lines: text.split(/\r?\n/).filter(line => line.trim()).map(line => ({ time: null, text: line.trim() })) };
+}
+
+// The files among these whose track has reports: reading each one's tags, so only for a run asking for them
+export async function reportedFiles(files: string[], { prefs, tags }: Pick<TagOptions, 'prefs' | 'tags'>): Promise<string[]> {
+  if (!prefs?.reportCount()) return [];
+  const found: string[] = [];
+  for (const file of files) {
+    try {
+      if (prefs.get(await queryForFile(file, {}, tags))?.reports) found.push(file);
+    } catch {
+      // No tags to find its track by
+    }
+  }
+  return found;
+}
+
+// A file whose track has reports: if it holds the lyrics reported, the best synced lyrics that fit it replace them (a pick
+// goes in as it is). With nothing to replace them, the file stays as it is: no text gives way to unsynced lyrics, and display
+// does not show what was reported anyway.
+async function fixReportedFile(file: string, options: TagOptions & { fetch: typeof fetch }, online: Set<string>): Promise<TagReport> {
+  const report = (status: TagStatus, detail?: string): TagReport => ({ file, status, ...(detail ? { detail } : {}) });
+  let tag;
+  try {
+    tag = await readLyricsTag(file);
+  } catch (error) {
+    return error instanceof Id3Error ? report('skipped', error.message) : report('failed', (error as Error).message);
+  }
+  if (tag.usltCount > 1) return report('skipped', `${tag.usltCount} USLT frames`);
+  let query;
+  try {
+    query = await queryForFile(file, {}, options.tags);
+  } catch (error) {
+    return report('skipped', (error as Error).message);
+  }
+  const { fetch, cache, prefs, timeoutMs, userAgent, tags, signal, providers } = options;
+  const decided = prefs?.get(query);
+  const existing = tag.uslt?.text.trim() ? tag.uslt.text : '';
+  const reported = existing && decided?.reports ? reportFor({ provider: 'embedded', lyrics: lyricsInFile(existing) }, decided.reports, true) : null;
+  if (!reported) return report('unchanged', 'the lyrics reported are not in this file');
+  if (decided?.mark) return report('has lyrics', 'marked by you; the lyrics reported stay in the file');
+  const result = await fetchLyrics(query, {
+    providers: providers!, fetch, ...(prefs ? { prefs } : {}),
+    ...(timeoutMs !== undefined ? { timeoutMs } : {}), ...(cache ? { cache } : {}),
+    ...(userAgent ? { userAgent } : {}), ...(tags ? { tags } : {}), ...(signal ? { signal } : {})
+  });
+  if (signal?.aborted) return report('failed', 'interrupted');
+  const synced = result.candidates.filter(candidate => candidate.lyrics.synced);
+  const chosen = result.pinned ? (result.best?.lyrics.synced ? result.best : null) : synced.find(candidate => doubts(query, candidate) === null) ?? null;
+  const order = providers!.map(provider => provider.name);
+  const failed = result.errors.filter(error => online.has(error.provider));
+  const earlier = chosen ? failed.filter(error => order.indexOf(error.provider) < order.indexOf(chosen.provider)) : failed;
+  if (earlier.length) return report('deferred', `${earlier.map(error => error.provider).join(', ')} failed; run again later`);
+  if (!chosen) return report('has lyrics', `nothing else fits; the lyrics reported ${reported} stay in the file`);
+  const text = formatLrc(shiftLyrics(chosen.lyrics, chosen === result.best ? result.offsetMs : 0), { words: false });
+  const source = `${formatRef(chosen)}, synced, ${chosen.lyrics.lines.length} lines, replacing lyrics reported ${reported}`;
+  if (!options.write) return report('would write', source);
+  try {
+    await writeLyricsTag(tag, text);
+  } catch (error) {
+    if (error instanceof FileChangedError) return report('failed', 'changed while sleeve looked its lyrics up; run again');
+    return error instanceof Id3Error ? report('skipped', error.message) : report('failed', (error as Error).message);
+  }
+  options.fallbacks?.forget(path.resolve(file));
+  return report('written', source);
+}
+
 async function tagFile(file: string, options: TagOptions & { fetch: typeof fetch; anyMarks: boolean }, online: Set<string>, now: () => number): Promise<TagReport> {
   if (options.recheck) return recheckFile(file, options, online);
+  if (options.fixReported) return fixReportedFile(file, options, online);
   const report = (status: TagStatus, detail?: string): TagReport => ({ file, status, ...(detail ? { detail } : {}) });
   if (!/\.mp3$/i.test(file)) return report('skipped', 'not an mp3');
   let tag;

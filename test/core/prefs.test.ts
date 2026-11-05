@@ -92,3 +92,52 @@ describe('candidate refs', () => {
     expect(sameCandidate(candidate, { provider: 'lrclib', id: '13' })).to.equal(false);
   });
 });
+
+describe('reports on TrackPrefs', () => {
+  let time: number, prefs: TrackPrefs;
+  beforeEach(() => {
+    time = 1000;
+    prefs = new TrackPrefs(':memory:', { now: () => time });
+  });
+  afterEach(() => prefs.close());
+
+  const query = { artist: 'Radiohead', title: 'Airbag', durationMs: 284_400, path: '/m/a.mp3' };
+
+  it('keeps one report per kind and candidate, with what is needed to catch the same lyrics again', () => {
+    prefs.addReport(query, 'wrong', candidate);
+    time = 2000;
+    prefs.addReport(query, 'wrong', candidate);
+    prefs.addReport(query, 'mistimed', candidate);
+    const reports = prefs.get(query)!.reports!;
+    expect(reports.map(report => report.kind)).to.deep.equal(['wrong', 'mistimed']);
+    expect(reports[0]).to.deep.include({ provider: 'lrclib', id: '12', artist: 'Radiohead', title: 'Airbag', path: '/m/a.mp3', times: [1000], reportedAt: 2000 });
+    expect(reports[0].words).to.match(/^[0-9a-f]{32}$/);
+    expect(prefs.reportCount()).to.equal(1);
+  });
+
+  it('takes a pick away when it is what was reported, and a report away when it is picked', () => {
+    prefs.setPick(query, candidate);
+    prefs.addReport(query, 'wrong', other);
+    expect(prefs.get(query)!.pick).to.deep.equal(candidate);
+    prefs.addReport(query, 'mistimed', candidate);
+    expect(prefs.get(query)!.pick).to.equal(null);
+    prefs.setPick(query, candidate);
+    expect(prefs.get(query)!.reports).to.equal(undefined);
+  });
+
+  it('keeps a track with only reports, lists them latest first, and forgets them', () => {
+    prefs.addReport(query, 'wrong', candidate);
+    time = 2000;
+    prefs.addReport({ artist: 'B', title: 'C' }, 'mistimed', other);
+    expect(prefs.allReports().map(report => report.provider)).to.deep.equal(['netease', 'lrclib']);
+    expect(prefs.clearReports(query)).to.equal(true);
+    expect(prefs.clearReports(query)).to.equal(false);
+    expect(prefs.get(query)).to.equal(null);
+    prefs.setOffset(query, 100, candidate);
+    prefs.addReport(query, 'wrong', candidate);
+    expect(prefs.clearAllReports()).to.equal(2);
+    expect(prefs.reportCount()).to.equal(0);
+    expect(prefs.get(query)!.offset!.ms).to.equal(100);
+    expect(prefs.get({ artist: 'B', title: 'C' })).to.equal(null);
+  });
+});

@@ -4,6 +4,7 @@ import { rankCandidates, scoreCandidate, THRESHOLD, typicalDuration } from './ma
 import { lrclib } from './providers/lrclib.ts';
 import { embedded, sidecar } from './providers/local.ts';
 import { netease } from './providers/netease.ts';
+import { asUntimed, reportFor } from './reports.ts';
 import { latinCandidate, latinCandidates } from './script.ts';
 import { formatRef, sameCandidate, type CandidateRef, type TrackPrefs, type TrackPrefsRecord } from './prefs.ts';
 import type { Provider, ProviderContext } from './providers/provider.ts';
@@ -29,6 +30,9 @@ import type { Candidate, LyricsResult, ProviderError, ScoredCandidate, TrackQuer
 //
 // onPartial hears the result so far whenever an online provider answers while others are still out, once
 // something passes the threshold: a display can show it instead of waiting on a slow or retrying provider.
+//
+// Lyrics the user reported (src/core/reports.ts) are out of the ranking, listed with the rejected, and do not stop the
+// online providers being asked. When nothing is left but lyrics whose times were reported, their words are shown untimed.
 //
 // Every candidate, a pick included, is held to Latin script before it is scored (src/core/script.ts): lines in
 // another alphabet are dropped, and lyrics or tracks mostly in one are left out. The cache keeps what the
@@ -118,10 +122,12 @@ function byTypicalDuration(query: TrackQuery, candidates: ScoredCandidate[]): Sc
 
 // The candidates with the pinned one first, wherever the ranking put it, and the offset for whichever is shown
 function finish(candidates: ScoredCandidate[], rejected: ScoredCandidate[], pinned: ScoredCandidate | null, record: TrackPrefsRecord | null, errors: ProviderError[]): LyricsResult {
+  // The first of the rejected that passed but for its times, when nothing else is left to show
+  const mistimed = candidates.length || pinned ? undefined : rejected.find(candidate => candidate.reported === 'mistimed' && candidate.score >= THRESHOLD);
   const ref = pinned ? { provider: pinned.provider, id: pinned.id ?? '' } : null;
   const others = (candidate: ScoredCandidate) => !ref || !sameCandidate(candidate, ref);
   const ranked = pinned ? [pinned, ...candidates.filter(others)] : candidates;
-  const best = ranked[0] ?? null;
+  const best = ranked[0] ?? (mistimed ? asUntimed(mistimed) : null);
   const offset = record?.offset && best && sameCandidate(best, record.offset) ? record.offset.ms : 0;
   return { best, candidates: ranked, rejected: rejected.filter(others), errors, pinned: Boolean(pinned), offsetMs: offset };
 }
@@ -198,29 +204,36 @@ export async function fetchLyrics(query: TrackQuery, options: FetchOptions = {})
     gone();
   }
 
+  const onFile = new Set(providers.filter(provider => provider.local).map(provider => provider.name));
+  const reports = record?.reports ?? [];
+  const flagged = (candidate: ScoredCandidate): ScoredCandidate => {
+    const kind = reportFor(candidate, reports, onFile.has(candidate.provider));
+    return kind ? { ...candidate, reported: kind } : candidate;
+  };
+  const passes = (candidate: ScoredCandidate) => candidate.score >= THRESHOLD && !candidate.reported;
   const local = await run(providers.filter(provider => provider.local), query, settings);
-  const haveSynced = local.candidates.some(candidate => candidate.score >= THRESHOLD && candidate.lyrics.synced);
+  const haveSynced = local.candidates.map(flagged).some(candidate => passes(candidate) && candidate.lyrics.synced);
   const partial: Progress | undefined = options.onPartial && !options.all
     ? (answered, answeredErrors) => {
-      const known = byTypicalDuration(query, [...local.candidates, ...answered]);
-      const passing = rankCandidates(known.filter(candidate => candidate.score >= THRESHOLD));
+      const known = byTypicalDuration(query, [...local.candidates, ...answered]).map(flagged);
+      const passing = rankCandidates(known.filter(passes));
       if (!passing.length) return;
-      options.onPartial!(finish(passing, rankCandidates(known.filter(candidate => candidate.score < THRESHOLD)), null, record,
+      options.onPartial!(finish(passing, rankCandidates(known.filter(candidate => !passes(candidate))), null, record,
         [...errors, ...local.errors, ...answeredErrors]));
     }
     : undefined;
   const online = haveSynced && !options.all
     ? { candidates: [] as ScoredCandidate[], errors: [] as ProviderError[] }
     : await run(providers.filter(provider => !provider.local), query, settings, partial);
-  const all = byTypicalDuration(query, [...local.candidates, ...online.candidates]);
+  const all = byTypicalDuration(query, [...local.candidates, ...online.candidates]).map(flagged);
   errors.push(...local.errors, ...online.errors);
   let pinned: ScoredCandidate | null = null;
   if (ref && options.all) {
     pinned = all.find(candidate => sameCandidate(candidate, ref)) ?? (pickedProvider!.local ? null : scoreCandidate(query, pick!));
     if (!pinned) gone();
   }
-  const candidates = rankCandidates(all.filter(candidate => candidate.score >= THRESHOLD));
-  const rejected = rankCandidates(all.filter(candidate => candidate.score < THRESHOLD));
+  const candidates = rankCandidates(all.filter(passes));
+  const rejected = rankCandidates(all.filter(candidate => !passes(candidate)));
   const result = finish(candidates, rejected, pinned, record, errors);
   return mark ? { ...result, best: null, pinned: true, offsetMs: 0, marked: mark } : result;
 }

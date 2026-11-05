@@ -228,6 +228,42 @@ describe('NowPlaying commands', () => {
     expect(prefs.get(spotifyTrack as unknown as TrackQuery)).to.equal(null);
   });
 
+  describe('reports', () => {
+    const untimed: ScoredCandidate = { ...best, reported: 'mistimed', lyrics: { synced: false, instrumental: false, lines: [{ time: null, text: 'one' }] } };
+
+    it('reports what is shown, shows what the lookup gives next, and forgets it again', async () => {
+      const session = await started();
+      const { reported, next } = await session.report('wrong');
+      expect(reported.id).to.equal('1');
+      expect(next?.id).to.equal('1');
+      expect(prefs.get(spotifyTrack as unknown as TrackQuery)!.reports!.map(report => report.kind)).to.deep.equal(['wrong']);
+      expect(calls).to.have.length(2);
+      expect(await session.unreport()).to.equal(true);
+      expect(calls).to.have.length(3);
+      expect(await session.unreport()).to.equal(false);
+      expect(calls).to.have.length(3);
+    });
+
+    it('refuses with nothing shown, without prefs, and times on lyrics that have none', async () => {
+      const plain = await started();
+      (plain as unknown as { state: NowState }).state = { ...plain.current(), result: { ...result(), best: untimed } };
+      await plain.report('mistimed').then(() => expect.fail('reported'), error => expect(error.message).to.equal('These lyrics have no times'));
+      (plain as unknown as { state: NowState }).state = { ...plain.current(), result: { ...result(), best: null, candidates: [] } };
+      await plain.report('wrong').then(() => expect.fail('reported'), error => expect(error.message).to.equal('No lyrics shown'));
+      const off = await started({ prefs: null });
+      await off.report('wrong').then(() => expect.fail('reported'), error => expect(error.message).to.equal('Picks are off (--no-prefs)'));
+    });
+
+    it('picks the lyrics themselves, not the words shown without times', async () => {
+      const session = await started();
+      const original = { ...best, reported: 'mistimed' as const };
+      (session as unknown as { state: NowState }).state = { ...session.current(), result: { ...result(), best: untimed, candidates: [], rejected: [original] } };
+      const picked = await session.pick({ provider: 'lrclib', id: '1' });
+      expect(picked.lyrics.synced).to.equal(true);
+      expect(prefs.get(spotifyTrack as unknown as TrackQuery)!.pick!.lyrics.synced).to.equal(true);
+    });
+  });
+
   it('refuses picks without prefs and odd offsets, and removes an offset set to 0', async () => {
     const session = await started({ prefs: null });
     await session.pick({ provider: 'lrclib', id: '1' }).then(() => expect.fail('picked'), error => {

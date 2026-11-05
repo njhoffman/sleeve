@@ -3,7 +3,7 @@ import { DEFAULT_TIMEOUT_MS, type FetchOptions } from '../core/fetchLyrics.ts';
 import type { Provider } from '../core/providers/provider.ts';
 import { createLrclib } from '../core/providers/lrclib.ts';
 import type { TagFallbacks, TagRetries } from '../core/retries.ts';
-import { DEFAULT_DELAY_MS, DEFAULT_JOBS, listMp3s, TAG_STATUSES, tagFiles, type TagReport, type TagStatus } from '../core/tagger.ts';
+import { DEFAULT_DELAY_MS, DEFAULT_JOBS, listMp3s, reportedFiles, TAG_STATUSES, tagFiles, type TagReport, type TagStatus } from '../core/tagger.ts';
 import { parseDuration, pickProviders, type Io } from './lyrics.ts';
 import { openStores } from './stores.ts';
 
@@ -16,6 +16,7 @@ export interface TagCommandOptions {
   unsynced?: boolean;
   retryNow?: boolean;
   recheckFallbacks?: boolean;
+  fixReported?: boolean;
   delay?: string;
   jobs?: string;
   limit?: string;
@@ -51,6 +52,8 @@ export async function tagCommand(paths: string[], options: TagCommandOptions, io
   const timeoutMs = options.timeout ? parseDuration(options.timeout) : DEFAULT_TIMEOUT_MS;
   const providers = forBatch(pickProviders(options.providers)!);
   if (options.recheckFallbacks && options.force) throw new Error('Give --recheck-fallbacks or --force, not both');
+  if (options.fixReported && (options.recheckFallbacks || options.force)) throw new Error('Give --fix-reported alone, without --recheck-fallbacks or --force');
+  if (options.fixReported && options.prefs === false) throw new Error('--fix-reported reads your reports, so not with --no-prefs');
   const found = await listMp3s(paths);
   const base = paths.length === 1 ? path.resolve(paths[0]) : process.cwd();
   const shown = (file: string) => {
@@ -58,7 +61,9 @@ export async function tagCommand(paths: string[], options: TagCommandOptions, io
     return relative && !relative.startsWith('..') ? relative : file;
   };
   const stores = openStores({ cache: options.cache !== false, prefs: options.prefs !== false, retries: true, fallbacks: true }, given);
-  const files = options.recheckFallbacks ? found.filter(file => stores.fallbacks!.get(path.resolve(file))) : found;
+  const files = options.recheckFallbacks ? found.filter(file => stores.fallbacks!.get(path.resolve(file)))
+    : options.fixReported ? await reportedFiles(found, { ...(stores.prefs ? { prefs: stores.prefs } : {}), ...(given.tags ? { tags: given.tags } : {}) })
+      : found;
   // Ctrl-C lets the files under way finish (a lookup is cut short, a write is not), never stopping halfway through one
   const abort = new AbortController();
   const signal = given.signal ? AbortSignal.any([abort.signal, given.signal]) : abort.signal;
@@ -81,6 +86,7 @@ export async function tagCommand(paths: string[], options: TagCommandOptions, io
       ...(stores.retries ? { retries: stores.retries } : {}),
       ...(stores.fallbacks ? { fallbacks: stores.fallbacks } : {}),
       ...(options.recheckFallbacks ? { recheck: true } : {}),
+      ...(options.fixReported ? { fixReported: true } : {}),
       onFile: (report: TagReport) => {
         if (options.verbose || !QUIET.includes(report.status)) io.out(`${report.status.padEnd(12)} ${shown(report.file)}${report.detail ? `  (${report.detail})` : ''}`);
       }
@@ -90,7 +96,7 @@ export async function tagCommand(paths: string[], options: TagCommandOptions, io
     stores.close();
   }
   const done = TAG_STATUSES.filter(status => counts[status]).map(status => `${counts[status]} ${status}`);
-  io.err(`${signal.aborted ? 'Stopped: ' : ''}${done.join(', ') || (options.recheckFallbacks ? 'no fallbacks recorded here' : 'no mp3 files')}`);
-  if (!options.recheckFallbacks && (counts.deferred || counts.waiting)) io.err('Deferred files are asked about again on a later run, once their pause is over (--retry-now: at once)');
+  io.err(`${signal.aborted ? 'Stopped: ' : ''}${done.join(', ') || (options.recheckFallbacks ? 'no fallbacks recorded here' : options.fixReported ? 'nothing reported here' : 'no mp3 files')}`);
+  if (!options.recheckFallbacks && !options.fixReported && (counts.deferred || counts.waiting)) io.err('Deferred files are asked about again on a later run, once their pause is over (--retry-now: at once)');
   return counts.failed ? 1 : 0;
 }

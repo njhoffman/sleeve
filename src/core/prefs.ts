@@ -1,5 +1,6 @@
 import { defaultDatabasePath, openShared, rankRows, rememberIds, SleeveDatabase, trackKey, trackMatch, type TrackRow } from './db.ts';
-import type { Candidate, TrackMark, TrackQuery } from './types.ts';
+import { lineTimes, withoutPicked, wordsHash, type LyricsReport } from './reports.ts';
+import type { Candidate, ReportKind, TrackMark, TrackQuery } from './types.ts';
 
 // What the user decided for a track: a pick (the candidate to show, whatever the ranking says) or a mark (no
 // lyrics are right for it, or it is instrumental: nothing is shown or written, whatever is found), and a timing
@@ -9,6 +10,9 @@ import type { Candidate, TrackMark, TrackQuery } from './types.ts';
 // stored answer and the provider dropping the record. The offset is set against one candidate (provider and
 // id), since how far lyrics drift is a property of that candidate's timing against the audio; it applies
 // only while that candidate is the one shown, and is kept otherwise. Setting an offset does not pick.
+//
+// A report says lyrics shown were wrong or mistimed (src/core/reports.ts); a track can have any number, kept with its row.
+// Reporting the lyrics picked removes the pick, and picking reported lyrics removes the report.
 //
 // Offsets are in milliseconds, positive to show lyrics later. (LRC's own [offset:] tag runs the other way.)
 // Tracks match as db.ts defines: by ISRC or Spotify id first, else by names, the closest duration winning.
@@ -28,6 +32,7 @@ export interface TrackPrefsRecord {
   offset: TrackOffset | null;
   updatedAt: number;
   mark?: TrackMark;
+  reports?: LyricsReport[];
 }
 
 interface Row extends TrackRow {
@@ -37,6 +42,7 @@ interface Row extends TrackRow {
   offset_provider: string | null;
   offset_id: string | null;
   updated_at: number;
+  reports: string | null;
 }
 
 // "provider:id", the form `sleeve pick` takes and `sleeve lyrics --all` prints
@@ -66,6 +72,8 @@ function snapshot(candidate: Candidate): Candidate {
   return { provider, ...(id ? { id } : {}), track, lyrics, ...(exact ? { exact } : {}) };
 }
 
+const reportsColumn = (reports: LyricsReport[]) => reports.length ? JSON.stringify(reports) : null;
+
 export class TrackPrefs {
   readonly file: string;
   private database: SleeveDatabase;
@@ -86,7 +94,7 @@ export class TrackPrefs {
   private row(query: TrackQuery): Row | null {
     const key = trackKey(query);
     const { where, params } = trackMatch(key);
-    const rows = this.db.prepare(`SELECT id, duration_ms, isrc, spotify_id, pick_candidate, mark, offset_ms, offset_provider, offset_id, updated_at FROM track_prefs WHERE ${where}`)
+    const rows = this.db.prepare(`SELECT id, duration_ms, isrc, spotify_id, pick_candidate, mark, offset_ms, offset_provider, offset_id, updated_at, reports FROM track_prefs WHERE ${where}`)
       .all(...params) as unknown as Row[];
     const [row] = rankRows(rows, key);
     if (row) rememberIds(this.database, 'track_prefs', row, key);
@@ -102,7 +110,8 @@ export class TrackPrefs {
         ? { ms: row.offset_ms, provider: row.offset_provider, id: row.offset_id }
         : null,
       updatedAt: row.updated_at,
-      ...(row.mark ? { mark: row.mark } : {})
+      ...(row.mark ? { mark: row.mark } : {}),
+      ...(row.reports ? { reports: JSON.parse(row.reports) as LyricsReport[] } : {})
     };
   }
 
@@ -120,7 +129,7 @@ export class TrackPrefs {
       }
       const assignments = Object.keys(columns).map(name => `${name} = ?`).join(', ');
       this.db.prepare(`UPDATE track_prefs SET ${assignments}, updated_at = ? WHERE id = ?`).run(...Object.values(columns), this.now(), existing.id);
-      this.db.prepare('DELETE FROM track_prefs WHERE id = ? AND pick_candidate IS NULL AND mark IS NULL AND offset_ms IS NULL').run(existing.id);
+      this.db.prepare('DELETE FROM track_prefs WHERE id = ? AND pick_candidate IS NULL AND mark IS NULL AND offset_ms IS NULL AND reports IS NULL').run(existing.id);
       return true;
     });
   }
@@ -128,7 +137,11 @@ export class TrackPrefs {
   // Shows this candidate for the track from now on
   setPick(query: TrackQuery, candidate: Candidate): void {
     const ref = refOf(candidate);
-    this.update(query, { pick_provider: ref.provider, pick_id: ref.id, pick_candidate: JSON.stringify(snapshot(candidate)), mark: null });
+    const reports = this.get(query)?.reports;
+    this.update(query, {
+      pick_provider: ref.provider, pick_id: ref.id, pick_candidate: JSON.stringify(snapshot(candidate)), mark: null,
+      ...(reports ? { reports: reportsColumn(withoutPicked(reports, candidate)) } : {})
+    });
   }
 
   // Shows nothing for the track from now on, in place of any pick
@@ -146,6 +159,46 @@ export class TrackPrefs {
   // How many tracks are marked: a run over the library looks each file's track up only when some are
   markCount(): number {
     return (this.db.prepare('SELECT COUNT(*) AS count FROM track_prefs WHERE mark IS NOT NULL').get() as { count: number }).count;
+  }
+
+  // Remembers what the user said about these lyrics, once per kind; a pick of them goes
+  addReport(query: TrackQuery, kind: ReportKind, candidate: Candidate): void {
+    const record = this.get(query);
+    const { provider, id, lyrics } = candidate;
+    const report: LyricsReport = {
+      kind, provider, ...(id ? { id } : {}), artist: query.artist, title: query.title, ...(query.path ? { path: query.path } : {}),
+      words: wordsHash(lyrics), times: lineTimes(lyrics), reportedAt: this.now()
+    };
+    const others = (record?.reports ?? []).filter(item => item.kind !== kind || item.provider !== provider || item.id !== id);
+    const picked = record?.pick && id && sameCandidate(record.pick, { provider, id });
+    this.update(query, { reports: reportsColumn([...others, report]), ...(picked ? { pick_provider: null, pick_id: null, pick_candidate: null } : {}) });
+  }
+
+  // Forgets what was reported about the track; whether anything was
+  clearReports(query: TrackQuery): boolean {
+    if (!this.get(query)?.reports) return false;
+    return this.update(query, { reports: null });
+  }
+
+  // How many tracks have reports
+  reportCount(): number {
+    return (this.db.prepare('SELECT COUNT(*) AS count FROM track_prefs WHERE reports IS NOT NULL').get() as { count: number }).count;
+  }
+
+  // Every report, the latest first
+  allReports(): LyricsReport[] {
+    const rows = this.db.prepare('SELECT reports FROM track_prefs WHERE reports IS NOT NULL').all() as unknown as Array<{ reports: string }>;
+    return rows.flatMap(row => JSON.parse(row.reports) as LyricsReport[]).sort((a, b) => b.reportedAt - a.reportedAt);
+  }
+
+  // Forgets every report; how many tracks had some
+  clearAllReports(): number {
+    const count = this.reportCount();
+    this.database.transaction(() => {
+      this.db.prepare('UPDATE track_prefs SET reports = NULL WHERE reports IS NOT NULL').run();
+      this.db.prepare('DELETE FROM track_prefs WHERE pick_candidate IS NULL AND mark IS NULL AND offset_ms IS NULL AND reports IS NULL').run();
+    });
+    return count;
   }
 
   // Shifts the candidate's lyrics by ms (positive: later) whenever it is the one shown for the track

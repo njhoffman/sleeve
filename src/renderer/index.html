@@ -31,7 +31,7 @@
   <section id="picker" hidden>
     <h2>Lyrics for this track</h2>
     <ol id="candidates"></ol>
-    <p class="marks"><button id="mark-none" type="button"><kbd>n</kbd> No correct lyrics</button> <button id="mark-instrumental" type="button"><kbd>i</kbd> Instrumental</button></p>
+    <p class="marks"><button id="mark-none" type="button"><kbd>n</kbd> No correct lyrics</button> <button id="mark-instrumental" type="button"><kbd>i</kbd> Instrumental</button> <button id="report-wrong" type="button"><kbd>x</kbd> These are wrong</button> <button id="report-mistimed" type="button"><kbd>t</kbd> Timing is off</button></p>
     <p class="hint"><kbd>1</kbd>-<kbd>9</kbd> or click to pick · <kbd>u</kbd> back to the ranking · <kbd>Esc</kbd> close</p>
   </section>
   <section id="help" hidden>
@@ -40,6 +40,8 @@
       <dt><kbd>+</kbd> <kbd>-</kbd></dt><dd>lyrics 100 ms later or sooner (saved for the track)</dd>
       <dt><kbd>0</kbd></dt><dd>remove the offset</dd>
       <dt><kbd>p</kbd></dt><dd>choose other lyrics</dd>
+      <dt><kbd>x</kbd></dt><dd>these lyrics are wrong: never show them for this track, show the next best</dd>
+      <dt><kbd>t</kbd></dt><dd>these lyrics are timed wrong: try other timing, else the words without times</dd>
       <dt><kbd>r</kbd></dt><dd>look the track up again online</dd>
       <dt>wheel</dt><dd>scroll back through the lyrics (back to the current line after a few seconds)</dd>
       <dt>click</dt><dd>play from that line, or from that place on the seek bar</dd>

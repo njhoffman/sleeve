@@ -2,7 +2,7 @@ import { formatRef, parseRef } from '../core/prefs.ts';
 import type { LyricsResult, ScoredCandidate, TrackMark } from '../core/types.ts';
 import { DaemonClient } from '../daemon/client.ts';
 import { defaultSocketPath } from '../daemon/paths.ts';
-import type { ClientCommand, DisplayCommand, LyricsAlign, NowPosition, NowPreset } from '../protocol/messages.ts';
+import { describeReport, type ClientCommand, type DisplayCommand, type LyricsAlign, type NowPosition, type NowPreset, type ReportReply } from '../protocol/messages.ts';
 import { describeCandidate, formatOffset, type Io } from './lyrics.ts';
 import { parseOffset } from './prefs.ts';
 
@@ -57,8 +57,8 @@ export async function ctlCommand(action: string, args: string[], options: CtlOpt
     case 'nudge': case 'offset': needs(1, '<ms>'); break;
     case 'pick': needs(1, '<provider:id | number>'); break;
     case 'mark': needs(1, '<none | instrumental>'); break;
-    case 'unpick': case 'refresh': case 'candidates': case 'display': needs(0, ''); break;
-    default: throw new Error(`Unknown action: ${action} (nudge, offset, pick, mark, unpick, refresh, candidates, display)`);
+    case 'unpick': case 'wrong': case 'mistimed': case 'unreport': case 'refresh': case 'candidates': case 'display': needs(0, ''); break;
+    default: throw new Error(`Unknown action: ${action} (nudge, offset, pick, mark, unpick, wrong, mistimed, unreport, refresh, candidates, display)`);
   }
   const ms = action === 'nudge' || action === 'offset' ? parseOffset(args[0]) : 0;
   const picked = action === 'pick' && !/^\d+$/.test(args[0]) ? parseRef(args[0]) : null;
@@ -83,6 +83,19 @@ export async function ctlCommand(action: string, args: string[], options: CtlOpt
       case 'mark': {
         if (await send(client, { type: 'mark', mark: args[0] as TrackMark }, io) === undefined) return 1;
         io.out(args[0] === 'none' ? 'Marked: no correct lyrics' : 'Marked: instrumental');
+        return 0;
+      }
+      case 'wrong':
+      case 'mistimed': {
+        const data = await send(client, { type: 'report', kind: action }, io) as ReportReply | undefined;
+        if (!data) return 1;
+        io.out(describeReport(data));
+        return 0;
+      }
+      case 'unreport': {
+        const data = await send(client, { type: 'unreport' }, io) as { removed: boolean } | undefined;
+        if (!data) return 1;
+        io.out(data.removed ? 'Forgot what was reported' : 'Nothing reported for this track');
         return 0;
       }
       case 'display': {

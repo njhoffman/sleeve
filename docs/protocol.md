@@ -91,6 +91,8 @@ back. Replies may come after the broadcasts the command caused.
 | `candidates` |                     | asks every provider for the track (the cache still answers for online ones)                  | a `LyricsResult`       |
 | `pick`       | `ref` (`provider:id`)| shows that candidate for the track from now on, like `sleeve pick`, and reloads              | `{ ref }`              |
 | `mark`       | `mark` (`none`, `instrumental`) | shows nothing for the track from now on, like `sleeve pick --none`, and reloads  | `{ mark }`             |
+| `report`     | `kind` (`wrong`, `mistimed`) | the lyrics shown are not this song's, or are timed wrong: kept for the track, and the next best shown (the words without times if only those are left). Files are untouched | `{ kind, ref, next, untimed }` |
+| `unreport`   |                     | forgets what was reported about the track and reloads                                        | `{ removed }`          |
 | `seek`       | `ms`                | plays from `ms` into the track, kept within it, in the player playing it                     | `{ positionMs }`       |
 | `display`    | any of `instance`, `preset`, `position`, `align`, `lyricsArea`, `nowArea`, `background`, `visible`, `reset` | changes how a page looks without a reload: the one that named this instance (`?instance=`), or all without one; `reset` forgets the changes | `{ displays }` |
 | `unpick`     |                     | forgets the pick or mark and reloads                                                         | `{ removed }`          |

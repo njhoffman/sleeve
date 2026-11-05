@@ -2,7 +2,7 @@ import { DURATION_WINDOW_MS } from '../core/db.ts';
 import { DEFAULT_PROVIDERS, fetchLyrics, queryForFile, type FetchOptions } from '../core/fetchLyrics.ts';
 import type { TagReader } from '../core/tags/reader.ts';
 import { formatRef, sameCandidate, type CandidateRef } from '../core/prefs.ts';
-import type { LyricsResult, ScoredCandidate, TrackMark, TrackQuery } from '../core/types.ts';
+import type { LyricsResult, ReportKind, ScoredCandidate, TrackMark, TrackQuery } from '../core/types.ts';
 import { positionAt } from '../players/clock.ts';
 import type { PlaybackSource } from '../players/hub.ts';
 import type { MusicmanLibrary } from '../players/musicman.ts';
@@ -344,8 +344,10 @@ export class NowPlaying {
     const { query, result } = this.state;
     if (!query) throw new Error(this.state.playback?.track ? 'The track has no artist and title to look up' : 'Nothing playing');
     const key = this.key;
-    let candidate = listed(result).find(item => sameCandidate(item, ref));
-    if (!candidate) candidate = listed(await this.candidates()).find(item => sameCandidate(item, ref));
+    // Not the untimed words shown for lyrics whose times were reported: the pick is of the lyrics themselves
+    const whole = (item: ScoredCandidate) => sameCandidate(item, ref) && !(item.reported === 'mistimed' && !item.lyrics.synced);
+    let candidate = listed(result).find(whole);
+    if (!candidate) candidate = listed(await this.candidates()).find(whole);
     if (this.key !== key) throw new Error('The track changed before the pick was made');
     if (!candidate) throw new Error(`No candidate ${formatRef(ref)} for ${query.artist} - ${query.title}`);
     prefs.setPick(query, candidate);
@@ -360,6 +362,30 @@ export class NowPlaying {
     if (!query) throw new Error(this.state.playback?.track ? 'The track has no artist and title to look up' : 'Nothing playing');
     prefs.setMark(query, mark);
     await this.reload();
+  }
+
+  // Remembers that the lyrics shown are wrong or mistimed, for good, and shows what is next best; the lyrics reported and what
+  // shows now. Files are left as they are (`sleeve tag --fix-reported`).
+  async report(kind: ReportKind): Promise<{ reported: ScoredCandidate; next: ScoredCandidate | null }> {
+    const prefs = this.requirePrefs();
+    const { query, result, loading } = this.state;
+    if (!query) throw new Error(this.state.playback?.track ? 'The track has no artist and title to look up' : 'Nothing playing');
+    const reported = result?.best;
+    if (!reported) throw new Error(loading ? 'Still looking up lyrics' : 'No lyrics shown');
+    if (kind === 'mistimed' && !reported.lyrics.synced) throw new Error('These lyrics have no times');
+    prefs.addReport(query, kind, reported);
+    await this.reload();
+    return { reported, next: this.state.result?.best ?? null };
+  }
+
+  // Forgets what was reported about the current track, so the ranking may choose those lyrics again; whether anything was
+  async unreport(): Promise<boolean> {
+    const prefs = this.requirePrefs();
+    const query = this.state.query;
+    if (!query) throw new Error('Nothing playing');
+    const had = prefs.clearReports(query);
+    if (had) await this.reload();
+    return had;
   }
 
   // Forgets the pick or mark for the current track, so the ranking decides again; whether there was one

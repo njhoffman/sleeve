@@ -1,4 +1,4 @@
-import type { LyricsResult, TrackMark, TrackQuery } from '../core/types.ts';
+import type { LyricsResult, ReportKind, TrackMark, TrackQuery } from '../core/types.ts';
 import type { PlaybackState, PlayingTrack } from '../players/types.ts';
 
 // The messages between sleeved and its clients, the same over the WebSocket (one per text frame) and the Unix
@@ -174,6 +174,10 @@ export interface OffsetCommand extends Command { type: 'offset'; ms: number }
 export interface PickCommand extends Command { type: 'pick'; ref: string }
 export interface MarkCommand extends Command { type: 'mark'; mark: TrackMark }
 export interface UnpickCommand extends Command { type: 'unpick' }
+// The lyrics shown are wrong or mistimed: remembered for the track, and the next best shown
+export interface ReportCommand extends Command { type: 'report'; kind: ReportKind }
+// Forgets what was reported about the track playing
+export interface UnreportCommand extends Command { type: 'unreport' }
 // Plays from ms into the track playing, in the player playing it
 export interface SeekCommand extends Command { type: 'seek'; ms: number }
 // Changes how one instance's page looks, or every page's without one; reset forgets the changes made for it
@@ -184,10 +188,25 @@ export interface CandidatesCommand extends Command { type: 'candidates' }
 export interface StateCommand extends Command { type: 'state' }
 export interface SubscribeCommand extends Command { type: 'subscribe'; lines: boolean }
 
-export type ClientCommand = NudgeCommand | OffsetCommand | PickCommand | MarkCommand | UnpickCommand | SeekCommand | DisplayCommand | RefreshCommand | CandidatesCommand
+export type ClientCommand = NudgeCommand | OffsetCommand | PickCommand | MarkCommand | UnpickCommand | ReportCommand | UnreportCommand | SeekCommand | DisplayCommand | RefreshCommand | CandidatesCommand
   | StateCommand | SubscribeCommand;
 
-export const COMMANDS: ReadonlyArray<ClientCommand['type']> = ['nudge', 'offset', 'pick', 'mark', 'unpick', 'seek', 'display', 'refresh', 'candidates', 'state', 'subscribe'];
+export const COMMANDS: ReadonlyArray<ClientCommand['type']> = ['nudge', 'offset', 'pick', 'mark', 'unpick', 'report', 'unreport', 'seek', 'display', 'refresh', 'candidates', 'state', 'subscribe'];
+
+// What a report command replies: the lyrics reported, what shows now (null for nothing), and whether that is their words
+// alone, nothing else having been found
+export interface ReportReply {
+  kind: ReportKind;
+  ref: string;
+  next: string | null;
+  untimed: boolean;
+}
+
+// The reply in a sentence, for a key's toast and for sleeve ctl
+export function describeReport({ kind, ref, next, untimed }: ReportReply): string {
+  const shows = untimed ? 'showing the words without times' : next ? `showing ${next}` : 'no lyrics left';
+  return `${kind === 'wrong' ? 'Wrong lyrics' : 'Wrong times'}: ${ref}; ${shows}`;
+}
 
 // A command from untrusted JSON text, or why it is not one
 export function parseCommand(text: string): { command: ClientCommand } | { error: string; id?: string | number } {
@@ -207,6 +226,7 @@ export function parseCommand(text: string): { command: ClientCommand } | { error
   if ((type === 'nudge' || type === 'offset') && !Number.isInteger(record.ms)) return failed(`${type} needs ms, whole milliseconds`);
   if (type === 'pick' && (typeof record.ref !== 'string' || !record.ref)) return failed('pick needs ref, as provider:id');
   if (type === 'mark' && record.mark !== 'none' && record.mark !== 'instrumental') return failed('mark needs mark, none or instrumental');
+  if (type === 'report' && record.kind !== 'wrong' && record.kind !== 'mistimed') return failed('report needs kind, wrong or mistimed');
   if (type === 'seek' && (!Number.isInteger(record.ms) || (record.ms as number) < 0)) return failed('seek needs ms, whole milliseconds, not negative');
   if (type === 'display') {
     if (record.instance !== undefined && (typeof record.instance !== 'string' || !record.instance)) return failed('display needs instance to be a name');

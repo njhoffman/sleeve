@@ -151,6 +151,11 @@ build items that depend on it, listed in the later projects.
       by artist, title and length, in milliseconds. In the other direction, aligning lyrics to its vocal stem could give
       the word timings no provider has (see "A source of word timings"); untried. A contract goes in writing first, as
       with musicman.
+- [x] **Report lyrics as wrong or mistimed.** (p2) [feature] Tell sleeve the lyrics shown are not this song's, or are
+      timed wrong, so it stops showing them and tries the next best. Only for this track, kept until taken back.
+      Done in 0.39.0: `src/core/reports.ts`, schema 8; the `x` and `t` keys and the pick panel, `sleeve ctl wrong`,
+      `mistimed`, `unreport`, `sleeve reports`, `sleeve tag --fix-reported`. Lyrics are caught by id and by content, since
+      the file holds what LRCLIB gave. Nothing is sent to LRCLIB.
 - [ ] **Port the Genius provider.** (p3) [feature] Unsynced lyrics only, as the last fallback; Sunamu scrapes its
       pages (`src/main/lyricproviders/genius.ts` there). Check whether its API gives lyrics without scraping.
 - [ ] **Look into Musixmatch again.** (p3) [feature] Wanted for word-level richsync and lookups by ISRC and

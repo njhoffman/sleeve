@@ -1,10 +1,10 @@
-import type { LyricLine, LyricsResult, ScoredCandidate, TrackMark } from '../core/types.ts';
+import type { LyricLine, LyricsResult, ReportKind, ScoredCandidate, TrackMark } from '../core/types.ts';
 import { nextLineTime, wordFill, wordTexts, wordTimings } from '../now/lines.ts';
 import type { NowState } from '../now/state.ts';
 import { Connection } from './connection.ts';
 import { pageTheme, parseHex, textTheme, themeVariables, validColors, type OverlayColors } from './contrast.ts';
 import { CoverFlow } from './flow.ts';
-import { parseBackground, type PageBackground } from '../protocol/messages.ts';
+import { describeReport, parseBackground, type PageBackground, type ReportReply } from '../protocol/messages.ts';
 import { candidateEntries, coverColors, displaySettings, flowSettings, flowStep, follow, formatOffset, formatTime, lineStart, lyricsInsets, NO_SCROLL_BACK, nowText, resolveArea, progress, scrollBackOffset, status, wheel, type CandidateEntry, type DisplaySettings, type FlowSettings, type FlowView, type ScrollBack } from './view.ts';
 
 // The renderer: sleeved's session as scrolling lyrics. The current line is worked out every frame from the
@@ -530,6 +530,12 @@ async function markTrack(which: TrackMark): Promise<void> {
   showToast(reply.ok ? (which === 'none' ? 'Marked: no correct lyrics' : 'Marked: instrumental') : reply.error ?? 'Failed');
 }
 
+async function reportShown(kind: ReportKind): Promise<void> {
+  picker.hidden = true;
+  const reply = await connection.send({ type: 'report', kind });
+  showToast(reply.ok ? describeReport(reply.data as ReportReply) : reply.error ?? 'Failed');
+}
+
 async function simple(type: 'refresh' | 'unpick', done: (data: unknown) => string): Promise<void> {
   if (type === 'refresh') showToast('Looking it up again');
   const reply = await connection.send({ type });
@@ -538,6 +544,8 @@ async function simple(type: 'refresh' | 'unpick', done: (data: unknown) => strin
 
 element<HTMLElement>('mark-none').addEventListener('click', () => void markTrack('none'));
 element<HTMLElement>('mark-instrumental').addEventListener('click', () => void markTrack('instrumental'));
+element<HTMLElement>('report-wrong').addEventListener('click', () => void reportShown('wrong'));
+element<HTMLElement>('report-mistimed').addEventListener('click', () => void reportShown('mistimed'));
 
 document.addEventListener('keydown', event => {
   if (event.ctrlKey || event.metaKey || event.altKey) return;
@@ -547,6 +555,8 @@ document.addEventListener('keydown', event => {
     else if (/^[1-9]$/.test(key) && entries[Number(key) - 1]) void pick(entries[Number(key) - 1]);
     else if (key === 'n') void markTrack('none');
     else if (key === 'i') void markTrack('instrumental');
+    else if (key === 'x') void reportShown('wrong');
+    else if (key === 't') void reportShown('mistimed');
     else if (key === 'u') {
       picker.hidden = true;
       void simple('unpick', data => (data as { removed: boolean }).removed ? 'Back to the ranking' : 'No pick for this track');
@@ -558,6 +568,8 @@ document.addEventListener('keydown', event => {
   else if (key === '-' || key === '_') void nudge({ type: 'nudge', ms: -NUDGE_MS });
   else if (key === '0') void nudge({ type: 'offset', ms: 0 });
   else if (key === 'p') void openPicker();
+  else if (key === 'x') void reportShown('wrong');
+  else if (key === 't') void reportShown('mistimed');
   else if (key === 'r') void simple('refresh', () => 'Looked up again');
   else if (key === '?') help.hidden = !help.hidden;
   else if (key === 'Escape') help.hidden = true;

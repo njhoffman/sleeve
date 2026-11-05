@@ -63,7 +63,8 @@ export function describeCandidate(candidate: ScoredCandidate): string {
   const words = lyrics.lines.some(line => line.words?.length) ? ', word timing' : '';
   const album = track.album ? ` (${track.album})` : '';
   const cached = candidate.cachedAt ? ', cached' : '';
-  return `${candidate.provider}: ${track.artist} - ${track.title}${album} ${clock(track.durationMs)}, ${kind}${words}, score ${candidate.score.toFixed(2)}${cached}`;
+  const reported = candidate.reported ? `, reported ${candidate.reported}` : '';
+  return `${candidate.provider}: ${track.artist} - ${track.title}${album} ${clock(track.durationMs)}, ${kind}${words}, score ${candidate.score.toFixed(2)}${cached}${reported}`;
 }
 
 export function pickProviders(names: string | undefined): FetchOptions['providers'] {

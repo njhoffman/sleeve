@@ -136,10 +136,28 @@ describe('sleeve daemon', () => {
       expect(err.at(-1)).to.match(/^No candidate nope:1 for /);
     });
 
+    it('reports the lyrics shown, says what shows now, and forgets it', async () => {
+      await startDaemon();
+      expect(await ctlCommand('mistimed', [], { socket }, io)).to.equal(0);
+      expect(out.at(-1)).to.match(/^Wrong times: lrclib:\d+; showing the words without times$/);
+      expect(await ctlCommand('mistimed', [], { socket }, io)).to.equal(1);
+      expect(err.at(-1)).to.equal('These lyrics have no times');
+      expect(await ctlCommand('unreport', [], { socket }, io)).to.equal(0);
+      expect(out.at(-1)).to.equal('Forgot what was reported');
+      expect(await ctlCommand('wrong', [], { socket }, io)).to.equal(0);
+      expect(out.at(-1)).to.match(/^Wrong lyrics: lrclib:\d+; no lyrics left$/);
+      expect(await ctlCommand('wrong', [], { socket }, io)).to.equal(1);
+      expect(err.at(-1)).to.equal('No lyrics shown');
+      expect(await ctlCommand('unreport', [], { socket }, io)).to.equal(0);
+      expect(await ctlCommand('unreport', [], { socket }, io)).to.equal(0);
+      expect(out.at(-1)).to.equal('Nothing reported for this track');
+    });
+
     it('says when there is nothing to move, and refuses bad usage and a missing daemon', async () => {
       const failure = async (action: string, args: string[]) => (await ctlCommand(action, args, { socket }, io).catch(error => error)).message;
       expect(await failure('nudge', ['+100'])).to.equal(`sleeved is not running (nothing answers at ${socket})`);
-      expect(await failure('jump', [])).to.equal('Unknown action: jump (nudge, offset, pick, mark, unpick, refresh, candidates, display)');
+      expect(await failure('jump', [])).to.equal('Unknown action: jump (nudge, offset, pick, mark, unpick, wrong, mistimed, unreport, refresh, candidates, display)');
+      expect(await failure('wrong', ['x'])).to.equal('Usage: sleeve ctl wrong');
       expect(await failure('nudge', [])).to.equal('Usage: sleeve ctl nudge <ms>');
       expect(await failure('refresh', ['x'])).to.equal('Usage: sleeve ctl refresh');
       expect(await failure('offset', ['soon'])).to.match(/^Invalid offset: soon/);

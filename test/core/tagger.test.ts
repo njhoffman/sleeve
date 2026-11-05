@@ -7,7 +7,7 @@ import { TrackPrefs } from '../../src/core/prefs.ts';
 import type { Provider } from '../../src/core/providers/provider.ts';
 import { FALLBACK_AFTER_MS, FALLBACK_ATTEMPTS, gaveUp, RETRY_BACKOFF_MS, TagFallbacks, TagRetries } from '../../src/core/retries.ts';
 import { queryForFile } from '../../src/core/fetchLyrics.ts';
-import { listMp3s, tagFiles, type TagReport } from '../../src/core/tagger.ts';
+import { listMp3s, reportedFiles, tagFiles, type TagReport } from '../../src/core/tagger.ts';
 import { parseId3 } from '../../src/core/tags/id3.ts';
 import { FileChangedError, readLyricsTag, writeLyricsTag } from '../../src/core/tags/lyricsTag.ts';
 import { musicMetadataReader } from '../../src/core/tags/musicMetadata.ts';
@@ -368,6 +368,80 @@ describe('sleeve tag', () => {
         const result = await run([file, other], options);
         expect(result.reports.map(report => report.detail)).to.deep.equal(['first not among the providers', 'no fallback recorded']);
         expect(fallbacks.count()).to.equal(1);
+      });
+    });
+
+    describe('reports', () => {
+      const reportedLrc = '[00:01.00]Other song\n[00:02.50]Other line';
+      const other: Lyrics = { synced: true, instrumental: false, lines: [{ time: 1000, text: 'Other song' }, { time: 2500, text: 'Other line' }] };
+      const report = async (file: string, kind: 'wrong' | 'mistimed', prefs: TrackPrefs) => {
+        prefs.addReport(await readQuery(file), kind, { provider: 'embedded', id: `${file}#USLT`, track: { artist: 'Artist', title: 'Song' }, lyrics: other });
+      };
+
+      it('leaves the file alone on a usual run, forced or not asked, and writes no reported lyrics into an empty one', async () => {
+        const prefs = new TrackPrefs(database);
+        const full = await mp3('a.mp3', { title: 'Full', unsynced: reportedLrc });
+        await report(full, 'wrong', prefs);
+        const before = await readFile(full);
+        const first = await run([full], { providers: [online('fake', () => [candidate(synced)])], prefs, write: true });
+        expect(first.status).to.deep.equal(['a.mp3: has lyrics']);
+        expect((await readFile(full)).equals(before)).to.equal(true);
+
+        const empty = await mp3('b.mp3', { title: 'Empty' });
+        await report(empty, 'wrong', prefs);
+        const second = await run([empty], { providers: [online('fake', () => [candidate(other)])], prefs, write: true });
+        expect(second.status).to.deep.equal(['b.mp3: not found']);
+        expect((await readLyricsTag(empty)).uslt).to.equal(null);
+      });
+
+      it('replaces reported lyrics in a file only with fixReported and write', async () => {
+        const prefs = new TrackPrefs(database);
+        const file = await mp3('a.mp3', { unsynced: reportedLrc });
+        await report(file, 'wrong', prefs);
+        const providers = [online('fake', () => [candidate(other, '1'), candidate(synced, '2')])];
+        const dry = await run([file], { providers, prefs, fixReported: true });
+        expect(dry.status).to.deep.equal(['a.mp3: would write']);
+        expect((await readLyricsTag(file)).uslt!.text).to.equal(reportedLrc);
+        const done = await run([file], { providers, prefs, fixReported: true, write: true });
+        expect(done.status).to.deep.equal(['a.mp3: written']);
+        expect(done.reports[0].detail).to.equal('fake:2, synced, 2 lines, replacing lyrics reported wrong');
+        expect((await readLyricsTag(file)).uslt!.text).to.equal(LRC);
+        const again = await run([file], { providers, prefs, fixReported: true, write: true });
+        expect(again.reports[0]).to.deep.include({ status: 'unchanged', detail: 'the lyrics reported are not in this file' });
+      });
+
+      it('keeps the file when nothing else fits, a provider failed, or it is marked', async () => {
+        const prefs = new TrackPrefs(database);
+        const file = await mp3('a.mp3', { unsynced: reportedLrc });
+        await report(file, 'wrong', prefs);
+        const before = await readFile(file);
+        const nothing = await run([file], { providers: [online('fake', () => [candidate(other)])], prefs, fixReported: true, write: true });
+        expect(nothing.reports[0]).to.deep.include({ status: 'has lyrics', detail: 'nothing else fits; the lyrics reported wrong stay in the file' });
+        const failing = await run([file], { providers: [online('fake', () => new Error('down'))], prefs, fixReported: true, write: true });
+        expect(failing.reports[0]).to.deep.include({ status: 'deferred', detail: 'fake failed; run again later' });
+        prefs.setMark(await readQuery(file), 'none');
+        const marked = await run([file], { providers: [online('fake', () => [candidate(synced)])], prefs, fixReported: true, write: true });
+        expect(marked.reports[0].status).to.equal('has lyrics');
+        expect((await readFile(file)).equals(before)).to.equal(true);
+      });
+
+      it('finds other timing for mistimed lyrics', async () => {
+        const prefs = new TrackPrefs(database);
+        const file = await mp3('a.mp3', { unsynced: reportedLrc });
+        await report(file, 'mistimed', prefs);
+        const later: Lyrics = { ...other, lines: other.lines.map(line => ({ ...line, time: line.time! + 400 })) };
+        const done = await run([file], { providers: [online('fake', () => [candidate(other, '1'), candidate(later, '2')])], prefs, fixReported: true, write: true });
+        expect(done.status).to.deep.equal(['a.mp3: written']);
+        expect((await readLyricsTag(file)).uslt!.text).to.equal('[00:01.40]Other song\n[00:02.90]Other line');
+      });
+
+      it('lists only the files whose track has reports', async () => {
+        const prefs = new TrackPrefs(database);
+        const reported = await mp3('a.mp3', { title: 'One', unsynced: reportedLrc });
+        const quiet = await mp3('b.mp3', { title: 'Two', unsynced: reportedLrc });
+        expect(await reportedFiles([reported, quiet], { prefs })).to.deep.equal([]);
+        await report(reported, 'wrong', prefs);
+        expect(await reportedFiles([reported, quiet], { prefs })).to.deep.equal([reported]);
       });
     });
 

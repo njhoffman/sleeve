@@ -1,6 +1,6 @@
 import { expect } from 'chai';
 import type { LyricsResult, ScoredCandidate } from '../../src/core/types.ts';
-import { parseBackground, parseCommand } from '../../src/protocol/messages.ts';
+import { describeReport, parseBackground, parseCommand } from '../../src/protocol/messages.ts';
 import { fromWire, SessionMirror } from '../../src/protocol/mirror.ts';
 
 const best: ScoredCandidate = {
@@ -10,7 +10,21 @@ const best: ScoredCandidate = {
 const result: LyricsResult = { best, candidates: [best], rejected: [], errors: [], pinned: false, offsetMs: 0 };
 const track = { key: 'k', artist: 'A', title: 'T', durationMs: 60_000 };
 
+describe('describeReport', () => {
+  it('says what was reported and what shows now', () => {
+    expect(describeReport({ kind: 'wrong', ref: 'lrclib:1', next: 'netease:2', untimed: false })).to.equal('Wrong lyrics: lrclib:1; showing netease:2');
+    expect(describeReport({ kind: 'wrong', ref: 'lrclib:1', next: null, untimed: false })).to.equal('Wrong lyrics: lrclib:1; no lyrics left');
+    expect(describeReport({ kind: 'mistimed', ref: 'lrclib:1', next: 'lrclib:1', untimed: true })).to.equal('Wrong times: lrclib:1; showing the words without times');
+  });
+});
+
 describe('parseCommand', () => {
+  it('takes reports of the two kinds only', () => {
+    expect(parseCommand('{"type":"report","kind":"mistimed"}')).to.deep.equal({ command: { type: 'report', kind: 'mistimed' } });
+    expect(parseCommand('{"type":"unreport"}')).to.deep.equal({ command: { type: 'unreport' } });
+    expect(parseCommand('{"type":"report","kind":"bad"}')).to.deep.equal({ error: 'report needs kind, wrong or mistimed' });
+  });
+
   it('takes every command with what it needs', () => {
     expect(parseCommand('{"type":"nudge","ms":-100,"id":3}')).to.deep.equal({ command: { type: 'nudge', ms: -100, id: 3 } });
     expect(parseCommand('{"type":"pick","ref":"lrclib:1","id":"a"}')).to.deep.equal({ command: { type: 'pick', ref: 'lrclib:1', id: 'a' } });

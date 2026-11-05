@@ -14,6 +14,7 @@ import { daemonCommand, type DaemonCommandOptions } from './daemon.ts';
 import { FORMATS, lyricsCommand, type Io, type LyricsOptions } from './lyrics.ts';
 import { nowCommand, type NowOptions } from './now.ts';
 import { offsetCommand, pickCommand, type TrackCommandOptions } from './prefs.ts';
+import { reportsCommand, type ReportsOptions } from './reports.ts';
 import { tagCommand, type TagCommandOptions } from './tag.ts';
 
 const stdio: Io = {
@@ -99,8 +100,8 @@ export function buildProgram(io: Io, setExit: (code: number) => void): Command {
     });
 
   program.command('ctl')
-    .description('Tell the running sleeved what to do with what plays, e.g. from an i3 binding: nudge <ms>, offset <ms>, pick <provider:id|n>, unpick, refresh, candidates, display')
-    .argument('<action>', 'nudge, offset, pick, mark, unpick, refresh, candidates or display')
+    .description('Tell the running sleeved what to do with what plays, e.g. from an i3 binding: nudge <ms>, offset <ms>, pick <provider:id|n>, unpick, wrong, mistimed, unreport, refresh, candidates, display')
+    .argument('<action>', 'nudge, offset, pick, mark, unpick, wrong, mistimed, unreport, refresh, candidates or display')
     .argument('[args...]', 'milliseconds for nudge and offset (+100, -250; offset 0 removes it), a candidate for pick')
     .option('--socket <path>', 'sleeved\'s Unix socket (default: $XDG_RUNTIME_DIR/sleeve/sleeved.sock)')
     .option('--json', 'with candidates, print them all as JSON')
@@ -153,6 +154,19 @@ export function buildProgram(io: Io, setExit: (code: number) => void): Command {
       setExit(await offsetCommand(args, options, io));
     });
 
+  program.command('reports')
+    .description('List the lyrics you reported as wrong or mistimed (sleeve ctl wrong, the x and t keys); --reset forgets those of a track')
+    .argument('[file]', 'with --reset: an audio file; its tags give the track')
+    .option('-a, --artist <artist>', 'with --reset: artist (overrides the file\'s tag)')
+    .option('-t, --title <title>', 'with --reset: title (overrides the file\'s tag)')
+    .option('-d, --duration <length>', 'with --reset: track length in seconds or m:ss')
+    .option('--reset', 'forget what was reported about the track named')
+    .option('--all', 'with --reset: about every track')
+    .option('--json', 'print them as JSON')
+    .action(async (file: string | undefined, options: ReportsOptions) => {
+      setExit(await reportsCommand(file, options, io));
+    });
+
   program.command('tag')
     .description('Write synced lyrics into mp3 files (their USLT frame, as LRC text), leaving lyrics that are there alone; only says what it would write without --write')
     .argument('<paths...>', 'mp3 files, or directories to go through')
@@ -161,6 +175,7 @@ export function buildProgram(io: Io, setExit: (code: number) => void): Command {
     .option('--unsynced', 'write unsynced lyrics when no synced ones are found')
     .option('--retry-now', 'ask about files deferred for a failing provider now, not after their pause')
     .option('--recheck-fallbacks', 'only ask a provider that kept failing again about the files written without it, replacing their lyrics with its own when those fit')
+    .option('--fix-reported', 'only replace lyrics you reported as wrong or mistimed in the files that hold them, when others fit')
     .option('--delay <ms>', 'least time between two requests to one service, in milliseconds (LRCLIB: never under 700, one at a time)', String(DEFAULT_DELAY_MS))
     .option('-j, --jobs <count>', 'files looked up at once', String(DEFAULT_JOBS))
     .option('--limit <count>', 'stop after this many files written (or that would be)')

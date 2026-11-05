@@ -71,6 +71,9 @@ export interface ScoredCandidate extends Candidate {
   // 0 to 1; candidates under the threshold are not offered as a match
   score: number;
   detail: ScoreDetail;
+  // What the user reported about these lyrics (src/core/reports.ts). Those stay out of the ranking, listed with the rejected;
+  // best with this set and no times is the words of lyrics whose times were reported, nothing better being found.
+  reported?: ReportKind;
 }
 
 export interface ProviderError {
@@ -80,6 +83,9 @@ export interface ProviderError {
 
 // What the user can say instead of picking lyrics: none are right for this track, or it has no words
 export type TrackMark = 'none' | 'instrumental';
+
+// What the user can say about lyrics shown: not this song's words, or this song's words at the wrong times
+export type ReportKind = 'wrong' | 'mistimed';
 
 export interface LyricsResult {
   best: ScoredCandidate | null;
