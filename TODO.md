@@ -253,6 +253,8 @@ build items that depend on it, listed in the later projects.
       until Retry-After plus up to 30% jitter, during which requests fail at once (`LrclibHeldError`) unsent.
       0.16.2: a hold ending within 5 s is waited out; the third dry run showed 1 s holds after 503s deferring
       416 of the first 1000 files unasked.
+- [x] **Review the doubtful files.** (p2) [feature] 198 files after the 2026-11-05 run have synced lyrics held back as not fitting: 148 are 5 to 10 s off the file's length, 36 run past its end, 14 stop early.
+      Done in 0.42.0: `sleeve review <paths>`, closest match first: accept, preview, another candidate, skip, or mark. `--list` prints them without asking.
 - [ ] **Register sleeve with LRCLIB.** (p2) [chore] An app in https://lrclib.net/developers gets an `Lrclib-App-Id`
       (public, safe to ship) and about 180 requests a minute instead of 90, and a way for them to reach us.
       sleeve would send the header when one is configured. LRCLIB still answered 429 about 180 times in the

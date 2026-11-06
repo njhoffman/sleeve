@@ -6,6 +6,12 @@ All notable changes to sleeve are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.42.0] - 2026-11-05
+
+### Added
+
+- `sleeve review <paths>` goes through doubtful files, closest match first, to accept, preview, try another candidate, skip or mark each one. `--list` only lists them.
+
 ## [0.41.0] - 2026-11-05
 
 ### Added

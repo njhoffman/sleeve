@@ -15,6 +15,7 @@ import { errStyle, FORMATS, lyricsCommand, outStyle, type Io, type LyricsOptions
 import { nowCommand, type NowOptions } from './now.ts';
 import { offsetCommand, pickCommand, type TrackCommandOptions } from './prefs.ts';
 import { reportsCommand, type ReportsOptions } from './reports.ts';
+import { reviewCommand, type ReviewOptions } from './review.ts';
 import { tagCommand, type TagCommandOptions } from './tag.ts';
 import { paint, streamStyle } from './style.ts';
 
@@ -177,6 +178,15 @@ export function buildProgram(io: Io, setExit: (code: number) => void): Command {
     .option('--json', 'print them as JSON')
     .action(async (file: string | undefined, options: ReportsOptions) => {
       setExit(await reportsCommand(file, options, io));
+    });
+
+  program.command('review')
+    .description('Go through files with synced lyrics held back as not fitting (sleeve tag calls them doubtful), closest match first: write them, look at them, try another, skip, or mark the track')
+    .argument('<paths...>', 'mp3 files, or directories to go through')
+    .option('--list', 'only list them, closest first, without asking (also when not at a terminal)')
+    .option('-p, --providers <names>', 'comma-separated providers to ask, as for sleeve lyrics (the file\'s own lyrics never count)')
+    .action(async (paths: string[], options: ReviewOptions) => {
+      setExit(await reviewCommand(paths, options, io));
     });
 
   program.command('tag')

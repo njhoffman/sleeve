@@ -58,6 +58,15 @@ export interface TagReport {
   file: string;
   status: TagStatus;
   detail?: string;
+  // On a doubtful file: what was held back, for someone to look at
+  doubt?: FileDoubt;
+}
+
+export interface FileDoubt {
+  query: TrackQuery;
+  reason: string;
+  // The synced lyrics found, best first: the first is what the reason is about
+  candidates: ScoredCandidate[];
 }
 
 export interface TagOptions extends Pick<FetchOptions, 'providers' | 'timeoutMs' | 'fetch' | 'cache' | 'prefs' | 'userAgent' | 'tags'> {
@@ -223,6 +232,14 @@ export function doubts(query: TrackQuery, candidate: ScoredCandidate): string | 
     if (share > LYRICS_SPAN[1]) return `${formatRef(candidate)} runs past the end of the file`;
   }
   return null;
+}
+
+// How far from fitting a candidate is, for looking at the likeliest first: the seconds its length is off, with lyrics that stop
+// early or run past the end after all of those, whatever its length, since those are more often another song
+export function doubtDistance(query: TrackQuery, candidate: ScoredCandidate): number {
+  const span = doubts({ durationMs: query.durationMs, artist: query.artist, title: query.title }, { ...candidate, detail: { ...candidate.detail, duration: null } });
+  const apart = query.durationMs && candidate.track.durationMs ? Math.abs(candidate.track.durationMs - query.durationMs) / 1000 : 0;
+  return span ? 1_000_000 + apart : apart;
 }
 
 // What the user marked the file's track as; null for a file with no tags to look it up by
@@ -434,7 +451,7 @@ async function tagFile(file: string, options: TagOptions & { fetch: typeof fetch
   if (chosen && !chosen.lyrics.synced) text = plainText(chosen.lyrics);
   if (text === null || !chosen) {
     retries?.clear(tag.file);
-    if (doubt) return report('doubtful', doubt);
+    if (doubt) return { ...report('doubtful', doubt), doubt: { query, reason: doubt, candidates: synced } };
     if (keepsExisting) return report('has lyrics', 'unsynced; no synced lyrics found to replace them');
     return report('not found', best ? `only unsynced lyrics (${formatRef(best)}; --unsynced writes them)` : undefined);
   }

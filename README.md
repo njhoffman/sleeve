@@ -333,6 +333,10 @@ LRCLIB is asked once per file, with no retry, since a second ask a moment later 
 With no network nothing is deferred: such a file reports `offline`, three of those within a minute stop the run with exit
 status 1, and the next run asks as if nothing had happened. A run also forgets deferred files no longer on disk or in a hidden directory.
 
+`sleeve review <paths>` goes through the files a run called doubtful, whose synced lyrics did not seem to fit, closest match first: accept (pins them
+and writes them), preview their start and end with times, try another candidate, skip, or mark the track as having no correct lyrics or as instrumental.
+A file skipped comes back next time. `--list` only lists them, as it does when not at a terminal.
+
 Two files are looked up at once (`-j`), and requests to each service are at least 300 ms apart (`--delay`). A
 service's own rate limit comes first: LRCLIB allows about 90 requests a minute from one IP for a client that
 names itself, as sleeve does, and asks batch clients to send them one at a time
