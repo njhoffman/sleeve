@@ -133,6 +133,8 @@ build items that depend on it, listed in the later projects.
       Sampled 2026-11-02: no word-synced record among 160, and 2026-11-03: none among 100 for five popular tracks
       (all have a `lyricsfile`), and 2026-11-04: none among 400 for 20 tracks, popular and recent, with no `words:` in any
       `lyricsfile`, and none in the 12265 answers cached. Wait until some exist to record a fixture.
+      2026-11-05, from the 13106 synced LRCLIB records cached for this library: 2 flagged among up to 340, both in the newest 100 and the same song (identical lines and times); none in 100 at random or 140 older. The flag can be trusted: `words: []` on unflagged records is empty.
+      Shape: `version: '1.0'`, `metadata`, then `lines` of `text`, `start_ms`, `end_ms`, `words`, each word `text` (trailing space kept), `start_ms`, `end_ms`, in ms from the start of the song. Too rare to show yet; a fixture can now be recorded, its text replaced with placeholders. Sample again in a few months.
 - [x] **Queries without a duration cannot tell versions apart.** (p3) [feature] `sleeve lyrics -a -t` without `-d`
       scores live and album versions alike (all 1.0 for "Everything In Its Right Place"). Prefer the record
       whose album matches, or the most common duration among candidates, when no duration is given.
