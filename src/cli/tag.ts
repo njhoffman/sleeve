@@ -3,7 +3,7 @@ import { DEFAULT_TIMEOUT_MS, type FetchOptions } from '../core/fetchLyrics.ts';
 import type { Provider } from '../core/providers/provider.ts';
 import { createLrclib } from '../core/providers/lrclib.ts';
 import type { TagFallbacks, TagRetries } from '../core/retries.ts';
-import { DEFAULT_DELAY_MS, DEFAULT_JOBS, listMp3s, reportedFiles, TAG_STATUSES, tagFiles, type TagReport, type TagStatus } from '../core/tagger.ts';
+import { DEFAULT_DELAY_MS, DEFAULT_JOBS, listMp3s, pruneRetries, reportedFiles, TAG_STATUSES, tagFiles, type TagReport, type TagStatus } from '../core/tagger.ts';
 import { parseDuration, pickProviders, type Io } from './lyrics.ts';
 import { openStores } from './stores.ts';
 
@@ -75,7 +75,10 @@ export async function tagCommand(paths: string[], options: TagCommandOptions, io
   process.once('SIGINT', interrupted);
   const { cache: _cache, prefs: _prefs, retries: _retries, fallbacks: _fallbacks, signal: _signal, ...rest } = given;
   let counts: Record<TagStatus, number>;
+  let networkGone = false;
   try {
+    const forgotten = stores.retries ? pruneRetries(paths, stores.retries) : 0;
+    if (forgotten) io.err(`Forgot ${forgotten} deferred file${forgotten === 1 ? '' : 's'} no run would ask about again (gone, or in a hidden directory)`);
     if (!options.write) io.err(`Looking up ${files.length} file${files.length === 1 ? '' : 's'}; nothing is written without --write`);
     counts = await tagFiles(files, {
       ...rest, providers, timeoutMs, delayMs, jobs, signal,
@@ -87,6 +90,7 @@ export async function tagCommand(paths: string[], options: TagCommandOptions, io
       ...(stores.fallbacks ? { fallbacks: stores.fallbacks } : {}),
       ...(options.recheckFallbacks ? { recheck: true } : {}),
       ...(options.fixReported ? { fixReported: true } : {}),
+      onNetworkDown: () => { networkGone = true; },
       onFile: (report: TagReport) => {
         if (options.verbose || !QUIET.includes(report.status)) io.out(`${report.status.padEnd(12)} ${shown(report.file)}${report.detail ? `  (${report.detail})` : ''}`);
       }
@@ -96,7 +100,8 @@ export async function tagCommand(paths: string[], options: TagCommandOptions, io
     stores.close();
   }
   const done = TAG_STATUSES.filter(status => counts[status]).map(status => `${counts[status]} ${status}`);
-  io.err(`${signal.aborted ? 'Stopped: ' : ''}${done.join(', ') || (options.recheckFallbacks ? 'no fallbacks recorded here' : options.fixReported ? 'nothing reported here' : 'no mp3 files')}`);
+  io.err(`${signal.aborted || networkGone ? 'Stopped: ' : ''}${done.join(', ') || (options.recheckFallbacks ? 'no fallbacks recorded here' : options.fixReported ? 'nothing reported here' : 'no mp3 files')}`);
   if (!options.recheckFallbacks && !options.fixReported && (counts.deferred || counts.waiting)) io.err('Deferred files are asked about again on a later run, once their pause is over (--retry-now: at once)');
-  return counts.failed ? 1 : 0;
+  if (networkGone) io.err('The network looks down, so the run stopped; nothing is held against the files it could not ask about. Run it again once the network is back');
+  return counts.failed || counts.offline ? 1 : 0;
 }

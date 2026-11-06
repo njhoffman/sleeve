@@ -6,6 +6,16 @@ All notable changes to sleeve are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.40.0] - 2026-11-05
+
+### Changed
+
+- `sleeve tag` with no network no longer defers files, which pushed them back by up to a day and counted toward taking a later provider's lyrics. A file reports `offline` with nothing recorded, three of those within a minute stop the run, and the exit status is 1.
+
+### Fixed
+
+- `sleeve tag` forgets deferred files that are gone from disk or in a hidden directory, which no run would ever clear.
+
 ## [0.39.3] - 2026-11-05
 
 ### Changed

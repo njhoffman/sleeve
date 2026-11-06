@@ -7,7 +7,7 @@ import { netease } from './providers/netease.ts';
 import { asUntimed, reportFor } from './reports.ts';
 import { latinCandidate, latinCandidates } from './script.ts';
 import { formatRef, sameCandidate, type CandidateRef, type TrackPrefs, type TrackPrefsRecord } from './prefs.ts';
-import type { Provider, ProviderContext } from './providers/provider.ts';
+import { networkDown, type Provider, type ProviderContext } from './providers/provider.ts';
 import { musicMetadataReader } from './tags/musicMetadata.ts';
 import type { FileTags, TagReader } from './tags/reader.ts';
 import type { Candidate, LyricsResult, ProviderError, ScoredCandidate, TrackQuery } from './types.ts';
@@ -163,7 +163,7 @@ async function run(providers: Provider[], query: TrackQuery, options: RunOptions
       store(provider, query, candidates, options, errors);
       return latinCandidates(candidates);
     } catch (error) {
-      errors.push({ provider: provider.name, message: message(error, signal) });
+      errors.push({ provider: provider.name, message: message(error, signal), ...(networkDown(error) ? { offline: true } : {}) });
       return [];
     }
   }

@@ -66,6 +66,10 @@ export class TagRetries {
     this.database.db.prepare('DELETE FROM tag_retries WHERE path = ?').run(path);
   }
 
+  paths(): string[] {
+    return (this.database.db.prepare('SELECT path FROM tag_retries').all() as Array<{ path: string }>).map(row => row.path);
+  }
+
   count(): number {
     return (this.database.db.prepare('SELECT COUNT(*) AS count FROM tag_retries').get() as { count: number }).count;
   }

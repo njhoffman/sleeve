@@ -8,7 +8,7 @@ import { SleeveDatabase } from '../../src/core/db.ts';
 import { DEFAULT_PROVIDERS } from '../../src/core/fetchLyrics.ts';
 import type { ProviderContext } from '../../src/core/providers/provider.ts';
 import { musicMetadataReader } from '../../src/core/tags/musicMetadata.ts';
-import { TagFallbacks } from '../../src/core/retries.ts';
+import { TagFallbacks, TagRetries } from '../../src/core/retries.ts';
 import { readLyricsTag } from '../../src/core/tags/lyricsTag.ts';
 import { fakeFetch, fixture } from '../helpers/fetch.ts';
 import { writeTaggedMp3 } from '../helpers/id3.ts';
@@ -30,6 +30,34 @@ describe('sleeve tag providers', () => {
 
   it('keeps LRCLIB\'s rate limit on the batch provider: one request at a time, 700 ms apart', () => {
     expect(forBatch(DEFAULT_PROVIDERS).find(provider => provider.name === 'lrclib')!.rateLimit).to.deep.equal({ host: 'lrclib.net', gapMs: 700, serial: true });
+  });
+});
+
+describe('sleeve tag with no network', () => {
+  it('stops, says so, holds nothing against the files, and exits 1', async () => {
+    const dir = await mkdtemp(path.join(os.tmpdir(), 'sleeve-tag-offline-'));
+    const database = new SleeveDatabase(path.join(dir, 'sleeve.db'));
+    try {
+      for (const name of ['a', 'b', 'c', 'd', 'e']) await writeTaggedMp3(path.join(dir, `${name}.mp3`), { artist: 'Artist', title: name });
+      const retries = new TagRetries(database);
+      const gone = path.join(dir, 'gone.mp3');
+      retries.defer(gone, 'x');
+      const out: string[] = [];
+      const err: string[] = [];
+      const io: Io = { out: text => out.push(text), err: text => err.push(text) };
+      const fetch = (async () => { throw Object.assign(new TypeError('fetch failed'), { cause: { code: 'EAI_AGAIN' } }); }) as unknown as typeof globalThis.fetch;
+      const status = await tagCommand([dir], { cache: false, prefs: false, delay: '0', jobs: '1', providers: 'lrclib' }, io, { retries, fallbacks: new TagFallbacks(database), fetch });
+      expect(status).to.equal(1);
+      expect(out.filter(line => line.startsWith('offline'))).to.have.length(3);
+      expect(err.join('\n')).to.include('Forgot 1 deferred file no run');
+      expect(err.join('\n')).to.include('Stopped: 3 offline');
+      expect(err.join('\n')).to.include('The network looks down');
+      expect(err.join('\n')).to.not.include('Deferred files are asked');
+      expect(retries.count()).to.equal(0);
+    } finally {
+      database.close();
+      await rm(dir, { recursive: true, force: true });
+    }
   });
 });
 

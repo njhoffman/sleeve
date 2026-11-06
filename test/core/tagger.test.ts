@@ -4,10 +4,10 @@ import os from 'node:os';
 import path from 'node:path';
 import { SleeveDatabase } from '../../src/core/db.ts';
 import { TrackPrefs } from '../../src/core/prefs.ts';
-import type { Provider } from '../../src/core/providers/provider.ts';
+import { networkDown, type Provider } from '../../src/core/providers/provider.ts';
 import { FALLBACK_AFTER_MS, FALLBACK_ATTEMPTS, gaveUp, RETRY_BACKOFF_MS, TagFallbacks, TagRetries } from '../../src/core/retries.ts';
 import { queryForFile } from '../../src/core/fetchLyrics.ts';
-import { listMp3s, reportedFiles, tagFiles, type TagReport } from '../../src/core/tagger.ts';
+import { listMp3s, OFFLINE_STOP_AFTER, OFFLINE_WINDOW_MS, pruneRetries, reportedFiles, tagFiles, type TagReport } from '../../src/core/tagger.ts';
 import { parseId3 } from '../../src/core/tags/id3.ts';
 import { FileChangedError, readLyricsTag, writeLyricsTag } from '../../src/core/tags/lyricsTag.ts';
 import { musicMetadataReader } from '../../src/core/tags/musicMetadata.ts';
@@ -490,6 +490,101 @@ describe('sleeve tag', () => {
       const skipped = await run([text, damaged, untitled], { providers: [provider], fetch });
       expect(skipped.status).to.deep.equal(['notes.txt: skipped', 'damaged.mp3: skipped', 'untitled.mp3: skipped']);
       expect(skipped.reports[1].detail).to.equal('unsynchronised tag');
+    });
+
+    describe('with no network', () => {
+      const noNetwork = (code = 'ENOTFOUND') => Object.assign(new TypeError('fetch failed'), { cause: Object.assign(new Error(code), { code }) });
+
+      it('tells no network from a service that refuses or does not answer', () => {
+        for (const code of ['ENOTFOUND', 'EAI_AGAIN', 'ENETUNREACH', 'ENETDOWN', 'EHOSTUNREACH']) expect(networkDown(noNetwork(code)), code).to.equal(true);
+        expect(networkDown(Object.assign(new TypeError('fetch failed'), { cause: Object.assign(new Error('all'), { errors: [{ code: 'ENETUNREACH' }] }) }))).to.equal(true);
+        for (const code of ['ECONNREFUSED', 'ECONNRESET', 'ETIMEDOUT']) expect(networkDown(noNetwork(code)), code).to.equal(false);
+        expect(networkDown(new Error('LRCLIB answered 503'))).to.equal(false);
+        expect(networkDown(null)).to.equal(false);
+      });
+
+      it('records nothing against the file: no pause, no try, and the next run asks', async () => {
+        const retries = new TagRetries(database);
+        const file = await mp3('a.mp3');
+        let down = true;
+        const provider = online('lrclib', () => down ? noNetwork() : [candidate(synced)]);
+        const result = await run([file], { providers: [provider], retries, write: true });
+        expect(result.status).to.deep.equal(['a.mp3: offline']);
+        expect(result.reports[0].detail).to.equal('no network: lrclib: fetch failed; asked on the next run');
+        expect(retries.count()).to.equal(0);
+        down = false;
+        expect((await run([file], { providers: [provider], retries, write: true })).status).to.deep.equal(['a.mp3: written']);
+      });
+
+      it('leaves a deferred file\'s pause and tries as they were, and takes no later provider\'s lyrics for having waited', async () => {
+        let clock = 0;
+        const now = () => clock;
+        const retries = new TagRetries(database, { now });
+        const file = await mp3('a.mp3');
+        const key = (await readLyricsTag(file)).file;
+        for (let attempt = 0; attempt < FALLBACK_ATTEMPTS; attempt++) retries.defer(key, 'lrclib: busy');
+        const before = retries.get(key);
+        clock = FALLBACK_AFTER_MS + 1;
+        const second = online('second', () => [{ ...candidate(synced), provider: 'second' }]);
+        const result = await run([file], { providers: [online('first', () => noNetwork()), second], retries, now, retryNow: true, write: true });
+        expect(result.status).to.deep.equal(['a.mp3: offline']);
+        expect(retries.get(key)).to.deep.equal(before);
+        expect((await readLyricsTag(file)).uslt).to.equal(null);
+      });
+
+      it('still writes what an earlier provider answered when a later one cannot be reached', async () => {
+        const file = await mp3('a.mp3');
+        const first = online('first', () => [{ ...candidate(synced), provider: 'first' }]);
+        expect((await run([file], { providers: [first, online('second', () => noNetwork())], write: true })).status).to.deep.equal(['a.mp3: written']);
+      });
+
+      it('stops the run after a few close together, once', async () => {
+        const files = await Promise.all(['a', 'b', 'c', 'd', 'e'].map(name => mp3(`${name}.mp3`)));
+        let told = 0;
+        const provider = online('lrclib', () => noNetwork());
+        const result = await run(files, { providers: [provider], jobs: 1, now: () => 0, onNetworkDown: () => { told++; } });
+        expect(result.counts.offline).to.equal(OFFLINE_STOP_AFTER);
+        expect(provider.asked).to.have.length(OFFLINE_STOP_AFTER);
+        expect(told).to.equal(1);
+      });
+
+      it('goes on through blips further apart', async () => {
+        const files = await Promise.all(['a', 'b', 'c', 'd', 'e'].map(name => mp3(`${name}.mp3`)));
+        let clock = 0;
+        let told = 0;
+        const provider = online('lrclib', () => { clock += OFFLINE_WINDOW_MS; return noNetwork(); });
+        const result = await run(files, { providers: [provider], jobs: 1, now: () => clock, onNetworkDown: () => { told++; } });
+        expect(result.counts.offline).to.equal(files.length);
+        expect(told).to.equal(0);
+      });
+
+      it('treats a service that refuses the connection as that service\'s failure', async () => {
+        const retries = new TagRetries(database);
+        const file = await mp3('a.mp3');
+        const result = await run([file], { providers: [online('lrclib', () => noNetwork('ECONNREFUSED'))], retries });
+        expect(result.status).to.deep.equal(['a.mp3: deferred']);
+        expect(retries.count()).to.equal(1);
+      });
+    });
+
+    describe('deferred files no run would ask about', () => {
+      it('forgets those gone or in a hidden directory under the paths given, and no others', async () => {
+        const retries = new TagRetries(database);
+        const root = path.join(dir, 'library');
+        await mkdir(path.join(root, '.trash'), { recursive: true });
+        const kept = path.join(root, 'kept.mp3');
+        const hidden = path.join(root, '.trash', 'old.mp3');
+        for (const file of [kept, hidden]) await writeFile(file, '');
+        const outside = path.join(dir, 'elsewhere', 'gone.mp3');
+        for (const file of [kept, hidden, path.join(root, 'gone.mp3'), outside]) retries.defer(file, 'x');
+        expect(pruneRetries([root], retries)).to.equal(2);
+        expect(retries.paths().sort()).to.deep.equal([kept, outside].sort());
+        // A hidden directory given as the path is one a run does list
+        retries.defer(hidden, 'x');
+        expect(pruneRetries([path.join(root, '.trash')], retries)).to.equal(0);
+        expect(pruneRetries([path.join(dir, 'no-such-directory')], retries)).to.equal(0);
+        expect(pruneRetries([kept], retries)).to.equal(0);
+      });
     });
 
     describe('with several files at once', () => {

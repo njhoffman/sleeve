@@ -1,3 +1,4 @@
+import { existsSync, statSync } from 'node:fs';
 import { readdir, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { DEFAULT_PROVIDERS, fetchLyrics, queryForFile, type FetchOptions } from './fetchLyrics.ts';
@@ -9,7 +10,7 @@ import { Id3Error } from './tags/id3.ts';
 import { FileChangedError, readLyricsTag, writeLyricsTag } from './tags/lyricsTag.ts';
 import { throttledFetch } from './throttle.ts';
 import { shiftLyrics } from './timing.ts';
-import type { Lyrics, ScoredCandidate, TrackMark, TrackQuery } from './types.ts';
+import type { Lyrics, ProviderError, ScoredCandidate, TrackMark, TrackQuery } from './types.ts';
 
 // `sleeve tag`: lyrics written into mp3 files' USLT frame as LRC text, the user's offset applied, word times left
 // out (most players would show them as text). Synced lyrics replace unsynced ones in the USLT (beets' lyrics plugin
@@ -25,6 +26,10 @@ import type { Lyrics, ScoredCandidate, TrackMark, TrackQuery } from './types.ts'
 // so a run while LRCLIB is overloaded does not fill the library with NetEase's lyrics. A file that has waited a day
 // and three tries (gaveUp, src/core/retries.ts) takes the later provider's answer, and its report says so. Such a
 // write is recorded (TagFallbacks), and a recheck run asks the providers it waited for again, about just those files.
+
+// A provider that could not be reached because this machine has no network has said nothing, so the file is left as it
+// was, with no pause and no try counted toward that day and three tries. A run stops once that happens a few times
+// close together: a blip costs a file or two, which the next run picks up.
 
 // Lyrics the user reported (src/core/reports.ts) are not written, but a run leaves the file's own lyrics alone, reported or
 // not: fixReported is what replaces them.
@@ -43,10 +48,11 @@ export type TagStatus =
   | 'doubtful' // synced lyrics found, none fitting the file well enough to write (see doubts)
   | 'deferred' // a provider failed; asked again after the retry pause
   | 'waiting' // deferred before, and its pause has not run out
+  | 'offline' // no network to ask a provider over; nothing recorded, asked on the next run
   | 'skipped' // a file or tag sleeve does not write to
   | 'failed';
 
-export const TAG_STATUSES: TagStatus[] = ['written', 'would write', 'unchanged', 'has lyrics', 'instrumental', 'not found', 'doubtful', 'deferred', 'waiting', 'skipped', 'failed'];
+export const TAG_STATUSES: TagStatus[] = ['written', 'would write', 'unchanged', 'has lyrics', 'instrumental', 'not found', 'doubtful', 'deferred', 'waiting', 'offline', 'skipped', 'failed'];
 
 export interface TagReport {
   file: string;
@@ -78,6 +84,8 @@ export interface TagOptions extends Pick<FetchOptions, 'providers' | 'timeoutMs'
   limit?: number;
   // Ends the run: no file is started after it, those under way finish (an interrupted lookup is not reported)
   signal?: AbortSignal;
+  // Told once when the run stops for want of a network
+  onNetworkDown?: () => void;
   now?: () => number;
   sleep?: (ms: number, signal?: AbortSignal) => Promise<void>;
   onFile?: (report: TagReport) => void;
@@ -104,7 +112,27 @@ export async function listMp3s(paths: string[]): Promise<string[]> {
   return found;
 }
 
+// Forgets the deferred files no run over these paths would ever ask about again, which would otherwise stay for good: those no
+// longer on disk, and those a directory's listing leaves out (listMp3s). Paths outside the given directories are left alone.
+export function pruneRetries(paths: string[], retries: TagRetries): number {
+  const roots = paths.map(given => path.resolve(given)).filter(root => statSync(root, { throwIfNoEntry: false })?.isDirectory());
+  let forgotten = 0;
+  for (const file of retries.paths()) {
+    const relative = roots.map(root => path.relative(root, file)).find(inside => !inside.startsWith('..') && !path.isAbsolute(inside));
+    if (relative === undefined) continue;
+    if (existsSync(file) && !relative.split(path.sep).some(part => part.startsWith('.'))) continue;
+    retries.clear(file);
+    forgotten++;
+  }
+  return forgotten;
+}
+
 const time = (ms: number) => new Date(ms).toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' });
+const noNetwork = (errors: ProviderError[]) => `no network: ${errors.map(error => `${error.provider}: ${error.message}`).join('; ')}; asked on the next run`;
+
+// How many files with no network, how close together, stop a run
+export const OFFLINE_STOP_AFTER = 3;
+export const OFFLINE_WINDOW_MS = 60_000;
 
 export async function tagFiles(files: string[], options: TagOptions = {}): Promise<Record<TagStatus, number>> {
   const counts = Object.fromEntries(TAG_STATUSES.map(status => [status, 0])) as Record<TagStatus, number>;
@@ -125,6 +153,15 @@ export async function tagFiles(files: string[], options: TagOptions = {}): Promi
   let underWay = 0;
   let written = 0;
   let failure: { error: unknown } | null = null;
+  let offlineAt: number[] = [];
+  let networkGone = false;
+  const noteOffline = () => {
+    const at = now();
+    offlineAt = [...offlineAt.filter(earlier => at - earlier <= OFFLINE_WINDOW_MS), at];
+    if (networkGone || offlineAt.length < OFFLINE_STOP_AFTER) return;
+    networkGone = true;
+    options.onNetworkDown?.();
+  };
   const flush = () => {
     for (; reported < started && done[reported] !== undefined; reported++) {
       const report = done[reported];
@@ -133,7 +170,7 @@ export async function tagFiles(files: string[], options: TagOptions = {}): Promi
       options.onFile?.(report);
     }
   };
-  const more = () => started < files.length && !options.signal?.aborted && !failure
+  const more = () => started < files.length && !options.signal?.aborted && !failure && !networkGone
     && (options.limit === undefined || written + underWay < options.limit);
   const worker = async () => {
     while (more()) {
@@ -144,6 +181,7 @@ export async function tagFiles(files: string[], options: TagOptions = {}): Promi
         // Interrupted: only a file written counts, the rest is looked at again on the next run
         const counted = !options.signal?.aborted || report.status === 'written';
         done[index] = counted ? report : null;
+        if (counted && report.status === 'offline') noteOffline();
         if (counted && (report.status === 'written' || report.status === 'would write')) written++;
       } catch (error) {
         done[index] = null;
@@ -234,6 +272,7 @@ async function recheckFile(file: string, options: TagOptions & { fetch: typeof f
   });
   if (signal?.aborted) return report('failed', 'interrupted');
   const failed = result.errors.filter(error => online.has(error.provider));
+  if (failed.some(error => error.offline)) return report('offline', noNetwork(failed));
   if (failed.length) return report('deferred', `${failed.map(error => error.provider).join(', ')} failed again; ${record.provider}'s lyrics stay until the next recheck`);
   const chosen = result.candidates.find(candidate => candidate.lyrics.synced && doubts(query, candidate) === null);
   if (!chosen) return done('has lyrics', `${record.waitedFor.join(', ')} has nothing that fits; ${record.provider}'s lyrics stay`);
@@ -305,6 +344,7 @@ async function fixReportedFile(file: string, options: TagOptions & { fetch: type
   const order = providers!.map(provider => provider.name);
   const failed = result.errors.filter(error => online.has(error.provider));
   const earlier = chosen ? failed.filter(error => order.indexOf(error.provider) < order.indexOf(chosen.provider)) : failed;
+  if (earlier.some(error => error.offline)) return report('offline', noNetwork(earlier));
   if (earlier.length) return report('deferred', `${earlier.map(error => error.provider).join(', ')} failed; run again later`);
   if (!chosen) return report('has lyrics', `nothing else fits; the lyrics reported ${reported} stay in the file`);
   const text = formatLrc(shiftLyrics(chosen.lyrics, chosen === result.best ? result.offsetMs : 0), { words: false });
@@ -377,6 +417,7 @@ async function tagFile(file: string, options: TagOptions & { fetch: typeof fetch
   }
   // A provider preferred to the one with the answer failed: wait for it
   const earlier = chosen ? failed.filter(error => order.indexOf(error.provider) < order.indexOf(chosen.provider)) : failed;
+  if (earlier.some(error => error.offline)) return report('offline', noNetwork(earlier));
   // ...unless it has waited long enough for them, and the later provider has an answer
   const waitedOut = chosen !== null && earlier.length > 0 && gaveUp(retry, now());
   const waitFor = waitedOut ? [] : earlier;

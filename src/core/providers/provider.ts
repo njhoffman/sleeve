@@ -38,3 +38,12 @@ export class ProviderHttpError extends Error {
     this.status = status;
   }
 }
+
+// What fetch's failure says when this machine has no way out, as opposed to a service that refuses or does not answer: no
+// name resolved, no route. fetch wraps the system's error in cause; with several addresses to try, cause holds them all.
+const NO_NETWORK = new Set(['ENOTFOUND', 'EAI_AGAIN', 'ENETUNREACH', 'ENETDOWN', 'EHOSTUNREACH']);
+
+export function networkDown(error: unknown): boolean {
+  const cause = (error as { cause?: { code?: string; errors?: Array<{ code?: string }> } } | null)?.cause;
+  return [cause?.code, ...(cause?.errors ?? []).map(each => each.code)].some(code => code !== undefined && NO_NETWORK.has(code));
+}

@@ -326,6 +326,8 @@ what the first wrote, so stopping it (Ctrl-C finishes the files in hand) loses n
 (LRCLIB is often overloaded, for about a quarter of a library's first run) are deferred: a later run asks about
 them again after 10 minutes, then 1, 6 and 24 hours (`--retry-now` at once), so a library takes a few runs.
 LRCLIB is asked once per file, with no retry, since a second ask a moment later hardly ever gets through.
+With no network nothing is deferred: such a file reports `offline`, three of those within a minute stop the run with exit
+status 1, and the next run asks as if nothing had happened. A run also forgets deferred files no longer on disk or in a hidden directory.
 
 Two files are looked up at once (`-j`), and requests to each service are at least 300 ms apart (`--delay`). A
 service's own rate limit comes first: LRCLIB allows about 90 requests a minute from one IP for a client that

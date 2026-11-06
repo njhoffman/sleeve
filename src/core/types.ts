@@ -79,6 +79,8 @@ export interface ScoredCandidate extends Candidate {
 export interface ProviderError {
   provider: string;
   message: string;
+  // The machine had no network, so this says nothing about the provider
+  offline?: boolean;
 }
 
 // What the user can say instead of picking lyrics: none are right for this track, or it has no words

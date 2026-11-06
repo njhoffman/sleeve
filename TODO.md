@@ -260,13 +260,16 @@ build items that depend on it, listed in the later projects.
       those lyrics even once LRCLIB answers. Could record them (their report says "failing since") and offer a
       run that asks LRCLIB again for just those, replacing the lyrics when LRCLIB's fit.
       Done in 0.26.0: `TagFallbacks` (schema 7), `sleeve tag --recheck-fallbacks`.
-- [ ] **A library run with the network down defers everything.** (p2) [bug] On 2026-11-05 a run with Wi-Fi off gave 277 `lrclib: fetch failed`, each counted as a provider failure: 265 files moved to the longest wait, and such
+- [x] **A library run with the network down defers everything.** (p2) [bug] On 2026-11-05 a run with Wi-Fi off gave 277 `lrclib: fetch failed`, each counted as a provider failure: 265 files moved to the longest wait, and such
       failures also count toward taking a later provider's answer after a day and three tries. A run that finds the network down should stop rather than defer, without counting those attempts.
-- [ ] **Stale rows in `tag_retries`.** (p3) [cleanup] 42 rows no run will ever clear: 28 for files in a dot-directory, which runs leave out, and 14 for files no longer on disk.
-- [ ] **LRCLIB's refusals in library runs.** (p3) [perf] About half the less-known tracks get a 503 from LRCLIB on
+      Done in 0.40.0: no name resolved or no route means `offline`, with nothing recorded, and three within a minute stop the run. A connection that hangs still counts as the provider timing out, so it is deferred.
+- [x] **Stale rows in `tag_retries`.** (p3) [cleanup] 42 rows no run will ever clear: 28 for files in a dot-directory, which runs leave out, and 14 for files no longer on disk.
+      Done in 0.40.0: `pruneRetries` forgets them at the start of a run over their directory.
+- [x] **LRCLIB's refusals in library runs.** (p3) [perf] About half the less-known tracks get a 503 from LRCLIB on
       first ask and are deferred when NetEase has nothing synced; with the 10 min / 1 h / 6 h / 24 h backoff a
       library run needs several passes. Watch how many stay deferred after a full run before tuning the backoff
       or adding a `--until-done` that loops over deferred files.
+      Watched, and no change needed: 1611 deferred or waiting, then 271, then none on 2026-11-05 with `--retry-now`. The backoff does its job, and `--retry-now` is the loop.
 
 ## 5. Players
 
