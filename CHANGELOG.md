@@ -6,6 +6,12 @@ All notable changes to sleeve are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.39.3] - 2026-11-05
+
+### Changed
+
+- Notes on running under backdrop: since backdrop 2.50.7 it no longer resizes a `--managed` window, now that sleeve sizes it exactly (`docs/backdrop.md`).
+
 ## [0.39.2] - 2026-11-05
 
 ### Fixed

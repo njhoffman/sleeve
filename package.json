@@ -1,6 +1,6 @@
 {
   "name": "sleeve",
-  "version": "0.39.2",
+  "version": "0.39.3",
   "description": "Synced lyrics from several sources for what MPD or Spotify plays, shown in a window or as a desktop overlay",
   "type": "module",
   "license": "MPL-2.0",

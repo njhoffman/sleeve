@@ -224,7 +224,7 @@ build items that depend on it, listed in the later projects.
       requests to each host 300 ms apart across them (src/core/throttle.ts, `--delay`), reports in file order,
       `--limit` never overshot, LRCLIB without its retry in batch runs. 24 random files, no cache: 70-91 s before,
       22-33 s after; `-j 3` gave 19 s but 7 deferred instead of 3-4, so 2 stays the default.
-- [ ] **Library dry run, 2026-11-02.** (p1) [chore] 7551 files (188 of them in `.musicman`, now left out): 5512
+- [x] **Library dry run, 2026-11-02.** (p1) [chore] 7551 files (188 of them in `.musicman`, now left out): 5512
       would write, 1762 deferred (all LRCLIB), 118 not found, 101 has lyrics, 58 instrumental; 410 NetEase answers
       were "纯音乐" stand-ins (provider fixed, cache rows deleted). An audit of the first 833 written from the
       cache: LRCLIB 203, none under 0.85; NetEase 630, about 50 under 0.85, 133 more than 2 s off, 36 ending early
@@ -241,7 +241,8 @@ build items that depend on it, listed in the later projects.
       credits and notes in Chinese, Cyrillic look-alikes, 4 songs wrong outright); after 0.19.0 104 were
       rewritten and 6 had their USLT emptied (no lyrics in Latin script; Talking Heads' "Animals" and Cypress
       Hill's "Bitter" have unsynced English ones on LRCLIB).
-      Next: repeat runs for the deferred files over the following days.
+      Repeat runs for the deferred files followed. 2026-11-04 (7348 files): 900 written, 248 deferred, 23 waiting, 168 of the written from NetEase after LRCLIB kept failing.
+      Done 2026-11-05 with `--retry-now`: 69 written (all LRCLIB, 39 replacing unsynced lyrics), 5694 has lyrics (355 of them unsynced), 528 instrumental, 859 not found, 198 doubtful, none deferred. About 5408 files have synced lyrics.
 - [x] **Honor LRCLIB's `Retry-After`.** (p1) [fix] Its docs say clients must: on a 429 (and a 503, usually 1 s)
       wait at least that many seconds, with up to 30% jitter, or risk a temporary ban. sleeve ignores it: the
       daemon's retry waits a fixed second, and `sleeve tag` goes on with the next file. The throttle could hold
@@ -259,6 +260,9 @@ build items that depend on it, listed in the later projects.
       those lyrics even once LRCLIB answers. Could record them (their report says "failing since") and offer a
       run that asks LRCLIB again for just those, replacing the lyrics when LRCLIB's fit.
       Done in 0.26.0: `TagFallbacks` (schema 7), `sleeve tag --recheck-fallbacks`.
+- [ ] **A library run with the network down defers everything.** (p2) [bug] On 2026-11-05 a run with Wi-Fi off gave 277 `lrclib: fetch failed`, each counted as a provider failure: 265 files moved to the longest wait, and such
+      failures also count toward taking a later provider's answer after a day and three tries. A run that finds the network down should stop rather than defer, without counting those attempts.
+- [ ] **Stale rows in `tag_retries`.** (p3) [cleanup] 42 rows no run will ever clear: 28 for files in a dot-directory, which runs leave out, and 14 for files no longer on disk.
 - [ ] **LRCLIB's refusals in library runs.** (p3) [perf] About half the less-known tracks get a 503 from LRCLIB on
       first ask and are deferred when NetEase has nothing synced; with the 10 min / 1 h / 6 h / 24 h backoff a
       library run needs several passes. Watch how many stay deferred after a full run before tuning the backoff
