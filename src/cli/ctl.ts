@@ -3,7 +3,7 @@ import type { LyricsResult, ScoredCandidate, TrackMark } from '../core/types.ts'
 import { DaemonClient } from '../daemon/client.ts';
 import { defaultSocketPath } from '../daemon/paths.ts';
 import { describeReport, type ClientCommand, type DisplayCommand, type LyricsAlign, type NowPosition, type NowPreset, type ReportReply } from '../protocol/messages.ts';
-import { describeCandidate, formatOffset, type Io } from './lyrics.ts';
+import { candidateRows, describeCandidate, done, formatOffset, outStyle, problem, type Io } from './lyrics.ts';
 import { parseOffset } from './prefs.ts';
 
 // `sleeve ctl`: one command to the running sleeved, for key bindings (i3's bindsym) and scripts. It acts on
@@ -38,7 +38,7 @@ async function connect(options: CtlOptions): Promise<DaemonClient> {
 async function send(client: DaemonClient, command: Unsent, io: Io): Promise<unknown | undefined> {
   const reply = await client.send(command);
   if (!reply.ok) {
-    io.err(reply.error ?? 'Failed');
+    problem(io, reply.error ?? 'Failed');
     return undefined;
   }
   return reply.data ?? null;
@@ -71,31 +71,31 @@ export async function ctlCommand(action: string, args: string[], options: CtlOpt
       case 'offset': {
         const data = await send(client, { type: action, ms }, io) as { offsetMs: number } | undefined;
         if (!data) return 1;
-        io.out(data.offsetMs ? `Offset ${formatOffset(data.offsetMs)}` : 'Offset removed');
+        done(io, data.offsetMs ? `Offset ${formatOffset(data.offsetMs)}` : 'Offset removed');
         return 0;
       }
       case 'refresh': {
         if (await send(client, { type: 'refresh' }, io) === undefined) return 1;
         const best = client.mirror.current().result?.best;
-        io.out(best ? `Looked up again: ${describeCandidate(best)}` : 'Looked up again: no lyrics found');
+        done(io, best ? `Looked up again: ${describeCandidate(best)}` : 'Looked up again: no lyrics found');
         return 0;
       }
       case 'mark': {
         if (await send(client, { type: 'mark', mark: args[0] as TrackMark }, io) === undefined) return 1;
-        io.out(args[0] === 'none' ? 'Marked: no correct lyrics' : 'Marked: instrumental');
+        done(io, args[0] === 'none' ? 'Marked: no correct lyrics' : 'Marked: instrumental');
         return 0;
       }
       case 'wrong':
       case 'mistimed': {
         const data = await send(client, { type: 'report', kind: action }, io) as ReportReply | undefined;
         if (!data) return 1;
-        io.out(describeReport(data));
+        done(io, describeReport(data));
         return 0;
       }
       case 'unreport': {
         const data = await send(client, { type: 'unreport' }, io) as { removed: boolean } | undefined;
         if (!data) return 1;
-        io.out(data.removed ? 'Forgot what was reported' : 'Nothing reported for this track');
+        done(io, data.removed ? 'Forgot what was reported' : 'Nothing reported for this track');
         return 0;
       }
       case 'display': {
@@ -112,13 +112,13 @@ export async function ctlCommand(action: string, args: string[], options: CtlOpt
           ...(options.reset ? { reset: true } : {})
         };
         if (await send(client, command, io) === undefined) return 1;
-        io.out(`Display of ${options.instance ?? 'every page'} changed`);
+        done(io, `Display of ${options.instance ?? 'every page'} changed`);
         return 0;
       }
       case 'unpick': {
         const data = await send(client, { type: 'unpick' }, io) as { removed: boolean } | undefined;
         if (!data) return 1;
-        io.out(data.removed ? 'Removed the pick' : 'No pick for this track');
+        done(io, data.removed ? 'Removed the pick' : 'No pick for this track');
         return 0;
       }
       case 'candidates': {
@@ -131,6 +131,11 @@ export async function ctlCommand(action: string, args: string[], options: CtlOpt
         const shown = client.mirror.current().result?.best;
         const list = numbered(result);
         if (!list.length) io.out('No candidates');
+        if (outStyle(io).rich) {
+          const same = list.find(candidate => shown && candidate.provider === shown.provider && candidate.id === shown.id);
+          for (const line of candidateRows(list, outStyle(io), { shown: same ?? null })) io.out(line);
+          return 0;
+        }
         list.forEach((candidate, index) => {
           const mark = shown && candidate.provider === shown.provider && candidate.id === shown.id ? '*' : ' ';
           io.out(`${mark}${String(index + 1).padStart(2)}. ${formatRef(candidate)}  ${describeCandidate(candidate)}`);
@@ -144,14 +149,14 @@ export async function ctlCommand(action: string, args: string[], options: CtlOpt
           if (!result) return 1;
           const candidate = numbered(result)[Number(args[0]) - 1];
           if (!candidate) {
-            io.err(`No candidate ${args[0]}; list them with sleeve ctl candidates`);
+            problem(io, `No candidate ${args[0]}; list them with sleeve ctl candidates`);
             return 1;
           }
           ref = { provider: candidate.provider, id: candidate.id! };
         }
         const data = await send(client, { type: 'pick', ref: formatRef(ref) }, io) as { ref: string } | undefined;
         if (!data) return 1;
-        io.out(`Picked ${data.ref}`);
+        done(io, `Picked ${data.ref}`);
         return 0;
       }
     }

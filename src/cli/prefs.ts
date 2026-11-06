@@ -1,7 +1,8 @@
 import { DEFAULT_TIMEOUT_MS, fetchLyrics, type FetchOptions } from '../core/fetchLyrics.ts';
 import { formatRef, parseRef, sameCandidate, type TrackPrefs } from '../core/prefs.ts';
 import type { LyricsResult, TrackQuery } from '../core/types.ts';
-import { buildQuery, describeCandidate, formatOffset, parseDuration, pickProviders, type Io } from './lyrics.ts';
+import { buildQuery, describeCandidate, done, errStyle, formatOffset, parseDuration, pickProviders, problem, type Io } from './lyrics.ts';
+import { paint } from './style.ts';
 import { openStores } from './stores.ts';
 
 // `sleeve pick` (show these lyrics for a track from now on) and `sleeve offset` (shift them in time). The track
@@ -52,11 +53,11 @@ export async function pickCommand(args: string[], options: TrackCommandOptions, 
   return withTrack(file, options, fetchOptions, async (query, prefs, lookup) => {
     if (options.none || options.instrumental) {
       prefs.setMark(query, options.none ? 'none' : 'instrumental');
-      io.out(`Marked ${name(query)} as ${options.none ? 'having no correct lyrics' : 'instrumental'}; lyrics already in its file stay there`);
+      done(io, `Marked ${name(query)} as ${options.none ? 'having no correct lyrics' : 'instrumental'}; lyrics already in its file stay there`);
       return 0;
     }
     if (choice === undefined) {
-      io.out(prefs.clearPick(query) ? `Removed the pick for ${name(query)}` : `No pick for ${name(query)}`);
+      done(io, prefs.clearPick(query) ? `Removed the pick for ${name(query)}` : `No pick for ${name(query)}`);
       return 0;
     }
     const ref = /^\d+$/.test(choice) ? null : parseRef(choice);
@@ -65,12 +66,12 @@ export async function pickCommand(args: string[], options: TrackCommandOptions, 
     const listed = [...result.candidates, ...result.rejected];
     const candidate = ref ? listed.find(item => sameCandidate(item, ref)) : listed[Number(choice) - 1];
     if (!candidate) {
-      io.err(`No candidate ${choice} for ${name(query)}; list them with sleeve lyrics --all`);
-      for (const error of result.errors) io.err(`  ${error.provider} failed: ${error.message}`);
+      problem(io, `No candidate ${choice} for ${name(query)}; list them with sleeve lyrics --all`);
+      for (const error of result.errors) io.err(paint(errStyle(io)).dim(`  ${error.provider} failed: ${error.message}`));
       return 1;
     }
     prefs.setPick(query, candidate);
-    io.out(`Picked ${formatRef(candidate)} for ${name(query)}: ${describeCandidate(candidate)}`);
+    done(io, `Picked ${formatRef(candidate)} for ${name(query)}: ${describeCandidate(candidate)}`);
     return 0;
   });
 }
@@ -94,17 +95,17 @@ export async function offsetCommand(args: string[], options: TrackCommandOptions
   const ms = value === undefined ? undefined : parseOffset(value);
   return withTrack(files[0], options, fetchOptions, async (query, prefs, lookup) => {
     if (options.reset || ms === 0) {
-      io.out(prefs.clearOffset(query) ? `Removed the offset for ${name(query)}` : `No offset for ${name(query)}`);
+      done(io, prefs.clearOffset(query) ? `Removed the offset for ${name(query)}` : `No offset for ${name(query)}`);
       return 0;
     }
     const result = await lookup(false);
     if (!result.best) {
-      io.err(`No lyrics found for ${name(query)}, so nothing to offset`);
+      problem(io, `No lyrics found for ${name(query)}, so nothing to offset`);
       return 1;
     }
     if (ms !== undefined) {
       prefs.setOffset(query, ms, result.best);
-      io.out(`Offset ${formatOffset(ms)} for ${formatRef(result.best)} (${name(query)})`);
+      done(io, `Offset ${formatOffset(ms)} for ${formatRef(result.best)} (${name(query)})`);
       return 0;
     }
     const stored = prefs.get(query)?.offset;

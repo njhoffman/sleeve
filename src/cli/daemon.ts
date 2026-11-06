@@ -1,6 +1,6 @@
 import { SleeveDaemon } from '../daemon/server.ts';
 import { DEFAULT_HOST, DEFAULT_PORT, defaultSocketPath } from '../daemon/paths.ts';
-import type { Io } from './lyrics.ts';
+import { warn, type Io } from './lyrics.ts';
 import { openSession, type SessionCliOptions, type SessionDeps } from './session.ts';
 
 // `sleeve daemon` (also installed as `sleeved`): the NowPlaying session served over a WebSocket and a Unix socket
@@ -46,7 +46,7 @@ export async function daemonCommand(options: DaemonCommandOptions, io: Io, deps:
   if (port === null && socketPath === null) throw new Error('Nothing to listen on: leave the WebSocket or the socket on');
   const stop = deps.stop ?? signalled();
   const { session, hub, close } = await openSession(options, io, deps);
-  for (const { player, problem } of hub.problems()) io.err(`${player}: ${problem}`);
+  for (const { player, problem } of hub.problems()) warn(io, `${player}: ${problem}`);
   const daemon = new SleeveDaemon(session, {
     host: options.host ?? DEFAULT_HOST,
     port,

@@ -52,6 +52,10 @@ sleeve tag --write ~/Music/Sorted              # write them into the library's t
 The lyrics go to stdout and a line naming their source to stderr, so `sleeve lyrics song.mp3 > song.lrc`
 writes a clean LRC file. The exit status is 0 with lyrics and 1 without; usage errors exit 2.
 
+In a terminal the commands use color, aligned tables and gradient bars, and `sleeve tag` shows its progress as it runs. `NO_COLOR` keeps the
+layout without color, and `FORCE_COLOR` turns it all on down a pipe. Piped output is otherwise plain, for scripts, and `--json`, `sleeve line` and
+`--version` never change.
+
 ## How lyrics are found
 
 Providers, in order:

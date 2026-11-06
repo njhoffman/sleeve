@@ -5,8 +5,9 @@ import { nextLineTime, wordTimings, type CurrentLine } from '../now/lines.ts';
 import type { NowState } from '../now/state.ts';
 import { clockTime } from '../players/clock.ts';
 import type { PlayerProblem } from '../protocol/messages.ts';
-import { describeCandidate, formatOffset, type Io } from './lyrics.ts';
+import { describeCandidate, errStyle, formatOffset, outStyle, warn, type Io } from './lyrics.ts';
 import { openSession, shapesSession, type SessionCliOptions, type SessionDeps } from './session.ts';
+import { gradientBar, paint, type Paint } from './style.ts';
 
 // `sleeve now`: lyrics for what MPD or Spotify plays, line by line as they come due, with + and - to nudge the
 // timing (saved for the track) and q to quit; `--once` prints where playback is and the current line. In a terminal
@@ -63,11 +64,11 @@ function failures(result: LyricsResult | null): string[] {
   return errors.filter(error => !result?.best || error.provider === 'prefs').map(error => `${error.provider} failed: ${error.message}`);
 }
 
-function sourceLine(result: LyricsResult | null): string {
+function sourceLine(result: LyricsResult | null, paints?: Paint): string {
   if (result?.marked) return result.marked === 'none' ? 'marked as having no correct lyrics' : 'marked as instrumental';
   if (!result?.best) return 'no lyrics found';
   const decided = `${result.pinned ? ', pinned' : ''}${result.offsetMs ? `, offset ${formatOffset(result.offsetMs)}` : ''}`;
-  return `${describeCandidate(result.best)}${decided}`;
+  return `${describeCandidate(result.best, paints)}${decided}`;
 }
 
 // Prints what changed since it last printed: the track, where its lyrics came from, pauses, and each line as it
@@ -92,10 +93,12 @@ export class LivePrinter {
   private lastLine = -2;
   // The line being drawn in place, and how many of its words were sung when it was drawn
   private drawing: { text: string; sung: number } | null = null;
+  private paints: Paint;
 
   constructor(io: Io, live: LiveOptions | null = null) {
     this.io = io;
     this.live = live;
+    this.paints = paint(outStyle(io));
   }
 
   // Prints a line of its own, ending the one drawn in place first
@@ -121,13 +124,14 @@ export class LivePrinter {
       this.looked = false;
       this.paused = false;
       this.lastLine = -2;
-      this.say(key ? `\n== ${trackLine(state)} [${playback!.player}]` : '\n== Nothing playing');
+      this.say(key ? `\n${this.paints.bold(`== ${trackLine(state)}`)} ${this.paints.dim(`[${playback!.player}]`)}` : `\n${this.paints.bold('== Nothing playing')}`);
     }
     if (!key) return;
     if (!state.loading && !this.looked) {
       this.looked = true;
-      this.say(`-- ${state.error ? `lookup failed: ${state.error}` : state.query ? sourceLine(state.result) : 'no artist or title to look up'}`);
-      for (const failure of failures(state.result)) this.say(`-- ${failure}`);
+      const rich = outStyle(this.io).rich ? this.paints : undefined;
+      this.say(`${this.paints.dim('--')} ${state.error ? this.paints.red(`lookup failed: ${state.error}`) : state.query ? sourceLine(state.result, rich) : 'no artist or title to look up'}`);
+      for (const failure of failures(state.result)) this.say(this.paints.yellow(`-- ${failure}`));
       const lyrics = state.result?.best?.lyrics;
       if (lyrics?.instrumental) this.say('(instrumental)');
       else if (lyrics && !lyrics.synced) for (const line of lyrics.lines) this.say(line.text);
@@ -135,7 +139,7 @@ export class LivePrinter {
     const paused = playback!.state !== 'playing';
     if (paused !== this.paused) {
       this.paused = paused;
-      this.say(paused ? '-- paused' : '-- playing');
+      this.say(this.paints.dim(paused ? '-- paused' : '-- playing'));
     }
     if (state.loading) return;
     const current = session.line(now);
@@ -143,7 +147,7 @@ export class LivePrinter {
       this.settle();
       this.lastLine = current.index;
       if (!current.line?.text) return;
-      const text = `[${clockTime(current.time!)}] ${current.line.text}`;
+      const text = `${this.paints.dim(`[${clockTime(current.time!)}]`)} ${current.line.text}`;
       if (!this.live || !session.position || !(current.line.words?.length || this.live.estimateWords)) return this.io.out(text);
       this.drawing = { text, sung: -1 };
     }
@@ -159,7 +163,7 @@ export class LivePrinter {
     this.drawing!.sung = sung;
     const done = words.slice(0, sung).map(word => word.text).join('');
     const rest = words.slice(sung).map(word => word.text).join('');
-    this.live!.write(`${CLEAR_LINE}[${clockTime(current.time!)}] ${done}${rest ? `${DIM}${rest}${UNDIM}` : ''}`);
+    this.live!.write(`${CLEAR_LINE}${this.paints.dim(`[${clockTime(current.time!)}]`)} ${done}${rest ? `${DIM}${rest}${UNDIM}` : ''}`);
   }
 
   // Ends the line in place, when following stops
@@ -194,10 +198,22 @@ function printOnce(view: NowView, options: NowOptions, io: Io, now?: number): nu
   const state = view.current();
   if (!shot.track) {
     io.out('Nothing playing');
-    for (const { player, problem } of shot.problems) io.err(`  ${player}: ${problem}`);
+    for (const { player, problem } of shot.problems) warn(io, `${errStyle(io).rich ? '' : '  '}${player}: ${problem}`);
     return 1;
   }
   const length = shot.track.durationMs ? `/${clockTime(shot.track.durationMs)}` : '';
+  const style = outStyle(io);
+  if (style.rich) {
+    const paints = paint(style);
+    const stateColor = shot.state === 'playing' ? paints.green : paints.yellow;
+    const position = shot.track.durationMs ? `${gradientBar(shot.positionMs! / shot.track.durationMs, 24, style.depth)} ` : '';
+    io.out(`${paints.bold(trackLine(state))}`);
+    io.out(`${stateColor(String(shot.state))} ${paints.dim(String(shot.player))}  ${position}${clockTime(shot.positionMs!)}${paints.dim(length)}`);
+    io.out(state.query ? sourceLine(state.result, paints) : 'no artist or title to look up');
+    for (const failure of failures(state.result)) warn(io, failure);
+    if (shot.line) io.out(`${paints.cyan('>')} ${shot.line.text}`);
+    return 0;
+  }
   io.out(`${shot.player} ${shot.state} ${clockTime(shot.positionMs!)}${length} ${trackLine(state)}`);
   io.out(state.query ? sourceLine(state.result) : 'no artist or title to look up');
   for (const failure of failures(state.result)) io.err(`  ${failure}`);
@@ -230,7 +246,7 @@ function keys(input: NodeJS.ReadStream | undefined, view: NowView, say: (text: s
 
 // Prints lines as they come due until q, a signal, or the session going away; 0, or 1 when the daemon stopped
 async function follow(view: NowView, onChange: (listener: () => void) => () => void, io: Io, deps: NowDeps, options: NowOptions): Promise<number> {
-  for (const { player, problem } of view.problems()) io.err(`${player}: ${problem}`);
+  for (const { player, problem } of view.problems()) warn(io, `${player}: ${problem}`);
   const output = deps.output ?? process.stdout;
   const colors = output.isTTY && !(deps.env ?? process.env).NO_COLOR;
   const printer = new LivePrinter(io, colors ? { write: text => output.write(text), estimateWords: options.estimateWords === true } : null);
@@ -254,7 +270,7 @@ async function follow(view: NowView, onChange: (listener: () => void) => () => v
     process.once('SIGTERM', interrupted);
     void view.lost.then(() => {
       printer.close();
-      io.err('-- sleeved stopped');
+      warn(io, '-- sleeved stopped');
       quit(1);
     });
     render();
@@ -314,7 +330,7 @@ async function remote(client: DaemonClient, options: NowOptions, io: Io, deps: N
       await view.settled();
       return printOnce(view, options, io, deps.now?.());
     }
-    io.err(`-- following sleeved (${client.socketPath})`);
+    io.err(paint(errStyle(io)).dim(`-- following sleeved (${client.socketPath})`));
     return await follow(view, listener => mirror.onChange(listener), io, deps, options);
   } finally {
     client.close();

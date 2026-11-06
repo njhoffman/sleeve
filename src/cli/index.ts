@@ -11,15 +11,18 @@ import { ctlCommand, type CtlOptions } from './ctl.ts';
 import { lineCommand, type LineOptions } from './line.ts';
 import { shellCommand } from './shell.ts';
 import { daemonCommand, type DaemonCommandOptions } from './daemon.ts';
-import { FORMATS, lyricsCommand, type Io, type LyricsOptions } from './lyrics.ts';
+import { errStyle, FORMATS, lyricsCommand, outStyle, type Io, type LyricsOptions } from './lyrics.ts';
 import { nowCommand, type NowOptions } from './now.ts';
 import { offsetCommand, pickCommand, type TrackCommandOptions } from './prefs.ts';
 import { reportsCommand, type ReportsOptions } from './reports.ts';
 import { tagCommand, type TagCommandOptions } from './tag.ts';
+import { paint, streamStyle } from './style.ts';
 
 const stdio: Io = {
   out: text => process.stdout.write(`${text}\n`),
-  err: text => process.stderr.write(`${text}\n`)
+  err: text => process.stderr.write(`${text}\n`),
+  styles: { out: streamStyle(process.stdout), err: streamStyle(process.stderr) },
+  live: text => process.stderr.write(text)
 };
 
 // The options that name a track and the providers to look it up with, shared by pick and offset
@@ -54,7 +57,16 @@ export function buildProgram(io: Io, setExit: (code: number) => void): Command {
     .description('Synced lyrics from several sources')
     .version(pkg.version)
     .exitOverride()
-    .configureOutput({ writeOut: text => io.out(text.trimEnd()), writeErr: text => io.err(text.trimEnd()) });
+    .configureOutput({
+      writeOut: text => io.out(text.trimEnd()), writeErr: text => io.err(text.trimEnd()),
+      getOutHasColors: () => outStyle(io).depth > 1, getErrHasColors: () => errStyle(io).depth > 1,
+      outputError: (text, write) => write(text.replace(/^error:/, paint(errStyle(io)).red('error:')))
+    });
+  const help = paint(outStyle(io));
+  program.configureHelp({
+    styleTitle: text => help.bold(text), styleCommandText: text => help.cyan(text), styleSubcommandText: text => help.cyan(text),
+    styleOptionText: text => help.green(text), styleArgumentText: text => help.yellow(text), styleDescriptionText: text => text
+  });
 
   program.command('lyrics')
     .description('Find lyrics for a local file (from its tags) or for --artist and --title; LRC goes to stdout, the source to stderr')
@@ -214,7 +226,8 @@ export async function main(argv: string[], io: Io = stdio): Promise<number> {
     await program.parseAsync(argv, { from: 'user' });
   } catch (error) {
     if (error instanceof CommanderError) return error.exitCode;
-    io.err(`Error: ${error instanceof Error ? error.message : String(error)}`);
+    const message = error instanceof Error ? error.message : String(error);
+    io.err(errStyle(io).rich ? `${paint(errStyle(io)).red('error:')} ${message}` : `Error: ${message}`);
     return 2;
   }
   return code;

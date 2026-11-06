@@ -6,6 +6,13 @@ All notable changes to sleeve are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.41.0] - 2026-11-05
+
+### Added
+
+- Color, aligned tables and gradient bars in a terminal. `sleeve tag` has colored statuses, shortened paths, a live progress bar and a summary with each count's share; candidates in `sleeve lyrics --all` and `sleeve ctl candidates` line up with a bar for their score; `sleeve now --once` has a position bar, `sleeve cache` a found share, and `--help`, errors and warnings have color.
+- `NO_COLOR` keeps the layout without color, and `FORCE_COLOR` turns it all on down a pipe. Otherwise piped output is exactly what it was, and `--json`, `sleeve line` and `--version` never change.
+
 ## [0.40.0] - 2026-11-05
 
 ### Changed

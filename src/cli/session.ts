@@ -5,7 +5,7 @@ import { MusicmanLibrary, readMusicmanPaths, spotifyNext, type MusicmanPaths } f
 import { mpdSettings } from '../players/settings.ts';
 import type { Player, PlayingTrack } from '../players/types.ts';
 import { NowPlaying } from '../now/session.ts';
-import { parseDuration, pickProviders, type Io } from './lyrics.ts';
+import { parseDuration, pickProviders, warn, type Io } from './lyrics.ts';
 import { openStores } from './stores.ts';
 
 // The players, the musicman library, the stores and the NowPlaying session over them, as `sleeve now` and
@@ -70,14 +70,14 @@ export async function openSession(options: SessionCliOptions, io: Io, deps: Sess
   try {
     paths = (deps.musicman ?? (() => readMusicmanPaths()))();
   } catch (error) {
-    io.err(`musicman: ${error instanceof Error ? error.message : String(error)}`);
+    warn(io, `musicman: ${error instanceof Error ? error.message : String(error)}`);
   }
   let library: MusicmanLibrary | null = null;
   if (paths && names.length) {
     try {
       library = (deps.openLibrary ?? MusicmanLibrary.fromPaths)(paths);
     } catch (error) {
-      io.err(`musicman: ${error instanceof Error ? error.message : String(error)}`);
+      warn(io, `musicman: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 

@@ -310,6 +310,8 @@ build items that depend on it, listed in the later projects.
 
 ## 6. Display
 
+- [x] **Readable, colored command output.** (p2) [feature] Asked for 2026-11-05: color, alignment and gradient progress bars across the commands, with what scripts read left as it was.
+      Done in 0.41.0: `src/cli/style.ts`. In a terminal only: status colors and a live progress bar in `sleeve tag`, aligned tables with score bars for candidates, a position bar in `sleeve now --once`, colored help. Piped output is byte for byte what it was.
 - [x] **Renderer as a web client of the daemon.** (p1) [refactor] One WebSocket protocol for both the browser and
       the Electron shell, dropping Sunamu's separate electron-npapi and browser-npapi paths.
       Done in 0.7.0: `src/renderer/` served by sleeved at `/`, types stripped on request (no build step);

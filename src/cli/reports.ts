@@ -1,7 +1,8 @@
-import { buildQuery, type Io } from './lyrics.ts';
+import { buildQuery, done, errStyle, outStyle, type Io } from './lyrics.ts';
 import type { FetchOptions } from '../core/fetchLyrics.ts';
 import { formatRef } from '../core/prefs.ts';
 import { openStores } from './stores.ts';
+import { paint, table, type Cell } from './style.ts';
 
 // `sleeve reports`: the lyrics the user said were wrong or mistimed, the latest first. Files keep theirs until
 // `sleeve tag --fix-reported`. --reset forgets a track's, or everyone's with --all; lyrics a running sleeved already passed
@@ -26,7 +27,7 @@ export async function reportsCommand(file: string | undefined, options: ReportsO
     if (options.reset) {
       if (options.all) {
         const count = prefs.clearAllReports();
-        io.out(`Forgot the reports of ${count} track${count === 1 ? '' : 's'}`);
+        done(io, `Forgot the reports of ${count} track${count === 1 ? '' : 's'}`);
         return 0;
       }
       const query = await buildQuery(file, options, given.tags);
@@ -40,6 +41,18 @@ export async function reportsCommand(file: string | undefined, options: ReportsO
     }
     if (!reports.length) {
       io.out('Nothing reported');
+      return 0;
+    }
+    const style = outStyle(io);
+    if (style.rich) {
+      const paints = paint(style);
+      const when = (at: number) => new Date(at).toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' });
+      const rows: Cell[][] = reports.map(report => [
+        { text: report.kind, style: report.kind === 'wrong' ? paints.red : paints.yellow }, `${report.artist} - ${report.title}`,
+        { text: formatRef(report), style: paints.cyan }, { text: when(report.reportedAt), style: paints.dim }
+      ]);
+      for (const line of table(rows, { flex: 1, columns: style.columns })) io.out(line);
+      io.err(paint(errStyle(io)).dim('Files keep the lyrics they have until sleeve tag <paths> --fix-reported --write'));
       return 0;
     }
     for (const report of reports) {

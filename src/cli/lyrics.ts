@@ -6,6 +6,7 @@ import { shiftLyrics } from '../core/timing.ts';
 import type { LyricsResult, ScoredCandidate, TrackQuery } from '../core/types.ts';
 import type { TagReader } from '../core/tags/reader.ts';
 import { openStores } from './stores.ts';
+import { gradientBar, paint, PLAIN, table, type Cell, type Paint, type StreamStyle } from './style.ts';
 
 // `sleeve lyrics [file]`: the best lyrics for a track, from a local file's tags or from --artist and --title.
 
@@ -29,6 +30,30 @@ export interface LyricsOptions {
 export interface Io {
   out: (text: string) => void;
   err: (text: string) => void;
+  // What each stream can show; without them, plain
+  styles?: { out: StreamStyle; err: StreamStyle };
+  // Writes to the terminal with no newline, for a line redrawn in place
+  live?: (text: string) => unknown;
+}
+
+export const outStyle = (io: Io) => io.styles?.out ?? PLAIN;
+export const errStyle = (io: Io) => io.styles?.err ?? PLAIN;
+
+// Something that went wrong without ending the command
+export function warn(io: Io, text: string): void {
+  const style = errStyle(io);
+  io.err(style.rich ? `${paint(style).yellow('warning:')} ${text}` : text);
+}
+
+// What ended it, in a command's own words
+export function problem(io: Io, text: string): void {
+  const style = errStyle(io);
+  io.err(style.rich ? `${paint(style).red('error:')} ${text}` : text);
+}
+
+// A command having done what was asked
+export function done(io: Io, text: string): void {
+  io.out(paint(outStyle(io)).green(text));
 }
 
 export const FORMATS = ['lrc', 'plain'];
@@ -57,14 +82,44 @@ function decisions(result: LyricsResult): string {
   return `${result.pinned ? ', pinned' : ''}${result.offsetMs ? `, offset ${formatOffset(result.offsetMs)}` : ''}`;
 }
 
-export function describeCandidate(candidate: ScoredCandidate): string {
-  const { track, lyrics } = candidate;
+function candidateKind({ lyrics }: ScoredCandidate): string {
   const kind = lyrics.instrumental ? 'instrumental' : `${lyrics.synced ? 'synced' : 'unsynced'}, ${lyrics.lines.length} line${lyrics.lines.length === 1 ? '' : 's'}`;
-  const words = lyrics.lines.some(line => line.words?.length) ? ', word timing' : '';
-  const album = track.album ? ` (${track.album})` : '';
-  const cached = candidate.cachedAt ? ', cached' : '';
+  return `${kind}${lyrics.lines.some(line => line.words?.length) ? ', word timing' : ''}`;
+}
+
+const candidateTrack = ({ track }: ScoredCandidate) => `${track.artist} - ${track.title}${track.album ? ` (${track.album})` : ''}`;
+
+export function describeCandidate(candidate: ScoredCandidate, paints?: Paint): string {
+  const { track } = candidate;
+  const name = candidateTrack(candidate);
+  const after = ` ${clock(track.durationMs)}, ${candidateKind(candidate)}, score ${candidate.score.toFixed(2)}${candidate.cachedAt ? ', cached' : ''}`;
   const reported = candidate.reported ? `, reported ${candidate.reported}` : '';
-  return `${candidate.provider}: ${track.artist} - ${track.title}${album} ${clock(track.durationMs)}, ${kind}${words}, score ${candidate.score.toFixed(2)}${cached}${reported}`;
+  if (!paints) return `${candidate.provider}: ${name}${after}${reported}`;
+  return `${paints.cyan(`${candidate.provider}:`)} ${paints.bold(name)}${paints.dim(after)}${reported ? paints.red(reported) : ''}`;
+}
+
+const SCORE_BAR_WIDTH = 8;
+
+// Candidates as a table for a terminal: a mark, the number and ref to pick them by, how well each matched, and the rest
+export function candidateRows(list: ScoredCandidate[], style: StreamStyle, { shown, rejectedFrom = list.length, notes }: {
+  shown?: ScoredCandidate | null; rejectedFrom?: number; notes?: (candidate: ScoredCandidate) => string;
+} = {}): string[] {
+  const paints = paint(style);
+  const rows: Cell[][] = list.map((candidate, index) => {
+    const rejected = index >= rejectedFrom;
+    const quiet = (text: string): Cell => (rejected ? { text, style: paints.dim } : text);
+    const facts = [rejected ? 'rejected' : '', candidateKind(candidate), candidate.cachedAt ? 'cached' : '', notes?.(candidate) ?? ''].filter(Boolean).join(', ');
+    return [
+      candidate === shown ? { text: '*', style: paints.green } : ' ',
+      String(index + 1),
+      { text: formatRef(candidate), style: rejected ? paints.dim : paints.cyan },
+      `${gradientBar(candidate.score, SCORE_BAR_WIDTH, style.depth)} ${candidate.score.toFixed(2)}`,
+      quiet(candidateTrack(candidate)),
+      quiet(clock(candidate.track.durationMs)),
+      { text: `${facts}${candidate.reported ? `${facts ? ', ' : ''}reported ${candidate.reported}` : ''}`, style: candidate.reported ? paints.red : paints.dim }
+    ];
+  });
+  return table(rows, { right: [1, 5], flex: 4, columns: style.columns, gap: 2 });
 }
 
 export function pickProviders(names: string | undefined): FetchOptions['providers'] {
@@ -90,6 +145,11 @@ export async function buildQuery(file: string | undefined, options: LyricsOption
 // Every candidate, numbered as `sleeve pick` takes them, with its ref
 function printAll(result: LyricsResult, io: Io): void {
   const listed = [...result.candidates, ...result.rejected];
+  if (outStyle(io).rich) {
+    for (const line of candidateRows(listed, outStyle(io), { shown: result.best, rejectedFrom: result.candidates.length, notes: candidate => candidate === result.best ? decisions(result).slice(2) : '' })) io.out(line);
+    for (const error of result.errors) warn(io, `${error.provider} failed: ${error.message}`);
+    return;
+  }
   listed.forEach((candidate, index) => {
     const rejected = index >= result.candidates.length ? 'rejected ' : '';
     const mine = candidate === result.best ? decisions(result) : '';
@@ -104,8 +164,9 @@ function printResult(result: LyricsResult, options: LyricsOptions, io: Io): void
     return;
   }
   const best = result.best!;
-  io.err(`${describeCandidate(best)}${decisions(result)}`);
-  for (const error of result.errors.filter(error => error.provider === 'prefs')) io.err(`prefs: ${error.message}`);
+  const style = errStyle(io);
+  io.err(`${describeCandidate(best, style.rich ? paint(style) : undefined)}${paint(style).dim(decisions(result))}`);
+  for (const error of result.errors.filter(error => error.provider === 'prefs')) warn(io, `prefs: ${error.message}`);
   if (best.lyrics.instrumental) {
     io.out('(instrumental)');
     return;
@@ -137,12 +198,13 @@ export async function lyricsCommand(file: string | undefined, options: LyricsOpt
     return result.best ? 0 : 1;
   }
   if (result.marked && !options.all) {
-    io.err(`${query.artist} - ${query.title} is marked as ${result.marked === 'none' ? 'having no correct lyrics' : 'instrumental'} (sleeve pick --reset to undo)`);
+    problem(io, `${query.artist} - ${query.title} is marked as ${result.marked === 'none' ? 'having no correct lyrics' : 'instrumental'} (sleeve pick --reset to undo)`);
     return 1;
   }
   if (!result.best && !options.all) {
-    io.err(`No lyrics found for ${query.artist} - ${query.title}`);
-    for (const candidate of result.rejected.slice(0, 3)) io.err(`  under ${THRESHOLD}: ${describeCandidate(candidate)}`);
+    problem(io, `No lyrics found for ${query.artist} - ${query.title}`);
+    const paints = errStyle(io).rich ? paint(errStyle(io)) : undefined;
+    for (const candidate of result.rejected.slice(0, 3)) io.err(`  under ${THRESHOLD}: ${describeCandidate(candidate, paints)}`);
     for (const error of result.errors) io.err(`  ${error.provider} failed: ${error.message}`);
     return 1;
   }

@@ -73,6 +73,7 @@ just install-service     # the systemd user unit for sleeved
   The page gets nothing from the shell but the wallpaper colors behind the overlay (`shell/preload.cjs`, one
   way); everything else goes over sleeved's WebSocket, so the page works the same in a browser.
   `just check` typechecks the shell when `shell/node_modules` exists.
+- Command output goes through `Io`; how it looks in a terminal is `src/cli/style.ts`. Keep the plain form exactly as it was when a stream is not a terminal, since scripts read it, and leave `--json`, `sleeve line` and `--version` unstyled.
 - Tests stay offline: inject `fetch` (`test/helpers/fetch.ts`) and replay recorded responses from
   `test/fixtures/<provider>/`; build tagged mp3s with `test/helpers/id3.ts`.
 
