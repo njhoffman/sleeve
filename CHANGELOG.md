@@ -6,6 +6,17 @@ All notable changes to sleeve are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.43.0] - 2026-11-14
+
+### Added
+
+- `just install`: dependencies (`npm ci`), `~/.local/bin/sleeve` (or `$XDG_BIN_HOME`) linked to
+  `src/cli/index.ts`, the `sleeved` unit written by `install-service`, then enabled and restarted
+  (`install-enable`). It refuses to replace a file that is not a link. `just install-check` exits 1
+  when the link, `node_modules`, or the enabled unit for this checkout is missing. The Electron
+  shell stays separate, since it needs sudo once for AppArmor. `~/.shell`'s `deploy --with repos`
+  runs them on each host.
+
 ## [0.42.0] - 2026-11-05
 
 ### Added

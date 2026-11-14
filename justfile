@@ -41,6 +41,36 @@ now *args:
 daemon *args:
     node src/cli/index.ts daemon "$@"
 
+# Dependencies (npm ci), ~/.local/bin/sleeve -> src/cli/index.ts, the sleeved unit (install-service), enabled and started; the Electron shell stays separate (shell-install, install-shell-service: it needs sudo once for AppArmor)
+install: && install-service install-enable
+    #!/usr/bin/env bash
+    set -euo pipefail
+    npm ci --no-audit --no-fund
+    bindir="${XDG_BIN_HOME:-$HOME/.local/bin}"
+    src="$PWD/src/cli/index.ts"
+    dest="$bindir/sleeve"
+    mkdir -p "$bindir"
+    if [[ -e "$dest" && ! -L "$dest" ]]; then
+      echo "install: $dest exists and is not a symlink; remove it first" >&2
+      exit 1
+    fi
+    ln -sfn "$src" "$dest"
+    echo "$dest -> $src"
+
+# Enable and (re)start sleeved after install wrote its unit; separate so install-service alone still only writes it
+install-enable:
+    systemctl --user enable sleeved.service
+    systemctl --user restart sleeved.service
+
+# exit 1 when the link, the dependencies or the enabled unit for this checkout is missing (deploy reinstalls then)
+install-check:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    [[ $(readlink -f "${XDG_BIN_HOME:-$HOME/.local/bin}/sleeve") == "$(pwd -P)/src/cli/index.ts" ]]
+    [[ -d node_modules ]]
+    grep -qF "$PWD/src/cli/index.ts daemon" "${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user/sleeved.service"
+    systemctl --user is-enabled --quiet sleeved.service
+
 # Write the systemd user unit for sleeved (this checkout, this node) and reload systemd; does not enable it
 install-service:
     #!/usr/bin/env bash
