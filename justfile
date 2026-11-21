@@ -101,6 +101,9 @@ install-service:
 # Install the Electron shell (shell/, ~100 MB; the daemon and CLI never need it)
 shell-install:
     cd shell && npm install --no-audit --no-fund
+    # Electron's package has no install script: it fetches its binary on the first run unless asked here, and
+    # shell-sandbox and install-shell-service need that binary before anything has run it
+    cd shell && node node_modules/electron/install.js
 
 # What each background costs the GPU in the real shell, kept in benchmarks/gpu.jsonl, with the average of every run so far.
 # Placeholder lyrics show on the desktop while it runs, ignoring clicks. E.g. just bench-gpu --rounds 3; --show only prints

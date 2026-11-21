@@ -6,6 +6,13 @@ All notable changes to sleeve are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.43.1] - 2026-11-21
+
+### Fixed
+
+- `just shell-install` downloads Electron's binary too. Electron fetches it only on its first run, so
+  `just shell-sandbox` and `just install-shell-service` stopped with "Run just shell-install first" right after one.
+
 ## [0.43.0] - 2026-11-14
 
 ### Added
