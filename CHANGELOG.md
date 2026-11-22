@@ -6,6 +6,18 @@ All notable changes to sleeve are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.44.0] - 2026-11-22
+
+### Added
+
+- `--art-animation: sleeve-art-swirl`: Sunamu's moving background, two copies of the cover turning opposite ways and
+  blended so their colors keep mixing, drawn by WebGL at about the cost of `sleeve-art-flow`. `--swirl-period`,
+  `--swirl-delay`, `--swirl-size`, `--swirl-brightness` and `--swirl-timing` tune it live; the defaults are Sunamu's.
+- `--art-animation: sleeve-art-swirl-css`: the same look drawn as Sunamu drew it, with CSS filters (`--swirl-blur`),
+  to compare against the shader. It costs far more GPU.
+- `--art-size`: the size the cover is drawn at (16 to 1024 pixels, 64 by default). With a high size and
+  `--art-blur: 0`, `background: cover` shows the cover itself instead of a wash of its colors.
+
 ## [0.43.1] - 2026-11-21
 
 ### Fixed

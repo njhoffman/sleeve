@@ -140,13 +140,16 @@ The wheel scrolls back through the lyrics; a few seconds after the last turn the
 Behind the lyrics lies the track's cover, blurred and dimmed, with the text colored for it as over the overlay's
 wallpaper. It comes from the player (Spotify's cover over MPRIS), the file's own picture, or a `cover`, `folder` or
 `front` image beside the file. It is a 64-pixel canvas stretched over the window, so held still it costs next to
-nothing per frame. Everything about it is a CSS variable you can set in `~/.config/sleeve/style.css`, which the page
+nothing per frame; `--art-size` draws it larger (up to 1024), and with `--art-blur: 0` the cover itself shows. Everything about it is a CSS variable you can set in `~/.config/sleeve/style.css`, which the page
 loads after its own. Edits apply to an open page within a few seconds, with no reload:
 
 ```css
 :root {
-  --art-animation: sleeve-art-flow;   /* none (default), sleeve-art-flow (the cover warping, WebGL), sleeve-art-drift (slow turn), sleeve-art-breathe (slow zoom) */
+  --art-animation: sleeve-art-flow;   /* none (default), sleeve-art-flow (the cover warping, WebGL), sleeve-art-swirl (two covers turning, WebGL),
+                                         sleeve-art-swirl-css (the same in CSS), sleeve-art-drift (slow turn), sleeve-art-breathe (slow zoom) */
   --flow-speed: 1;                    /* also --flow-amount, --flow-detail, --flow-zoom, --flow-resolution, --flow-fps */
+  --swirl-period: 60;                 /* also --swirl-delay, --swirl-size, --swirl-brightness, --swirl-timing, --swirl-blur */
+  --art-size: 64;                     /* the cover's side in pixels: higher is sharper */
   --art-duration: 120s;               /* for drift and breathe; also --art-timing, --art-delay, --art-iteration, --art-direction */
   --art-opacity: 0.6;                 /* also --art-dim, --art-saturation, --art-scale, --art-blur, --art-fade */
   --art-background: on;               /* off: no cover */
@@ -156,6 +159,10 @@ loads after its own. Edits apply to an open page within a few seconds, with no r
 `sleeve-art-flow` glides to new settings from where the picture is, where changing a CSS animation restarts it. On an
 Iris Xe at about 1.5 megapixels it took 5 to 6% of the GPU's render time, against about 2% for the still cover and 9%
 for `sleeve-art-drift`; `--flow-resolution` is what matters most. Without WebGL 2 the cover stays still.
+`sleeve-art-swirl` is Sunamu's background: two copies of the cover turning opposite ways, the second trailing by
+`--swirl-delay`, blended by exclusion, so their colors keep mixing into new shapes. Its defaults are Sunamu's. The
+shader draws it from the small blurred cover at about the flow's cost; `sleeve-art-swirl-css` draws it as Sunamu did,
+with CSS filters on two full-size images, which costs far more and is there to compare the two.
 What shows besides the lyrics is a preset, set the same way, with the panel at any of eight places; the lyrics keep clear
 of it. `lyrics` shows nothing else, `minimal` a line with artist and title, and `full` the cover, title, artist, album, a
 seek bar you can click, and the times. The overlay shows `lyrics` and a window `minimal` unless you say otherwise:

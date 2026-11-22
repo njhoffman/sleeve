@@ -422,3 +422,19 @@ build items that depend on it, listed in the later projects.
       leave a 1 px seam on the right and bottom. Confirmed on the real desktop on 2026-11-05 (1919x1079 on a 1920x1080 monitor, 2559x1439 on 2560x1440); backdrop 2.50.1 works around it by sizing the window after it maps. When this is fixed, tell backdrop so it can drop the workaround (`resizes` in its `SleeveVisualizer.js`; its contract, `docs/specs/sleeve.md`, says so too).
       Done in 0.39.2: Chromium asks for 1 px less than any monitor-sized or larger window, for window managers that would make it fullscreen, and `setBounds` and `setContentSize` go the same way, so `overlayWindow` sets the size over X before it maps. 1920x1080 exact on the real desktop; `test/shell/exactSize.test.ts` runs the real window under Xvfb. backdrop told in its 2.50.6 contract, with its own item to drop the workaround.
 
+- [x] **A recognizable cover for `background: cover`.** (p2) [feature] Found 2026-11-22 with backdrop's `lyrics-stage`: the "cover as the whole
+      background" is a grey or colored smear. `showArt` (`src/renderer/main.ts`) always draws the cover onto a 64 px canvas (`ART_SIZE`), which the
+      CSS layer stretches to 1.6x the viewport and `sleeve-art-flow` samples as its texture, so even `--art-blur: 0`, `--art-dim: 0` and no animation
+      show only a wash. A square cover filling a 16:9 window also loses about 44% of its height. Decide: a sharp mode (full-resolution source, whole
+      or cropped, still or lightly moving), how it is asked for (a stylesheet variable, or a new `background` value that backdrop's presets and
+      settings validation learn too), and how the text keeps its contrast over a detailed image.
+      Done in 0.44.0: `--art-size` (16 to 1024 px) for the still layer and the shader's texture, colors still read from a 64 px
+      copy; a stylesheet variable, so backdrop needs nothing. Checked on Muse's Resistance at 512 px with `--art-blur: 0`.
+- [x] **Sunamu's moving background.** (p2) [feature] Asked for 2026-11-22: Sunamu's two counter-turning, `blur(180px)`,
+      exclusion-blended covers. Done in 0.44.0: `sleeve-art-swirl` in the WebGL shader (angles from `swirlLayers` and
+      `timingFunction` in `view.ts`, gliding like the flow), and `sleeve-art-swirl-css` as Sunamu drew it, to compare.
+      Defaults are Sunamu's: 60 s turns, 10 s apart, layers 2 vmax, brightness 0.5, ease-in-out.
+- [ ] **Lyrics readable over a sharp cover.** (p2) [feature] With `--art-size: 512` and `--art-blur: 0` the lines are hard to
+      read over a detailed cover: the text's colors come from the cover's average and the dim is one flat layer. Options: a
+      gradient or stronger dim under the lyrics area only, a text shadow or backing sized to the detail behind each line, or
+      colors from the part of the cover under the lyrics area rather than the whole of it (`coverColors`, `src/renderer/view.ts`).

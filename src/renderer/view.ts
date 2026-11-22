@@ -179,8 +179,8 @@ export function lyricsInsets(position: NowPosition, panel: { top: number; right:
   return insets;
 }
 
-// --art-animation: sleeve-art-flow, set from CSS variables. speed, amount, detail, zoom and saturation glide to a new
-// value; resolution and fps apply at once, since they do not show as movement.
+// --art-animation: sleeve-art-flow and sleeve-art-swirl, set from CSS variables. Everything that shows as movement glides
+// to a new value; resolution and fps apply at once, since they do not.
 export interface FlowSettings {
   speed: number;
   amount: number;
@@ -189,11 +189,19 @@ export interface FlowSettings {
   saturation: number;
   resolution: number;
   fps: number;
+  // sleeve-art-swirl: seconds a layer takes to turn once, how many seconds the second layer trails the first, a layer's side in
+  // viewport lengths (vmax), and the brightness of each layer before they are blended
+  period: number;
+  delay: number;
+  size: number;
+  brightness: number;
 }
 
-// What is drawn this frame: phase is how far the picture has moved, so a new speed carries on from there
+// What is drawn this frame: phase is how far the flow has moved, turn how many turns the swirl has made, so a new
+// speed or period carries on from where the picture is
 export interface FlowView extends FlowSettings {
   phase: number;
+  turn: number;
 }
 
 const FLOW_VARIABLES: Record<keyof FlowSettings, { name: string; fallback: number; min: number; max: number }> = {
@@ -203,7 +211,11 @@ const FLOW_VARIABLES: Record<keyof FlowSettings, { name: string; fallback: numbe
   zoom: { name: '--flow-zoom', fallback: 1.4, min: 1, max: 6 },
   saturation: { name: '--art-saturation', fallback: 1.3, min: 0, max: 4 },
   resolution: { name: '--flow-resolution', fallback: 0.25, min: 0.05, max: 1 },
-  fps: { name: '--flow-fps', fallback: 30, min: 1, max: 60 }
+  fps: { name: '--flow-fps', fallback: 30, min: 1, max: 60 },
+  period: { name: '--swirl-period', fallback: 60, min: 1, max: 3600 },
+  delay: { name: '--swirl-delay', fallback: 10, min: -3600, max: 3600 },
+  size: { name: '--swirl-size', fallback: 2, min: 0.5, max: 6 },
+  brightness: { name: '--swirl-brightness', fallback: 0.5, min: 0, max: 2 }
 };
 const FLOW_GLIDE_MS = 800;
 
@@ -222,20 +234,85 @@ export function flowSettings(read: (name: string) => string): FlowSettings {
 // The next frame's view: the phase moved on at the speed shown, the rest closer to its setting
 export function flowStep(view: FlowView, target: FlowSettings, dtMs: number): FlowView {
   const share = 1 - Math.exp(-Math.max(0, dtMs) / FLOW_GLIDE_MS);
-  const glide = (key: 'speed' | 'amount' | 'detail' | 'zoom' | 'saturation') => {
+  const glide = (key: 'speed' | 'amount' | 'detail' | 'zoom' | 'saturation' | 'period' | 'delay' | 'size' | 'brightness') => {
     const next = view[key] + (target[key] - view[key]) * share;
     return Math.abs(next - target[key]) < 0.001 ? target[key] : next;
   };
+  const seconds = Math.max(0, dtMs) / 1000 * view.speed;
   return {
-    phase: view.phase + dtMs / 1000 * view.speed,
+    phase: view.phase + seconds,
+    turn: view.turn + seconds / view.period,
     speed: glide('speed'),
     amount: glide('amount'),
     detail: glide('detail'),
     zoom: glide('zoom'),
     saturation: glide('saturation'),
     resolution: target.resolution,
-    fps: target.fps
+    fps: target.fps,
+    period: glide('period'),
+    delay: glide('delay'),
+    size: glide('size'),
+    brightness: glide('brightness')
   };
+}
+
+// A CSS timing function (--swirl-timing) as a function of progress 0..1: the keywords, cubic-bezier() and steps() aside
+// (a turn in steps is not a swirl), linear for anything else, so the shader eases the way the CSS version does
+const TIMING_KEYWORDS: Record<string, [number, number, number, number]> = {
+  linear: [0, 0, 1, 1],
+  ease: [0.25, 0.1, 0.25, 1],
+  'ease-in': [0.42, 0, 1, 1],
+  'ease-out': [0, 0, 0.58, 1],
+  'ease-in-out': [0.42, 0, 0.58, 1]
+};
+
+export function timingFunction(text: string): (progress: number) => number {
+  const value = text.trim().toLowerCase();
+  const bezier = /^cubic-bezier\(\s*([^,]+),([^,]+),([^,]+),([^)]+)\)$/.exec(value);
+  const points = bezier ? bezier.slice(1).map(Number) : TIMING_KEYWORDS[value];
+  if (!points || points.some(point => !Number.isFinite(point)) || points[0] < 0 || points[0] > 1 || points[2] < 0 || points[2] > 1) return progress => progress;
+  const [x1, y1, x2, y2] = points;
+  if (x1 === y1 && x2 === y2) return progress => progress;
+  const curve = (a: number, b: number, t: number) => 3 * a * t * (1 - t) ** 2 + 3 * b * t * t * (1 - t) + t ** 3;
+  return progress => {
+    const x = Math.min(1, Math.max(0, progress));
+    if (x === 0 || x === 1) return x;
+    // x is monotonic in t for x1, x2 within 0..1, so bisection always finds it
+    let low = 0;
+    let high = 1;
+    for (let step = 0; step < 30; step++) {
+      const middle = (low + high) / 2;
+      if (curve(x1, x2, middle) < x) low = middle;
+      else high = middle;
+    }
+    return curve(y1, y2, (low + high) / 2);
+  };
+}
+
+// One swirl layer, in viewport lengths (vmax) from the window's top-left, y down: the center it turns around and its
+// angle in radians, clockwise on screen as CSS rotate() is
+export interface SwirlLayer {
+  x: number;
+  y: number;
+  angle: number;
+}
+
+// sleeve-art-swirl, after Sunamu's background: two copies of the cover, each size vmax square, in a box 125% of the
+// window centered on it, one at the box's top-left turning forward, the other at its bottom-right turning back and
+// delay seconds behind, each turn eased by the timing function
+export function swirlLayers(view: Pick<FlowView, 'turn' | 'period' | 'delay' | 'size'>, ease: (progress: number) => number, width: number, height: number): [SwirlLayer, SwirlLayer] {
+  const vmax = Math.max(1, width, height);
+  const [boxWidth, boxHeight] = [1.25 * width / vmax, 1.25 * height / vmax];
+  const [left, top] = [-0.125 * width / vmax, -0.125 * height / vmax];
+  const half = view.size / 2;
+  const fraction = (value: number) => value - Math.floor(value);
+  const forward = 2 * Math.PI * ease(fraction(view.turn));
+  // CSS's animation-direction: reverse plays the turn from 360 degrees back to 0
+  const back = 2 * Math.PI * (1 - ease(fraction(view.turn - view.delay / view.period)));
+  return [
+    { x: left + half, y: top + half, angle: forward },
+    { x: left + boxWidth - half, y: top + boxHeight - half, angle: back }
+  ];
 }
 
 // Where a click on a line plays from (ms into the track, offset applied); null for a line without a time

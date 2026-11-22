@@ -13,7 +13,7 @@ import { NowPlaying } from '../../src/now/session.ts';
 import type { NowState } from '../../src/now/state.ts';
 import { PlayerHub } from '../../src/players/hub.ts';
 import { Connection } from '../../src/renderer/connection.ts';
-import { candidateEntries, coverColors, displaySettings, flowSettings, flowStep, follow, formatOffset, formatTime, lineStart, lyricsInsets, nowText, resolveArea, NO_SCROLL_BACK, progress, reconnectDelay, SCROLL_BACK_MS, scrollBackOffset, status, wheel } from '../../src/renderer/view.ts';
+import { candidateEntries, coverColors, displaySettings, flowSettings, flowStep, follow, formatOffset, formatTime, lineStart, lyricsInsets, nowText, resolveArea, NO_SCROLL_BACK, progress, reconnectDelay, SCROLL_BACK_MS, scrollBackOffset, status, swirlLayers, timingFunction, wheel } from '../../src/renderer/view.ts';
 import { until } from '../helpers/fakeMpd.ts';
 import { fakePlayer } from '../helpers/players.ts';
 
@@ -140,14 +140,15 @@ describe('renderer view', () => {
     const settings = (values: Record<string, string> = {}) => flowSettings(name => values[name] ?? '');
 
     it('takes its settings from CSS variables, its defaults for what is missing or unreadable, within range', () => {
-      expect(settings()).to.deep.equal({ speed: 1, amount: 1, detail: 1, zoom: 1.4, saturation: 1.3, resolution: 0.25, fps: 30 });
+      expect(settings()).to.deep.equal({ speed: 1, amount: 1, detail: 1, zoom: 1.4, saturation: 1.3, resolution: 0.25, fps: 30, period: 60, delay: 10, size: 2, brightness: 0.5 });
+      expect(settings({ '--swirl-period': '0', '--swirl-size': '20', '--swirl-delay': '-4' })).to.deep.include({ period: 1, size: 6, delay: -4 });
       expect(settings({ '--flow-speed': ' 2.5 ', '--flow-fps': '20', '--art-saturation': '0.5' })).to.deep.include({ speed: 2.5, fps: 20, saturation: 0.5 });
       expect(settings({ '--flow-speed': 'fast' }).speed).to.equal(1);
       expect(settings({ '--flow-resolution': '9', '--flow-fps': '0', '--flow-zoom': '0' })).to.deep.include({ resolution: 1, fps: 1, zoom: 1 });
     });
 
     it('moves at the speed shown, so a new speed carries on from where the picture is', () => {
-      const start = { ...settings(), phase: 10 };
+      const start = { ...settings(), phase: 10, turn: 0 };
       expect(flowStep(start, settings(), 500).phase).to.be.closeTo(10.5, 1e-9);
       const faster = flowStep(start, settings({ '--flow-speed': '20' }), 16);
       expect(faster.phase).to.be.closeTo(10.016, 1e-9);
@@ -157,7 +158,7 @@ describe('renderer view', () => {
     it('glides to a changed setting and settles on it, the same at any frame rate; resolution and fps apply at once', () => {
       const target = settings({ '--flow-amount': '3', '--flow-resolution': '0.5', '--flow-fps': '60' });
       const steps = (count: number, dtMs: number) => {
-        let view = { ...settings(), phase: 0 };
+        let view = { ...settings(), phase: 0, turn: 0 };
         for (let at = 0; at < count; at++) view = flowStep(view, target, dtMs);
         return view;
       };
@@ -165,6 +166,44 @@ describe('renderer view', () => {
       expect(steps(1, 16).amount).to.be.lessThan(1.1);
       expect(steps(30, 16).amount).to.be.closeTo(steps(15, 32).amount, 1e-6);
       expect(steps(500, 16).amount).to.equal(3);
+    });
+
+    it('turns the swirl once a period at the speed shown, and a new period carries on from where it is', () => {
+      const start = { ...settings(), phase: 0, turn: 0.25 };
+      expect(flowStep(start, settings(), 6000).turn).to.be.closeTo(0.35, 1e-9);
+      expect(flowStep({ ...start, speed: -1 }, settings({ '--flow-speed': '-1' }), 6000).turn).to.be.closeTo(0.15, 1e-9);
+      const slower = flowStep(start, settings({ '--swirl-period': '600' }), 16);
+      expect(slower.turn).to.be.greaterThan(0.25).and.lessThan(0.25 + 0.016 / 60 + 1e-9);
+      expect(slower.period).to.be.greaterThan(60).and.lessThan(600);
+    });
+
+    it('eases a turn as CSS does: the keywords, cubic-bezier(), linear for anything else', () => {
+      const easeInOut = timingFunction('ease-in-out');
+      expect(easeInOut(0)).to.equal(0);
+      expect(easeInOut(1)).to.be.closeTo(1, 1e-6);
+      expect(easeInOut(0.5)).to.be.closeTo(0.5, 1e-6);
+      expect(easeInOut(0.1)).to.be.lessThan(0.05);
+      expect(easeInOut(0.9)).to.be.greaterThan(0.95);
+      expect(timingFunction(' Cubic-Bezier(0.42, 0, 0.58, 1) ')(0.2)).to.be.closeTo(easeInOut(0.2), 1e-6);
+      expect(timingFunction('ease-in')(0.5)).to.be.lessThan(0.5);
+      expect(timingFunction('ease-out')(0.5)).to.be.greaterThan(0.5);
+      for (const text of ['linear', 'steps(4)', 'cubic-bezier(2, 0, 0.5, 1)', 'bounce', '']) expect(timingFunction(text)(0.3)).to.be.closeTo(0.3, 1e-9);
+    });
+
+    it('places the swirl layers at the corners of a box 125% of the window, turning opposite ways, the second trailing', () => {
+      const linear = (progress: number) => progress;
+      const view = { turn: 0.25, period: 60, delay: 15, size: 2 };
+      const [first, second] = swirlLayers(view, linear, 1600, 900);
+      // In viewport lengths: the box runs from (-0.125, -0.0703) to (1.125, 0.6328)
+      expect(first.x).to.be.closeTo(-0.125 + 1, 1e-9);
+      expect(first.y).to.be.closeTo(-0.125 * 900 / 1600 + 1, 1e-9);
+      expect(second.x).to.be.closeTo(1.125 - 1, 1e-9);
+      expect(second.y).to.be.closeTo(1.125 * 900 / 1600 - 1, 1e-9);
+      expect(first.angle).to.be.closeTo(Math.PI / 2, 1e-9);
+      // 15 s behind on a 60 s turn is a quarter turn behind, played backward: at turn 0.25 it is at 360 degrees
+      expect(second.angle).to.be.closeTo(2 * Math.PI, 1e-9);
+      expect(swirlLayers({ ...view, turn: 1.25 }, linear, 1600, 900)[0].angle).to.be.closeTo(Math.PI / 2, 1e-9);
+      expect(swirlLayers({ ...view, turn: 0.5 }, timingFunction('ease-in-out'), 900, 1600)[0].angle).to.be.closeTo(Math.PI, 1e-6);
     });
   });
 

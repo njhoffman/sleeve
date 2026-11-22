@@ -3,9 +3,9 @@ import { nextLineTime, wordFill, wordTexts, wordTimings } from '../now/lines.ts'
 import type { NowState } from '../now/state.ts';
 import { Connection } from './connection.ts';
 import { pageTheme, parseHex, textTheme, themeVariables, validColors, type OverlayColors } from './contrast.ts';
-import { CoverFlow } from './flow.ts';
+import { CoverFlow, type FlowMode } from './flow.ts';
 import { describeReport, parseBackground, type PageBackground, type ReportReply } from '../protocol/messages.ts';
-import { candidateEntries, coverColors, displaySettings, flowSettings, flowStep, follow, formatOffset, formatTime, lineStart, lyricsInsets, NO_SCROLL_BACK, nowText, resolveArea, progress, scrollBackOffset, status, wheel, type CandidateEntry, type DisplaySettings, type FlowSettings, type FlowView, type ScrollBack } from './view.ts';
+import { candidateEntries, coverColors, displaySettings, flowSettings, flowStep, follow, formatOffset, formatTime, lineStart, lyricsInsets, NO_SCROLL_BACK, nowText, resolveArea, progress, scrollBackOffset, status, timingFunction, wheel, type CandidateEntry, type DisplaySettings, type FlowSettings, type FlowView, type ScrollBack } from './view.ts';
 
 // The renderer: sleeved's session as scrolling lyrics. The current line is worked out every frame from the
 // mirrored playback clock, so line changes land on the frame they are due whatever the socket does; the scroll
@@ -61,7 +61,10 @@ window.sleeveShell?.onColors(value => {
 
 // The cover behind the lyrics
 
-const ART_SIZE = 64;
+// --art-size: the side the cover is drawn at, for the still layer and the shader's texture; its colors are always
+// read from a 64 px copy, so the text's colors stay as cheap as they were
+const COLOR_SAMPLE_SIZE = 64;
+const artSize = () => Math.round(Math.min(1024, Math.max(16, number('--art-size', 64))));
 let artKey: string | null | undefined = undefined;
 
 const setting = (name: string) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
@@ -129,6 +132,7 @@ function fadeArt(keep: HTMLCanvasElement | null = null): void {
 
 function clearArt(): void {
   fadeArt();
+  art.style.removeProperty('--cover-art-url');
   latestCover = null;
   flow?.forgetCover();
   document.documentElement.classList.remove('art');
@@ -136,18 +140,21 @@ function clearArt(): void {
   applyTheme();
 }
 
-// The cover drawn small and blurred (cropped to a square), faded in over the last, and the text colored for it
+// The cover drawn at --art-size and blurred (cropped to a square), faded in over the last, and the text colored for it
 function showArt(image: HTMLImageElement): void {
+  const size = artSize();
   const canvas = document.createElement('canvas');
-  canvas.width = canvas.height = ART_SIZE;
-  const context = canvas.getContext('2d', { willReadFrequently: true });
+  canvas.width = canvas.height = size;
+  const context = canvas.getContext('2d');
   if (!context) return;
   const side = Math.min(image.naturalWidth, image.naturalHeight);
   const blur = number('--art-blur', 6);
   // Drawn a little past the edges, so the blur does not fade them to transparent
   const margin = blur * 2;
   context.filter = blur > 0 ? `blur(${blur}px)` : 'none';
-  context.drawImage(image, (image.naturalWidth - side) / 2, (image.naturalHeight - side) / 2, side, side, -margin, -margin, ART_SIZE + 2 * margin, ART_SIZE + 2 * margin);
+  context.drawImage(image, (image.naturalWidth - side) / 2, (image.naturalHeight - side) / 2, side, side, -margin, -margin, size + 2 * margin, size + 2 * margin);
+  // sleeve-art-swirl-css draws the whole image itself, as Sunamu does
+  art.style.setProperty('--cover-art-url', `url("${image.src.replaceAll('"', '%22')}")`);
   art.append(canvas);
   requestAnimationFrame(() => canvas.classList.add('shown'));
   fadeArt(canvas);
@@ -155,7 +162,11 @@ function showArt(image: HTMLImageElement): void {
   latestCover = canvas;
   if (flowOn) flow?.setCover(canvas, performance.now(), artFadeMs());
   const base = parseHex(setting('--bg')) ?? [15, 18, 24];
-  coverColorsShown = coverColors(context.getImageData(0, 0, ART_SIZE, ART_SIZE).data, { opacity: number('--art-opacity', 0.6), dim: number('--art-dim', 0.45), base });
+  const sample = document.createElement('canvas');
+  sample.width = sample.height = COLOR_SAMPLE_SIZE;
+  const sampleContext = sample.getContext('2d', { willReadFrequently: true });
+  sampleContext?.drawImage(canvas, 0, 0, COLOR_SAMPLE_SIZE, COLOR_SAMPLE_SIZE);
+  coverColorsShown = coverColors(sampleContext?.getImageData(0, 0, COLOR_SAMPLE_SIZE, COLOR_SAMPLE_SIZE).data ?? [], { opacity: number('--art-opacity', 0.6), dim: number('--art-dim', 0.45), base });
   applyTheme();
 }
 
@@ -170,32 +181,49 @@ function updateArt(state: NowState): void {
   image.src = `/art/current?key=${encodeURIComponent(key)}`;
 }
 
-// --art-animation: sleeve-art-flow, and its settings read about once a second, so an edit to the stylesheet shows
-// without a reload. The WebGL context is only made once it is wanted.
+// --art-animation: sleeve-art-flow or sleeve-art-swirl (the shader), and their settings read about once a second, so
+// an edit to the stylesheet shows without a reload. The WebGL context is only made once it is wanted.
+// sleeve-art-swirl-css is the same swirl as Sunamu draws it, CSS filters and blend modes, kept to compare the two.
 
 const SETTINGS_READ_MS = 1000;
 let flow: CoverFlow | null = null;
 let flowOn = false;
+let flowMode: FlowMode = 'flow';
+let swirlEase: (progress: number) => number = progress => progress;
 let latestCover: HTMLCanvasElement | null = null;
 let flowTarget: FlowSettings | null = null;
 let flowView: FlowView | null = null;
 let settingsReadAt = -Infinity;
 
+const SHADER_LOOKS: Record<string, FlowMode> = { 'sleeve-art-flow': 'flow', 'sleeve-art-swirl': 'swirl' };
+let swirlBox: HTMLDivElement | null = null;
+
 function readFlow(now: number): void {
-  const wanted = artWanted() && setting('--art-animation').split(',')[0].trim() === 'sleeve-art-flow';
-  if (wanted) flow ??= new CoverFlow(art);
-  const on = wanted && !!flow?.available;
+  const look = setting('--art-animation').split(',')[0].trim();
+  const mode = artWanted() ? SHADER_LOOKS[look] : undefined;
+  if (mode) flow ??= new CoverFlow(art);
+  const on = !!mode && !!flow?.available;
   if (on && !flowOn && latestCover) flow!.setCover(latestCover, now, 0);
   flowOn = on;
+  flowMode = mode ?? 'flow';
+  swirlEase = timingFunction(setting('--swirl-timing') || 'ease-in-out');
   document.documentElement.classList.toggle('flow', on);
   flowTarget = on ? flowSettings(setting) : null;
-  if (flowTarget) flowView ??= { ...flowTarget, phase: 0 };
+  if (flowTarget) flowView ??= { ...flowTarget, phase: 0, turn: 0 };
+  const swirlCss = artWanted() && look === 'sleeve-art-swirl-css';
+  if (swirlCss && !swirlBox) {
+    swirlBox = document.createElement('div');
+    swirlBox.className = 'swirl';
+    swirlBox.append(document.createElement('div'), document.createElement('div'));
+    art.prepend(swirlBox);
+  }
+  document.documentElement.classList.toggle('swirl-css', swirlCss);
 }
 
 function updateFlow(now: number, dt: number): void {
   if (!flowOn || !flowTarget || !flowView || !document.documentElement.classList.contains('art')) return;
   flowView = flowStep(flowView, flowTarget, dt);
-  flow!.draw(now, flowView);
+  flow!.draw(now, flowView, flowMode, swirlEase);
 }
 
 // The now-playing panel and the lyrics' alignment, read as often as the flow's settings

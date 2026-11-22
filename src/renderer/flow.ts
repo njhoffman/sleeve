@@ -1,8 +1,13 @@
-import type { FlowView } from './view.ts';
+import { swirlLayers, type FlowView } from './view.ts';
 
-// --art-animation: sleeve-art-flow: the 64 px cover warped slowly by a fragment shader, drawn small and stretched, so
-// the GPU cost stays low (quarter resolution at 30 fps took about half the GPU time of the CSS drift on an Iris Xe).
+// The cover moved by a fragment shader, drawn small and stretched, so the GPU cost stays low (quarter resolution at
+// 30 fps took about half the GPU time of the CSS drift on an Iris Xe). Two looks:
+// --art-animation: sleeve-art-flow, the cover (--art-size px) warped slowly;
+// --art-animation: sleeve-art-swirl, Sunamu's background: two turning copies of the cover, exclusion blended, the
+// small blurred cover standing in for its blur(180px) at a fraction of the cost.
 // Everything moving is a uniform worked out in view.ts, so a changed setting carries on from where the picture is.
+
+export type FlowMode = 'flow' | 'swirl';
 
 const VERTEX = `#version 300 es
 out vec2 uv;
@@ -25,15 +30,43 @@ uniform float detail;
 uniform float zoom;
 uniform float saturation;
 uniform vec2 aspect;
+uniform int mode;
+uniform vec2 frame;
+uniform vec4 centers;
+uniform vec2 angles;
+uniform float size;
+uniform float brightness;
+vec3 sampled(vec2 p) {
+  return mix(texture(previous, p).rgb, texture(cover, p).rgb, fade);
+}
+vec3 saturated(vec3 c) {
+  return mix(vec3(dot(c, vec3(0.299, 0.587, 0.114))), c, saturation);
+}
+// One swirl layer at a point of the window (vmax, y down): the cover turned by angle around center, then CSS's
+// brightness() and saturate(), clamped as filters are
+vec3 layer(vec2 at, vec2 center, float angle) {
+  vec2 d = at - center;
+  float c = cos(angle);
+  float s = sin(angle);
+  vec2 q = vec2(c * d.x + s * d.y, -s * d.x + c * d.y) / size + 0.5;
+  return clamp(saturated(sampled(vec2(q.x, 1.0 - q.y)) * brightness), 0.0, 1.0);
+}
 void main() {
+  if (mode == 1) {
+    vec2 at = vec2(uv.x, 1.0 - uv.y) * frame;
+    vec3 a = layer(at, centers.xy, angles.x);
+    vec3 b = layer(at, centers.zw, angles.y);
+    color = vec4(a + b - 2.0 * a * b, 1.0);
+    return;
+  }
   vec2 p = (uv - 0.5) * aspect / zoom + 0.5;
   p += amount * 0.07 * vec2(sin(p.y * 3.1 * detail + phase * 0.11), cos(p.x * 2.7 * detail - phase * 0.09));
   p += amount * 0.04 * vec2(sin(p.y * 5.3 * detail - phase * 0.07), cos(p.x * 4.3 * detail + phase * 0.13));
-  vec3 c = mix(texture(previous, p).rgb, texture(cover, p).rgb, fade);
-  color = vec4(mix(vec3(dot(c, vec3(0.299, 0.587, 0.114))), c, saturation), 1.0);
+  color = vec4(saturated(sampled(p)), 1.0);
 }`;
 
-type Uniform = 'previous' | 'cover' | 'fade' | 'phase' | 'amount' | 'detail' | 'zoom' | 'saturation' | 'aspect';
+const UNIFORMS = ['previous', 'cover', 'fade', 'phase', 'amount', 'detail', 'zoom', 'saturation', 'aspect', 'mode', 'frame', 'centers', 'angles', 'size', 'brightness'] as const;
+type Uniform = typeof UNIFORMS[number];
 
 export class CoverFlow {
   readonly canvas: HTMLCanvasElement;
@@ -81,7 +114,7 @@ export class CoverFlow {
     gl.useProgram(program);
     gl.bindVertexArray(gl.createVertexArray());
     gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
-    for (const name of ['previous', 'cover', 'fade', 'phase', 'amount', 'detail', 'zoom', 'saturation', 'aspect'] as const) {
+    for (const name of UNIFORMS) {
       this.uniforms.set(name, gl.getUniformLocation(program, name));
     }
     gl.uniform1i(this.uniforms.get('previous')!, 0);
@@ -121,8 +154,8 @@ export class CoverFlow {
     this.cover = null;
   }
 
-  // Draws when the frame rate asks for one
-  draw(now: number, view: FlowView): void {
+  // Draws when the frame rate asks for one; ease is --swirl-timing as a function
+  draw(now: number, view: FlowView, mode: FlowMode, ease: (progress: number) => number): void {
     const gl = this.gl;
     if (!gl || !this.cover || now - this.lastDraw < 1000 / view.fps - 2) return;
     this.lastDraw = now;
@@ -141,6 +174,16 @@ export class CoverFlow {
     gl.uniform1f(uniform('zoom'), view.zoom);
     gl.uniform1f(uniform('saturation'), view.saturation);
     gl.uniform2f(uniform('aspect'), width > height ? 1 : width / height, width > height ? height / width : 1);
+    gl.uniform1i(uniform('mode'), mode === 'swirl' ? 1 : 0);
+    if (mode === 'swirl') {
+      const vmax = Math.max(1, innerWidth, innerHeight);
+      const [first, second] = swirlLayers(view, ease, innerWidth, innerHeight);
+      gl.uniform2f(uniform('frame'), innerWidth / vmax, innerHeight / vmax);
+      gl.uniform4f(uniform('centers'), first.x, first.y, second.x, second.y);
+      gl.uniform2f(uniform('angles'), first.angle, second.angle);
+      gl.uniform1f(uniform('size'), view.size);
+      gl.uniform1f(uniform('brightness'), view.brightness);
+    }
     gl.drawArrays(gl.TRIANGLES, 0, 3);
   }
 }
