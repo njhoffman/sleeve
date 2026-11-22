@@ -6,6 +6,19 @@ All notable changes to sleeve are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.47.0] - 2026-11-22
+
+### Changed
+
+- An edit to `--art-size` or `--art-blur` in `~/.config/sleeve/style.css` shows within a second, the cover drawn again,
+  instead of with the next track.
+
+### Fixed
+
+- A word wider than the lyrics area (a URL, a long compound) breaks onto the next line instead of being cut off at the
+  area's edge, the word-by-word fill included.
+- When the cover's shader cannot run, the page's console says why instead of the cover just staying still.
+
 ## [0.46.1] - 2026-11-22
 
 ### Fixed

@@ -5,36 +5,6 @@ Roadmap and open issues for sleeve, a synced-lyrics fetcher and viewer that star
 
 Reviewed: 2026-11-22
 
-## 1. Planning
-
-- [x] **Decide the stack.** (p1) [chore] Decided 2026-11-02: TypeScript run directly by Node 24 (no backend build
-      step), a headless daemon (`sleeved`) with one WebSocket protocol, a web renderer, Electron only as a
-      thin shell for window and overlay modes, a CLI over the core library, mocha + chai + sinon.
-- [x] **Decide the backdrop integration boundary.** (p1) [chore] Decided 2026-11-02: backdrop places the overlay
-      when it runs; without backdrop, sleeve stacks its own overlay; in window mode backdrop is not involved.
-- [x] **Decide which Sunamu features to drop.** (p2) [chore] Decided 2026-11-02: drop Discord RPC, Last.fm play
-      counts, Spotify links, track logging, i18n and Windows support.
-- [x] **Salvage the uncommitted fork work.** (p2) [chore] `~/git/Sunamu` (origin njhoffman/lyricist) has 24 modified files
-      (leveled logger, MPRIS fixes, provider logging) that are not committed or pushed; `~/git/lyricist`
-      is a stale clone with only lockfile changes. Commit or stash them before they are lost, so they
-      can be read for reference.
-- [x] **Decide the musicman integration.** (p2) [chore] `~/git/musicman` (v1.51.0, plain JS, pnpm workspace)
-      already detects the active player across MPD and Spotify (`musicman status --format json`,
-      `common/mpd/`), keeps a SQLite library and writes ID3 tags, including custom fields synced
-      with Spotify playlists. Overlaps sleeve's player layer and tag writing. Decide whether sleeve
-      reads now-playing from musicman (or shares `common/mpd`) and writes lyrics through musicman's tag
-      writer, so two programs never rewrite the same files' ID3 tags independently.
-      Decided 2026-11-02 for players (0.5.0): sleeve reads MPD and MPRIS itself, since lyrics need exact,
-      immediate position and musicman's adapters are one-shot reads; musicman shares a contract
-      (its docs/09-contract.md, 1.55.0): `paths.json` (MPD and the database) and the `spotify_track_files` view,
-      so Spotify tracks get their library file. Tag writing is still open (see Batch-write lyrics).
-      Tag writing settled 2026-11-02 in the contract's "Lyrics in the library's tags" (musicman 1.55.1):
-      sleeve writes `USLT`/`SYLT` itself, not through musicman, and musicman's node-id3 rewrites carry both over.
-- [x] **Check license obligations.** (p3) [docs] Sunamu is MPL-2.0: any file copied or closely ported from it
-      (LRC parser, Musixmatch client) stays MPL-2.0 with its notice. Pick sleeve's license with that in mind.
-      Done 2026-11-04 in 0.29.2: MPL-2.0 for the whole project. Comparing every file with Sunamu's found at most
-      2% of lines shared, all incidental, so no file needed its own notice.
-
 ## 2. Plan gaps (address later)
 
 Design questions raised in the stack review of 2026-11-02. Each is a decision to settle before the
@@ -275,7 +245,39 @@ build items that depend on it, listed in the later projects.
       or adding a `--until-done` that loops over deferred files.
       Watched, and no change needed: 1611 deferred or waiting, then 271, then none on 2026-11-05 with `--retry-now`. The backoff does its job, and `--retry-now` is the loop.
 
-## 5. Players
+## Completed
+
+### 1. Planning (completed 2026-11-04)
+
+- [x] **Decide the stack.** (p1) [chore] Decided 2026-11-02: TypeScript run directly by Node 24 (no backend build
+      step), a headless daemon (`sleeved`) with one WebSocket protocol, a web renderer, Electron only as a
+      thin shell for window and overlay modes, a CLI over the core library, mocha + chai + sinon.
+- [x] **Decide the backdrop integration boundary.** (p1) [chore] Decided 2026-11-02: backdrop places the overlay
+      when it runs; without backdrop, sleeve stacks its own overlay; in window mode backdrop is not involved.
+- [x] **Decide which Sunamu features to drop.** (p2) [chore] Decided 2026-11-02: drop Discord RPC, Last.fm play
+      counts, Spotify links, track logging, i18n and Windows support.
+- [x] **Salvage the uncommitted fork work.** (p2) [chore] `~/git/Sunamu` (origin njhoffman/lyricist) has 24 modified files
+      (leveled logger, MPRIS fixes, provider logging) that are not committed or pushed; `~/git/lyricist`
+      is a stale clone with only lockfile changes. Commit or stash them before they are lost, so they
+      can be read for reference.
+- [x] **Decide the musicman integration.** (p2) [chore] `~/git/musicman` (v1.51.0, plain JS, pnpm workspace)
+      already detects the active player across MPD and Spotify (`musicman status --format json`,
+      `common/mpd/`), keeps a SQLite library and writes ID3 tags, including custom fields synced
+      with Spotify playlists. Overlaps sleeve's player layer and tag writing. Decide whether sleeve
+      reads now-playing from musicman (or shares `common/mpd`) and writes lyrics through musicman's tag
+      writer, so two programs never rewrite the same files' ID3 tags independently.
+      Decided 2026-11-02 for players (0.5.0): sleeve reads MPD and MPRIS itself, since lyrics need exact,
+      immediate position and musicman's adapters are one-shot reads; musicman shares a contract
+      (its docs/09-contract.md, 1.55.0): `paths.json` (MPD and the database) and the `spotify_track_files` view,
+      so Spotify tracks get their library file. Tag writing is still open (see Batch-write lyrics).
+      Tag writing settled 2026-11-02 in the contract's "Lyrics in the library's tags" (musicman 1.55.1):
+      sleeve writes `USLT`/`SYLT` itself, not through musicman, and musicman's node-id3 rewrites carry both over.
+- [x] **Check license obligations.** (p3) [docs] Sunamu is MPL-2.0: any file copied or closely ported from it
+      (LRC parser, Musixmatch client) stays MPL-2.0 with its notice. Pick sleeve's license with that in mind.
+      Done 2026-11-04 in 0.29.2: MPL-2.0 for the whole project. Comparing every file with Sunamu's found at most
+      2% of lines shared, all incidental, so no file needed its own notice.
+
+### 5. Players (completed 2026-11-04)
 
 - [x] **Headless daemon over the session.** (p1) [feature] `sleeved`: `NowPlaying` (`src/now/session.ts`)
       behind the WebSocket protocol the renderer and Electron shell will use (state, current line, nudge,
@@ -312,7 +314,7 @@ build items that depend on it, listed in the later projects.
       Done in 0.5.0: `src/players/mpris.ts` on `@jellybrick/dbus-next` (Seeked, PropertiesChanged, a position
       read every 5 s while playing), written anew rather than ported.
 
-## 6. Display
+### 6. Display (completed 2026-11-22)
 
 - [x] **Readable, colored command output.** (p2) [feature] Asked for 2026-11-05: color, alignment and gradient progress bars across the commands, with what scripts read left as it was.
       Done in 0.41.0: `src/cli/style.ts`. In a terminal only: status colors and a live progress bar in `sleeve tag`, aligned tables with score bars for candidates, a position bar in `sleeve now --once`, colored help. Piped output is byte for byte what it was.
@@ -457,12 +459,19 @@ build items that depend on it, listed in the later projects.
       Electron shell and writing lyrics into tags as planned, all built, and names 5 of the 12 commands (not `daemon`,
       `ctl`, `shell`, `line`, `reports`, `review`, `tag`). Every agent starts from it. Rewrite it from `src/cli/index.ts`.
       Done in 0.46.1: what is where, by directory, every command named, and what is left pointed at TODO.md.
-- [ ] **A word wider than the lyrics area is clipped.** (p3) [bug] `.line` wraps only at spaces, so a long URL or compound
+- [x] **A word wider than the lyrics area is clipped.** (p3) [bug] `.line` wraps only at spaces, so a long URL or compound
       in a narrow area (backdrop's left-third presets) runs past `#lyrics-area`'s `overflow: hidden`. `overflow-wrap: anywhere`
       on `.line` breaks it instead; check the word-by-word fill (`.word .fill`, `white-space: nowrap`) still lines up.
-- [ ] **The shader fails silently.** (p3) [chore] `CoverFlow.setUp` (`src/renderer/flow.ts`) checks only the link status and
+      Done in 0.47.0: `overflow-wrap: anywhere` on `.line`, `max-width: 100%` on `.word`, and the fill copy spans the word's box
+      and wraps with it (checked: a 63-letter URL in a 305 px area, the fill exactly over the word). On a broken word the sweep
+      covers its lines together rather than one after the other.
+- [x] **The shader fails silently.** (p3) [chore] `CoverFlow.setUp` (`src/renderer/flow.ts`) checks only the link status and
       logs nothing, so a GLSL mistake in a new look (as `sleeve-art-swirl` added) shows as the still cover with no clue why.
       Log the compile and link info once to the console when either fails.
-- [ ] **`--art-size` and `--art-blur` edits wait for the next track.** (p3) [feature] The stylesheet's other settings apply
+      Done in 0.47.0: a compile or link failure logs the GL info log with `console.warn` (checked with a deliberate error:
+      "'not_glsl_at_all' : undeclared identifier", and the still cover).
+- [x] **`--art-size` and `--art-blur` edits wait for the next track.** (p3) [feature] The stylesheet's other settings apply
       within a second, and the same two sent by `style` draw the cover again at once, but an edit to `~/.config/sleeve/style.css`
       shows only when the cover changes. Read them with the flow's settings (`readFlow`) and draw the cover again on a change.
+      Done in 0.47.0: the settings read compares both with what the cover was drawn at and draws it again on a change; this
+      replaces the display style's own check from 0.46.0.

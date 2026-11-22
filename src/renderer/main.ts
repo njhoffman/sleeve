@@ -151,12 +151,25 @@ function fadeArt(keep: HTMLCanvasElement | null = null): void {
 function clearArt(): void {
   fadeArt();
   art.style.removeProperty('--cover-art-url');
+  artDrawn = '';
   latestCover = null;
   flow?.forgetCover();
   document.documentElement.classList.remove('art');
   coverColorsShown = null;
   coverDetailShown = 0;
   applyTheme();
+}
+
+// What the cover was drawn with (--art-size, --art-blur), read with the other settings: an edit to either, in the
+// stylesheet or by a display's style, draws it again rather than waiting for the next track
+let artDrawn = '';
+const artLook = () => `${artSize()} ${number('--art-blur', 6)}`;
+
+function redrawArtOnChange(): void {
+  if (artDrawn && artLook() !== artDrawn) {
+    artDrawn = '';
+    artKey = undefined;
+  }
 }
 
 // The cover drawn at --art-size and blurred (cropped to a square), faded in over the last, and the text colored for it
@@ -168,6 +181,7 @@ function showArt(image: HTMLImageElement): void {
   if (!context) return;
   const side = Math.min(image.naturalWidth, image.naturalHeight);
   const blur = number('--art-blur', 6);
+  artDrawn = artLook();
   // Drawn a little past the edges, so the blur does not fade them to transparent
   const margin = blur * 2;
   context.filter = blur > 0 ? `blur(${blur}px)` : 'none';
@@ -264,19 +278,15 @@ let shownTimes = '';
 const styleElement = document.createElement('style');
 document.head.append(styleElement);
 // Read when the cover is drawn, so a change to them draws it again
-const DRAWN_ART = ['--art-size', '--art-blur'];
-
-function applyStyle(rule: string, before: DisplaySettings['style'] | undefined, after: DisplaySettings['style']): void {
-  if (styleElement.textContent === rule) return;
-  styleElement.textContent = rule;
-  if (DRAWN_ART.some(name => before?.[name] !== after[name])) artKey = undefined;
+function applyStyle(rule: string): void {
+  if (styleElement.textContent !== rule) styleElement.textContent = rule;
 }
 
 function readDisplay(): void {
   const next = displaySettings(setting, pageParams, overlay, connection.mirror.displayFor(instance));
   const rule = styleRule(next.style);
   if (display && next.preset === display.preset && next.position === display.position && next.align === display.align && next.lyricsArea === display.lyricsArea && next.nowArea === display.nowArea && next.background === display.background && next.visible === display.visible && rule === styleElement.textContent) return;
-  applyStyle(rule, display?.style, next.style);
+  applyStyle(rule);
   if (display && !display.visible && next.visible) snap = true;
   display = next;
   document.documentElement.classList.toggle('page-hidden', !next.visible);
@@ -488,6 +498,7 @@ function render(now: number): void {
     displaysSeen = connection.mirror.displaysSeen;
     readDisplay();
     readFlow(now);
+    redrawArtOnChange();
     applyScrim();
   }
   updateArt(state);

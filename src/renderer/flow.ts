@@ -107,10 +107,15 @@ export class CoverFlow {
       const shader = gl.createShader(type)!;
       gl.shaderSource(shader, text);
       gl.compileShader(shader);
+      // A mistake in a look's GLSL would otherwise only show as the still cover
+      if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) console.warn(`sleeve: the cover's ${type === gl.VERTEX_SHADER ? 'vertex' : 'fragment'} shader did not compile, so the cover stays still:`, gl.getShaderInfoLog(shader));
       gl.attachShader(program, shader);
     }
     gl.linkProgram(program);
-    if (!gl.getProgramParameter(program, gl.LINK_STATUS)) return;
+    if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+      console.warn('sleeve: the cover\'s shaders did not link, so the cover stays still:', gl.getProgramInfoLog(program));
+      return;
+    }
     gl.useProgram(program);
     gl.bindVertexArray(gl.createVertexArray());
     gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
