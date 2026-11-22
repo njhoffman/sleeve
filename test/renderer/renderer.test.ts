@@ -13,7 +13,7 @@ import { NowPlaying } from '../../src/now/session.ts';
 import type { NowState } from '../../src/now/state.ts';
 import { PlayerHub } from '../../src/players/hub.ts';
 import { Connection } from '../../src/renderer/connection.ts';
-import { candidateEntries, coverColors, displaySettings, flowSettings, flowStep, follow, formatOffset, formatTime, lineStart, lyricsInsets, nowText, resolveArea, NO_SCROLL_BACK, progress, reconnectDelay, SCROLL_BACK_MS, scrollBackOffset, styleRule, scrimAlpha, coverDetail, SCRIM_MAX, status, swirlLayers, timingFunction, wheel } from '../../src/renderer/view.ts';
+import { candidateEntries, coverColors, displaySettings, flowSettings, flowStep, follow, formatOffset, formatTime, lineStart, lyricsInsets, nowText, resolveArea, NO_SCROLL_BACK, progress, reconnectDelay, SCROLL_BACK_MS, scrollBackOffset, styleRule, scrimAlpha, wholeCoverPosition, wholeCoverRect, coverDetail, SCRIM_MAX, status, swirlLayers, timingFunction, wheel } from '../../src/renderer/view.ts';
 import { until } from '../helpers/fakeMpd.ts';
 import { fakePlayer } from '../helpers/players.ts';
 
@@ -146,6 +146,42 @@ describe('renderer view', () => {
       expect(lyricsInsets('bottom-right', { top: 850, right: 980, bottom: 980, left: 600 }, view)).to.deep.equal({ ...none, bottom: 166 });
       expect(lyricsInsets('center-left', { top: 400, right: 364, bottom: 600, left: 24 }, view)).to.deep.equal({ ...none, left: 380 });
       expect(lyricsInsets('center-right', { top: 400, right: 976, bottom: 600, left: 636 }, view)).to.deep.equal({ ...none, right: 380 });
+    });
+  });
+
+  describe('the whole cover', () => {
+    const window = { width: 1920, height: 1080 };
+    const third = { left: 0, top: 0, width: 640, height: 1080 };
+
+    it('stands in the larger free side beside the lyrics, the largest square there less the margin', () => {
+      // Lyrics in the left third: the right two thirds, 1280 x 1080, a 1080 square less 10% all round
+      expect(wholeCoverRect(window, third, 'auto', 0.1)).to.deep.equal({ left: 640 + (1280 - 864) / 2, top: 108, width: 864, height: 864 });
+      // Lyrics on the right: the left side
+      const rightSide = { left: 1280, top: 0, width: 640, height: 1080 };
+      expect(wholeCoverRect(window, rightSide, 'auto', 0).left).to.equal((1280 - 1080) / 2);
+      // A narrow side: the square fits its width
+      expect(wholeCoverRect(window, { left: 0, top: 0, width: 1400, height: 1080 }, 'auto', 0)).to.deep.include({ left: 1400, width: 520 });
+    });
+
+    it('takes the middle of the window when neither side is a fifth of it, or when asked', () => {
+      const wide = { left: 100, top: 0, width: 1720, height: 1080 };
+      const middle = { left: (1920 - 1080) / 2, top: 0, width: 1080, height: 1080 };
+      expect(wholeCoverRect(window, wide, 'auto', 0)).to.deep.equal(middle);
+      expect(wholeCoverRect(window, third, 'center', 0)).to.deep.equal(middle);
+    });
+
+    it('takes a side when asked, the middle when that side has no room', () => {
+      expect(wholeCoverRect(window, { left: 960, top: 0, width: 960, height: 1080 }, 'left', 0).left).to.equal(0);
+      expect(wholeCoverRect(window, third, 'left', 0).left).to.equal((1920 - 1080) / 2);
+      expect(wholeCoverRect(window, third, 'right', 0).left).to.equal(640 + (1280 - 1080) / 2);
+    });
+
+    it('keeps the margin within 0 to 40%, and reads the position, auto for anything else', () => {
+      expect(wholeCoverRect(window, third, 'auto', 3).width).to.be.closeTo(1080 * 0.2, 1e-9);
+      expect(wholeCoverRect(window, third, 'auto', -1).width).to.equal(1080);
+      expect(wholeCoverPosition(' right ')).to.equal('right');
+      expect(wholeCoverPosition('top')).to.equal('auto');
+      expect(wholeCoverPosition('')).to.equal('auto');
     });
   });
 

@@ -279,11 +279,14 @@ build items that depend on it, listed in the later projects.
       looked at in Chrome. A headless-Chrome smoke test like backdrop's `test/web/pages.browser.test.js` (playwright-core,
       skipped without Chrome): sleeved on a fake session, `/` with and without `?style=`, failing on a script error, a
       CSP violation or a failed request.
-- [ ] **The whole cover, not a crop of it.** (p3) [feature] A sharp cover fills the window as a square `--art-scale`
+- [x] **The whole cover, not a crop of it.** (p3) [feature] A sharp cover fills the window as a square `--art-scale`
       vmax wide, so a 16:9 window cuts about 44% of its height, often where its title is (backdrop's `lyrics-stage` and
       `lyrics-cover`). An `--art-fit: contain` would place it whole, beside the lyrics, over a blurred copy filling the
       rest, as players' now-playing screens do; backdrop's presets could then pick it through `style`.
 
+      Done in 0.48.0: `--art-fit: contain` with `--art-fit-position` (auto, left, center, right), `--art-fit-margin`,
+      `--art-fit-radius` and `--art-fit-shadow`; placed by `wholeCoverRect` (`view.ts`), over the background as set.
+      backdrop's `lyrics-cover` uses it (its 3.2.0).
 ## Completed
 
 ### 1. Planning (completed 2026-11-04)

@@ -335,6 +335,34 @@ export function swirlLayers(view: Pick<FlowView, 'turn' | 'period' | 'delay' | '
   ];
 }
 
+// --art-fit: contain, the whole cover, sharp and uncropped, over whatever background is drawn. Where it stands
+// (--art-fit-position): auto takes the larger free side beside the lyrics area, or the middle of the window when
+// neither is at least WHOLE_COVER_MIN_SIDE of its width; left, right and center choose. It is the largest square the
+// space takes, less --art-fit-margin (a share of the space's shorter side, 0 to 0.4) all round, centered in it.
+export const WHOLE_COVER_MIN_SIDE = 0.2;
+export type WholeCoverPosition = 'auto' | 'left' | 'center' | 'right';
+const WHOLE_COVER_POSITIONS: readonly WholeCoverPosition[] = ['auto', 'left', 'center', 'right'];
+
+export function wholeCoverPosition(text: string): WholeCoverPosition {
+  const value = text.trim() as WholeCoverPosition;
+  return WHOLE_COVER_POSITIONS.includes(value) ? value : 'auto';
+}
+
+export function wholeCoverRect(window: { width: number; height: number }, lyrics: Rect, position: WholeCoverPosition, margin: number): Rect {
+  const whole = { left: 0, width: window.width };
+  const left = { left: 0, width: Math.max(0, lyrics.left) };
+  const right = { left: Math.min(window.width, lyrics.left + lyrics.width), width: Math.max(0, window.width - lyrics.left - lyrics.width) };
+  const larger = right.width >= left.width ? right : left;
+  const usable = (side: { width: number }) => side.width >= 1;
+  const space = position === 'center' ? whole
+    : position === 'left' ? (usable(left) ? left : whole)
+    : position === 'right' ? (usable(right) ? right : whole)
+    : larger.width >= WHOLE_COVER_MIN_SIDE * window.width ? larger : whole;
+  const shorter = Math.min(space.width, window.height);
+  const size = Math.max(0, shorter * (1 - 2 * Math.min(0.4, Math.max(0, margin))));
+  return { left: space.left + (space.width - size) / 2, top: (window.height - size) / 2, width: size, height: size };
+}
+
 // Where a click on a line plays from (ms into the track, offset applied); null for a line without a time
 export function lineStart(line: { time: number | null } | undefined, offsetMs: number): number | null {
   return typeof line?.time === 'number' ? Math.max(0, line.time + offsetMs) : null;

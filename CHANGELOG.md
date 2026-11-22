@@ -6,6 +6,15 @@ All notable changes to sleeve are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.48.0] - 2026-11-22
+
+### Added
+
+- `--art-fit: contain`: the whole cover, sharp and uncropped, over whatever background is set (the still cover, the
+  flow or the swirl). It stands in the larger free side beside the lyrics area, or the middle of the window when
+  neither side is a fifth of it, as large as the space takes. `--art-fit-position` (`auto`, `left`, `center`,
+  `right`), `--art-fit-margin`, `--art-fit-radius` and `--art-fit-shadow` adjust it, in the stylesheet or by `style`.
+
 ## [0.47.1] - 2026-11-22
 
 ### Fixed

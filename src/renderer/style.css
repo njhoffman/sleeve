@@ -27,6 +27,11 @@
   --art-size: 64;                /* the side the cover is drawn at, in pixels (16 to 1024): higher shows more of it; applies from the next track */
   --art-blur: 6;                 /* blur of that cover before it is stretched, in its own pixels (drawn once, free); 0 with a high --art-size for a sharp cover */
   --art-fade: 900ms;             /* cross-fade to the next track's cover */
+  --art-fit: cover;              /* contain: also the whole cover, sharp and uncropped, over the background above */
+  --art-fit-position: auto;      /* where: auto (the larger free side beside the lyrics, else the middle), left, center or right */
+  --art-fit-margin: 8%;          /* space around it, a share of its space's shorter side (0 to 40%) */
+  --art-fit-radius: 6px;
+  --art-fit-shadow: 0 12px 48px rgba(0, 0, 0, 0.55);
 
   /* What shows besides the lyrics. The URL wins over these (?now=, ?now-position=, ?lyrics-align=).
   --now-preset:    lyrics (only the lyrics), minimal (a line with artist and title) or full (cover, title, artist, album,
@@ -204,6 +209,23 @@ html.overlay #seek { pointer-events: none; cursor: default; }
 html.flow #art canvas:not(.flow) { display: none; }
 html.flow.art #art canvas.flow { opacity: var(--art-opacity); }
 html:not(.art) #art::after { display: none; }
+
+/* --art-fit: contain: the image itself in the box main.ts places, kept whole, faded in over the last */
+#art-whole { position: fixed; pointer-events: none; display: none; }
+html.whole-cover.art #art-whole { display: block; }
+#art-whole img {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  translate: -50% -50%;
+  max-width: 100%;
+  max-height: 100%;
+  border-radius: var(--art-fit-radius);
+  box-shadow: var(--art-fit-shadow);
+  opacity: 0;
+  transition: opacity var(--art-fade) ease;
+}
+#art-whole img.shown { opacity: 1; }
 
 /* sleeve-art-swirl-css: Sunamu's background as Sunamu draws it, to compare with sleeve-art-swirl. Costly: two blurred
    layers twice the screen's size, filtered and blended every frame. */

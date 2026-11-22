@@ -5,7 +5,7 @@ import { Connection } from './connection.ts';
 import { pageTheme, parseHex, textTheme, themeVariables, validColors, type OverlayColors } from './contrast.ts';
 import { CoverFlow, type FlowMode } from './flow.ts';
 import { describeReport, parseBackground, type PageBackground, type ReportReply } from '../protocol/messages.ts';
-import { candidateEntries, coverColors, displaySettings, flowSettings, flowStep, follow, formatOffset, formatTime, lineStart, lyricsInsets, NO_SCROLL_BACK, coverDetail, DETAIL_SAMPLE_SIZE, scrimAlpha, nowText, resolveArea, progress, scrollBackOffset, status, styleRule, timingFunction, wheel, type CandidateEntry, type DisplaySettings, type FlowSettings, type FlowView, type ScrollBack } from './view.ts';
+import { candidateEntries, coverColors, displaySettings, flowSettings, flowStep, follow, formatOffset, formatTime, lineStart, lyricsInsets, NO_SCROLL_BACK, coverDetail, DETAIL_SAMPLE_SIZE, scrimAlpha, nowText, resolveArea, progress, scrollBackOffset, status, styleRule, timingFunction, wheel, wholeCoverPosition, wholeCoverRect, type CandidateEntry, type DisplaySettings, type FlowSettings, type FlowView, type ScrollBack } from './view.ts';
 
 // The renderer: sleeved's session as scrolling lyrics. The current line is worked out every frame from the
 // mirrored playback clock, so line changes land on the frame they are due whatever the socket does; the scroll
@@ -38,6 +38,7 @@ const candidateList = element<HTMLOListElement>('candidates');
 const help = element<HTMLElement>('help');
 const toast = element<HTMLDivElement>('toast');
 const art = element<HTMLDivElement>('art');
+const artWhole = element<HTMLDivElement>('art-whole');
 
 // ?mode=overlay: drawn over the wallpaper by the Electron shell, with nothing but the lyrics
 const overlay = new URLSearchParams(location.search).get('mode') === 'overlay';
@@ -139,9 +140,9 @@ function setTheme(variables: Record<string, string> | null): void {
 const artFadeMs = () => number('--art-fade', 900) * (setting('--art-fade').endsWith('ms') ? 1 : 1000);
 
 // Fades the layers out and away; the newest stays when keep is given
-function fadeArt(keep: HTMLCanvasElement | null = null): void {
+function fadeArt(keep: HTMLElement | null = null, layers: Iterable<HTMLElement> = art.querySelectorAll<HTMLCanvasElement>('canvas:not(.flow)')): void {
   const fadeMs = artFadeMs();
-  for (const layer of art.querySelectorAll<HTMLCanvasElement>('canvas:not(.flow)')) {
+  for (const layer of layers) {
     if (layer === keep) continue;
     layer.classList.remove('shown');
     window.setTimeout(() => layer.remove(), fadeMs + 100);
@@ -150,6 +151,7 @@ function fadeArt(keep: HTMLCanvasElement | null = null): void {
 
 function clearArt(): void {
   fadeArt();
+  fadeArt(null, artWhole.querySelectorAll('img'));
   art.style.removeProperty('--cover-art-url');
   artDrawn = '';
   latestCover = null;
@@ -188,6 +190,13 @@ function showArt(image: HTMLImageElement): void {
   context.drawImage(image, (image.naturalWidth - side) / 2, (image.naturalHeight - side) / 2, side, side, -margin, -margin, size + 2 * margin, size + 2 * margin);
   // sleeve-art-swirl-css draws the whole image itself, as Sunamu does
   art.style.setProperty('--cover-art-url', `url("${image.src.replaceAll('"', '%22')}")`);
+  // --art-fit: contain shows the image itself, whole and sharp, faded in over the last
+  const whole = new Image();
+  whole.alt = '';
+  whole.src = image.src;
+  artWhole.append(whole);
+  requestAnimationFrame(() => whole.classList.add('shown'));
+  fadeArt(whole, artWhole.querySelectorAll('img'));
   art.append(canvas);
   requestAnimationFrame(() => canvas.classList.add('shown'));
   fadeArt(canvas);
@@ -314,8 +323,25 @@ function placeAreas(): void {
     box.style.height = `${rect.height}px`;
   }
   reservePanel();
+  placeWholeCover();
 }
 addEventListener('resize', () => placeAreas());
+
+// --art-fit: contain: the whole cover beside the lyrics (wholeCoverRect), read with the other settings
+let wholeShown = '';
+function placeWholeCover(): void {
+  const on = setting('--art-fit') === 'contain';
+  document.documentElement.classList.toggle('whole-cover', on);
+  if (!on || !display) return;
+  const size = { width: innerWidth, height: innerHeight };
+  const marginText = setting('--art-fit-margin');
+  const margin = Number.parseFloat(marginText) / (marginText.endsWith('%') ? 100 : 1);
+  const rect = wholeCoverRect(size, resolveArea(display.lyricsArea, size), wholeCoverPosition(setting('--art-fit-position')), Number.isFinite(margin) ? margin : 0.08);
+  const shown = `${rect.left} ${rect.top} ${rect.width}`;
+  if (shown === wholeShown) return;
+  wholeShown = shown;
+  Object.assign(artWhole.style, { left: `${rect.left}px`, top: `${rect.top}px`, width: `${rect.width}px`, height: `${rect.height}px` });
+}
 
 // Keeps the lyrics clear of the panel
 function reservePanel(): void {
@@ -499,6 +525,7 @@ function render(now: number): void {
     readDisplay();
     readFlow(now);
     redrawArtOnChange();
+    placeWholeCover();
     applyScrim();
   }
   updateArt(state);
