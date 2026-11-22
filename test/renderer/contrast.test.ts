@@ -46,6 +46,11 @@ describe('overlay contrast', () => {
     expect(validColors({ background: '#000000', main: 'x' })).to.equal(null);
     expect(validColors({ background: '#000000', main: [{ color: '#ffffff', share: 0.5 }, { color: 'nope', share: 1 }, { color: '#111111' }] }))
       .to.deep.equal({ background: '#000000', main: [{ color: '#ffffff', share: 0.5 }] });
+    // A busy cover counts as weak contrast, even where its colors leave the text plenty
+    const calm = textTheme({ background: '#000000', main: [] });
+    const busy = textTheme({ background: '#000000', main: [] }, 1);
+    expect(busy).to.deep.include({ text: calm.text, contrast: calm.contrast, shadowAlpha: 0.85, upcomingAlpha: 0.7, pastAlpha: 0.5 });
+    expect(textTheme({ background: '#000000', main: [] }, 0.5).shadowAlpha).to.be.greaterThan(calm.shadowAlpha).and.lessThan(0.85);
     expect(themeVariables(textTheme({ background: '#000000', main: [] }))).to.deep.equal({
       '--overlay-text': '244, 246, 251', '--overlay-shadow': '18, 21, 28', '--overlay-shadow-alpha': '0.45',
       '--overlay-upcoming-alpha': '0.5', '--overlay-past-alpha': '0.32'

@@ -6,6 +6,15 @@ All notable changes to sleeve are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.45.0] - 2026-11-22
+
+### Added
+
+- The lyrics stay readable over a sharp cover. sleeve measures how busy the cover is when it draws it; over a busy one a
+  soft scrim in the shadow's color lies behind the lyrics area, and the text's shadow and the other lines' opacity rise
+  as they do over low contrast. Over the blurred default cover nothing changes. `--lyrics-scrim` (auto, or 0 to 1) sets
+  its strength, `--lyrics-scrim-blur` frosts the cover behind it, and `--lyrics-scrim-edge` sets how softly it fades out.
+
 ## [0.44.0] - 2026-11-22
 
 ### Added

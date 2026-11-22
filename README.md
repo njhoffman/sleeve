@@ -150,6 +150,7 @@ loads after its own. Edits apply to an open page within a few seconds, with no r
   --flow-speed: 1;                    /* also --flow-amount, --flow-detail, --flow-zoom, --flow-resolution, --flow-fps */
   --swirl-period: 60;                 /* also --swirl-delay, --swirl-size, --swirl-brightness, --swirl-timing, --swirl-blur */
   --art-size: 64;                     /* the cover's side in pixels: higher is sharper */
+  --lyrics-scrim: auto;               /* a soft layer behind the lyrics, auto by how busy the cover is; also --lyrics-scrim-blur, --lyrics-scrim-edge */
   --art-duration: 120s;               /* for drift and breathe; also --art-timing, --art-delay, --art-iteration, --art-direction */
   --art-opacity: 0.6;                 /* also --art-dim, --art-saturation, --art-scale, --art-blur, --art-fade */
   --art-background: on;               /* off: no cover */
@@ -163,6 +164,9 @@ for `sleeve-art-drift`; `--flow-resolution` is what matters most. Without WebGL 
 `--swirl-delay`, blended by exclusion, so their colors keep mixing into new shapes. Its defaults are Sunamu's. The
 shader draws it from the small blurred cover at about the flow's cost; `sleeve-art-swirl-css` draws it as Sunamu did,
 with CSS filters on two full-size images, which costs far more and is there to compare the two.
+Over a sharp cover the lyrics get a scrim: a soft layer in the shadow's color behind the lyrics area, as strong as the
+cover is busy (none over the blurred default), and the shadow and the other lines grow stronger with it, as they do
+over low contrast. `--lyrics-scrim` sets its strength by hand, and `--lyrics-scrim-blur` frosts the cover behind it.
 What shows besides the lyrics is a preset, set the same way, with the panel at any of eight places; the lyrics keep clear
 of it. `lyrics` shows nothing else, `minimal` a line with artist and title, and `full` the cover, title, artist, album, a
 seek bar you can click, and the times. The overlay shows `lyrics` and a window `minimal` unless you say otherwise:

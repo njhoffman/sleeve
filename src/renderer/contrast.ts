@@ -4,7 +4,8 @@ import type { PageBackground } from '../protocol/messages.ts';
 // overlay (after its dim) and gives the average and the main colors with their shares; the Electron shell passes
 // them on. Light or dark text is chosen by WCAG contrast against every color that covers a real part of the area,
 // so a bright patch counts even when the average is dark; the shadow, in the opposite color, grows as contrast
-// falls, since it is what keeps the text readable over a busy picture.
+// falls, since it is what keeps the text readable over a busy picture. A sharp cover counts as weak contrast however its
+// colors average out: detail (coverDetail in view.ts, 0 to 1) raises the shadow and the other lines' opacity as weakness does.
 
 export interface OverlayColors {
   // #rrggbb
@@ -87,7 +88,7 @@ export function pageTheme(background: PageBackground | null, cover: OverlayColor
 const triplet = (rgb: [number, number, number]) => rgb.join(', ');
 const clamp = (value: number, low: number, high: number) => Math.min(high, Math.max(low, value));
 
-export function textTheme(colors: OverlayColors): TextTheme {
+export function textTheme(colors: OverlayColors, detail = 0): TextTheme {
   const behind = [colors.background, ...colors.main.filter(entry => entry.share >= SIGNIFICANT_SHARE).map(entry => entry.color)]
     .map(parseHex).filter((rgb): rgb is [number, number, number] => rgb !== null);
   const light = parseHex(LIGHT)!, dark = parseHex(DARK)!;
@@ -96,8 +97,8 @@ export function textTheme(colors: OverlayColors): TextTheme {
   // Ties go to light text, the renderer's own look
   const useLight = lightContrast >= darkContrast;
   const contrast = useLight ? lightContrast : darkContrast;
-  // 0 when contrast is good, 1 when it is as bad as it gets
-  const weakness = clamp((GOOD_CONTRAST - contrast) / (GOOD_CONTRAST - 1), 0, 1);
+  // 0 when contrast is good and the picture calm, 1 when either is as bad as it gets
+  const weakness = Math.max(clamp((GOOD_CONTRAST - contrast) / (GOOD_CONTRAST - 1), 0, 1), clamp(detail, 0, 1));
   return {
     text: triplet(useLight ? light : dark),
     shadow: triplet(useLight ? dark : light),

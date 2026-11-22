@@ -434,7 +434,14 @@ build items that depend on it, listed in the later projects.
       exclusion-blended covers. Done in 0.44.0: `sleeve-art-swirl` in the WebGL shader (angles from `swirlLayers` and
       `timingFunction` in `view.ts`, gliding like the flow), and `sleeve-art-swirl-css` as Sunamu drew it, to compare.
       Defaults are Sunamu's: 60 s turns, 10 s apart, layers 2 vmax, brightness 0.5, ease-in-out.
-- [ ] **Lyrics readable over a sharp cover.** (p2) [feature] With `--art-size: 512` and `--art-blur: 0` the lines are hard to
+- [x] **Lyrics readable over a sharp cover.** (p2) [feature] With `--art-size: 512` and `--art-blur: 0` the lines are hard to
       read over a detailed cover: the text's colors come from the cover's average and the dim is one flat layer. Options: a
       gradient or stronger dim under the lyrics area only, a text shadow or backing sized to the detail behind each line, or
       colors from the part of the cover under the lyrics area rather than the whole of it (`coverColors`, `src/renderer/view.ts`).
+      Done in 0.45.0: `coverDetail` (neighboring pixels' brightness on a 128 px copy) drives a scrim behind the lyrics area
+      (`--lyrics-scrim`, `--lyrics-scrim-blur`, `--lyrics-scrim-edge`) and counts as weak contrast in `textTheme`. Colors from
+      the part under the lyrics left out: under flow and swirl that part keeps moving.
+- [ ] **NetEase lyrics cannot wrap.** (p1) [bug] Found 2026-11-22: NetEase's lines join their words with U+00A0 (59 of 61 lines
+      of Muse's Resistance), so a line wider than the lyrics area runs past its edge and is clipped instead of wrapping, which
+      shows most in a narrow area such as backdrop's `lyrics-stage` (the left third). Normalize Unicode spaces to plain ones
+      where lyrics are parsed (`src/core/`), and in the renderer too, since cached answers already hold them.

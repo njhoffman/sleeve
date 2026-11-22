@@ -347,6 +347,40 @@ export function scrollBackOffset(back: ScrollBack, now: number): number {
   return now < back.until ? back.offset : 0;
 }
 
+// How busy the cover is behind the lyrics, 0 (flat, or blurred as the 64 px default is) to 1 (sharp detail): the mean
+// difference in brightness between neighboring pixels of a side x side RGBA copy (128 px, so any --art-size reads
+// alike), from DETAIL_FLAT up over DETAIL_RANGE. Measured on a busy cover: 1 at 64 px blurred 6, 3.6 at 128 px blurred 3,
+// 6.4 at 256 px blurred 2, 12 at 512 px sharp.
+export const DETAIL_SAMPLE_SIZE = 128;
+const DETAIL_FLAT = 1.5;
+const DETAIL_RANGE = 10;
+
+export function coverDetail(pixels: ArrayLike<number>, side: number): number {
+  if (side < 2 || pixels.length < side * side * 4) return 0;
+  const brightness = (at: number) => 0.2126 * pixels[at] + 0.7152 * pixels[at + 1] + 0.0722 * pixels[at + 2];
+  let sum = 0;
+  let count = 0;
+  for (let y = 0; y < side; y++) {
+    for (let x = 0; x < side; x++) {
+      const at = (y * side + x) * 4;
+      if (x + 1 < side) { sum += Math.abs(brightness(at) - brightness(at + 4)); count++; }
+      if (y + 1 < side) { sum += Math.abs(brightness(at) - brightness(at + side * 4)); count++; }
+    }
+  }
+  return Math.min(1, Math.max(0, (sum / count - DETAIL_FLAT) / DETAIL_RANGE));
+}
+
+// The scrim's opacity behind the lyrics (--lyrics-scrim): auto follows the cover's detail, up to SCRIM_MAX; a number
+// from 0 to 1 is taken as it is; anything else is auto
+export const SCRIM_MAX = 0.6;
+
+export function scrimAlpha(setting: string, detail: number): number {
+  const value = setting.trim();
+  const fixed = value === '' || value === 'auto' ? Number.NaN : Number(value);
+  const alpha = Number.isFinite(fixed) ? fixed : SCRIM_MAX * detail;
+  return Math.round(Math.min(1, Math.max(0, alpha)) * 100) / 100;
+}
+
 // The colors behind the lyrics when the cover is the background, for textTheme (contrast.ts): each pixel of the
 // drawn cover as it shows on screen, laid at opacity over the page's base color and darkened by dim (the share of
 // black over it), then grouped into coarse colors (4 bits a channel). background is their average; main the

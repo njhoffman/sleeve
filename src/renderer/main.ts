@@ -5,7 +5,7 @@ import { Connection } from './connection.ts';
 import { pageTheme, parseHex, textTheme, themeVariables, validColors, type OverlayColors } from './contrast.ts';
 import { CoverFlow, type FlowMode } from './flow.ts';
 import { describeReport, parseBackground, type PageBackground, type ReportReply } from '../protocol/messages.ts';
-import { candidateEntries, coverColors, displaySettings, flowSettings, flowStep, follow, formatOffset, formatTime, lineStart, lyricsInsets, NO_SCROLL_BACK, nowText, resolveArea, progress, scrollBackOffset, status, timingFunction, wheel, type CandidateEntry, type DisplaySettings, type FlowSettings, type FlowView, type ScrollBack } from './view.ts';
+import { candidateEntries, coverColors, displaySettings, flowSettings, flowStep, follow, formatOffset, formatTime, lineStart, lyricsInsets, NO_SCROLL_BACK, coverDetail, DETAIL_SAMPLE_SIZE, scrimAlpha, nowText, resolveArea, progress, scrollBackOffset, status, timingFunction, wheel, type CandidateEntry, type DisplaySettings, type FlowSettings, type FlowView, type ScrollBack } from './view.ts';
 
 // The renderer: sleeved's session as scrolling lyrics. The current line is worked out every frame from the
 // mirrored playback clock, so line changes land on the frame they are due whatever the socket does; the scroll
@@ -76,12 +76,30 @@ const number = (name: string, fallback: number) => {
 // default, nothing on the overlay and the cover in a window
 let background: PageBackground | null = null;
 let coverColorsShown: OverlayColors | null = null;
+// How busy the cover shown is (coverDetail), for the scrim behind the lyrics
+let coverDetailShown = 0;
 const artWanted = () => (background ? background.kind === 'cover' : !overlay && setting('--art-background') !== 'off');
 
 // The text's colors for what it stands on
 function applyTheme(): void {
   const colors = pageTheme(background, coverColorsShown, colorsBehind);
-  setTheme(colors ? themeVariables(textTheme(colors)) : null);
+  setTheme(colors ? themeVariables(textTheme(colors, coverColorsShown ? coverDetailShown : 0)) : null);
+  applyScrim();
+}
+
+// The scrim behind the lyrics: only over a cover, as strong as --lyrics-scrim says (auto: as the cover is busy)
+// --lyrics-scrim-blur is put on only when set, since even blur(0) costs a layer of its own
+let scrimShown = '';
+function applyScrim(): void {
+  const alpha = coverColorsShown ? scrimAlpha(setting('--lyrics-scrim'), coverDetailShown) : 0;
+  const blurred = !!coverColorsShown && number('--lyrics-scrim-blur', 0) > 0;
+  const shown = `${alpha} ${blurred}`;
+  if (shown === scrimShown) return;
+  scrimShown = shown;
+  const root = document.documentElement;
+  root.style.setProperty('--lyrics-scrim-alpha', String(alpha));
+  root.classList.toggle('scrim', alpha > 0 || blurred);
+  root.classList.toggle('scrim-blur', blurred);
 }
 
 function applyBackground(text: string | null): void {
@@ -137,6 +155,7 @@ function clearArt(): void {
   flow?.forgetCover();
   document.documentElement.classList.remove('art');
   coverColorsShown = null;
+  coverDetailShown = 0;
   applyTheme();
 }
 
@@ -166,6 +185,11 @@ function showArt(image: HTMLImageElement): void {
   sample.width = sample.height = COLOR_SAMPLE_SIZE;
   const sampleContext = sample.getContext('2d', { willReadFrequently: true });
   sampleContext?.drawImage(canvas, 0, 0, COLOR_SAMPLE_SIZE, COLOR_SAMPLE_SIZE);
+  const detail = document.createElement('canvas');
+  detail.width = detail.height = DETAIL_SAMPLE_SIZE;
+  const detailContext = detail.getContext('2d', { willReadFrequently: true });
+  detailContext?.drawImage(canvas, 0, 0, DETAIL_SAMPLE_SIZE, DETAIL_SAMPLE_SIZE);
+  coverDetailShown = coverDetail(detailContext?.getImageData(0, 0, DETAIL_SAMPLE_SIZE, DETAIL_SAMPLE_SIZE).data ?? [], DETAIL_SAMPLE_SIZE);
   coverColorsShown = coverColors(sampleContext?.getImageData(0, 0, COLOR_SAMPLE_SIZE, COLOR_SAMPLE_SIZE).data ?? [], { opacity: number('--art-opacity', 0.6), dim: number('--art-dim', 0.45), base });
   applyTheme();
 }
@@ -450,6 +474,7 @@ function render(now: number): void {
     displaysSeen = connection.mirror.displaysSeen;
     readDisplay();
     readFlow(now);
+    applyScrim();
   }
   updateArt(state);
   updateFlow(now, dt);

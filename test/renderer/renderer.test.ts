@@ -13,7 +13,7 @@ import { NowPlaying } from '../../src/now/session.ts';
 import type { NowState } from '../../src/now/state.ts';
 import { PlayerHub } from '../../src/players/hub.ts';
 import { Connection } from '../../src/renderer/connection.ts';
-import { candidateEntries, coverColors, displaySettings, flowSettings, flowStep, follow, formatOffset, formatTime, lineStart, lyricsInsets, nowText, resolveArea, NO_SCROLL_BACK, progress, reconnectDelay, SCROLL_BACK_MS, scrollBackOffset, status, swirlLayers, timingFunction, wheel } from '../../src/renderer/view.ts';
+import { candidateEntries, coverColors, displaySettings, flowSettings, flowStep, follow, formatOffset, formatTime, lineStart, lyricsInsets, nowText, resolveArea, NO_SCROLL_BACK, progress, reconnectDelay, SCROLL_BACK_MS, scrollBackOffset, scrimAlpha, coverDetail, SCRIM_MAX, status, swirlLayers, timingFunction, wheel } from '../../src/renderer/view.ts';
 import { until } from '../helpers/fakeMpd.ts';
 import { fakePlayer } from '../helpers/players.ts';
 
@@ -133,6 +133,40 @@ describe('renderer view', () => {
       expect(lyricsInsets('bottom-right', { top: 850, right: 980, bottom: 980, left: 600 }, view)).to.deep.equal({ ...none, bottom: 166 });
       expect(lyricsInsets('center-left', { top: 400, right: 364, bottom: 600, left: 24 }, view)).to.deep.equal({ ...none, left: 380 });
       expect(lyricsInsets('center-right', { top: 400, right: 976, bottom: 600, left: 636 }, view)).to.deep.equal({ ...none, right: 380 });
+    });
+  });
+
+  describe('the scrim behind the lyrics', () => {
+    // A side x side RGBA image, each pixel's gray from at(x, y)
+    const image = (side: number, at: (x: number, y: number) => number) => {
+      const pixels = new Uint8ClampedArray(side * side * 4);
+      for (let y = 0; y < side; y++) for (let x = 0; x < side; x++) pixels.set([at(x, y), at(x, y), at(x, y), 255], (y * side + x) * 4);
+      return pixels;
+    };
+
+    it('reads a flat or smooth cover as no detail, a busy one as full, and in between in order', () => {
+      expect(coverDetail(image(16, () => 128), 16)).to.equal(0);
+      expect(coverDetail(image(16, x => x * 2), 16)).to.equal(0);
+      expect(coverDetail(image(16, (x, y) => ((x + y) % 2) * 255), 16)).to.equal(1);
+      const some = coverDetail(image(16, (x, y) => ((x + y) % 2) * 6), 16);
+      expect(some).to.be.greaterThan(0).and.lessThan(1);
+      expect(coverDetail(image(16, (x, y) => ((x + y) % 2) * 3), 16)).to.be.lessThan(some);
+    });
+
+    it('reads nothing from too few pixels', () => {
+      expect(coverDetail([], 128)).to.equal(0);
+      expect(coverDetail(image(1, () => 255), 1)).to.equal(0);
+    });
+
+    it('follows the detail when auto or unset, takes a number from 0 to 1 as it is, and treats anything else as auto', () => {
+      expect(scrimAlpha('auto', 0)).to.equal(0);
+      expect(scrimAlpha('auto', 1)).to.equal(SCRIM_MAX);
+      expect(scrimAlpha('', 0.5)).to.equal(0.3);
+      expect(scrimAlpha(' 0.25 ', 1)).to.equal(0.25);
+      expect(scrimAlpha('0', 1)).to.equal(0);
+      expect(scrimAlpha('3', 0)).to.equal(1);
+      expect(scrimAlpha('-1', 1)).to.equal(0);
+      expect(scrimAlpha('strong', 1)).to.equal(SCRIM_MAX);
     });
   });
 

@@ -43,6 +43,10 @@
   --lyrics-fade-bottom: 24%;     /* the same toward the bottom */
   --lyrics-clear-top: 8%;        /* the empty strip above that fade */
   --lyrics-clear-bottom: 0%;     /* and below the other */
+  --lyrics-scrim: auto;          /* a soft layer behind the lyrics over a cover, in the shadow's color: auto follows how busy the
+                                    cover is (none over the blurred default, 0.6 over a sharp one); 0 to 1 sets it */
+  --lyrics-scrim-blur: 0px;      /* blur of the cover behind that layer, frosted glass; costs GPU every frame under a moving cover */
+  --lyrics-scrim-edge: 12%;      /* how far in from each side of the lyrics area it fades in */
   --now-scale: 1;                /* size of the panel */
   --now-margin: 24px;            /* its distance from the window's edge */
 
@@ -90,6 +94,21 @@ html, body {
   pointer-events: none;
 }
 #lyrics-area { z-index: 1; }
+/* The scrim: --lyrics-scrim-alpha is set by main.ts from --lyrics-scrim and the cover's detail, 0 without a cover */
+#lyrics-area::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: rgba(var(--overlay-shadow, 0, 0, 0), var(--lyrics-scrim-alpha, 0));
+  mask-image:
+    linear-gradient(to right, transparent, #000 var(--lyrics-scrim-edge), #000 calc(100% - var(--lyrics-scrim-edge)), transparent),
+    linear-gradient(to bottom, transparent, #000 var(--lyrics-scrim-edge), #000 calc(100% - var(--lyrics-scrim-edge)), transparent);
+  mask-composite: intersect;
+  transition: background var(--art-fade) ease;
+}
+html:not(.scrim) #lyrics-area::before { display: none; }
+html.scrim-blur #lyrics-area::before { backdrop-filter: blur(var(--lyrics-scrim-blur)); }
 #lyrics-area #viewport { pointer-events: auto; }
 html.overlay #lyrics-area #viewport { pointer-events: none; }
 #now-area { z-index: 2; }
