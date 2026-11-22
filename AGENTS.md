@@ -84,6 +84,10 @@ just install-service     # the systemd user unit for sleeved
 - Command output goes through `Io`; how it looks in a terminal is `src/cli/style.ts`. Keep the plain form exactly as it was when a stream is not a terminal, since scripts read it, and leave `--json`, `sleeve line` and `--version` unstyled.
 - Tests stay offline: inject `fetch` (`test/helpers/fetch.ts`) and replay recorded responses from
   `test/fixtures/<provider>/`; build tagged mp3s with `test/helpers/id3.ts`.
+- The page itself (`main.ts`, `flow.ts`) is tested in headless Chrome by `test/renderer/page.browser.test.ts`
+  (playwright-core, SwiftShader for the shaders; skipped without Chrome): a new look or setting the page draws gets a
+  case there. Functions run in the page are typed by hand (`PageRoot`), never passed as strings, which its CSP refuses.
+- CI (`.github/workflows/test.yml`) runs the tests and `npm run typecheck` on every push, Node 24 and latest.
 
 ## Workflow
 

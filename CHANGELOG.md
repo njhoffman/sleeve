@@ -6,6 +6,14 @@ All notable changes to sleeve are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.48.1] - 2026-11-22
+
+### Added
+
+- For development: a test that loads the page in headless Chrome against a real sleeved (the lyrics, the whole cover,
+  the shaders and the CSS swirl), failing on any script error, blocked request or shader that does not compile; it
+  skips itself without Chrome. And CI on GitHub: the tests and the typecheck on every push, on Node 24 and the latest.
+
 ## [0.48.0] - 2026-11-22
 
 ### Added

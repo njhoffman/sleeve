@@ -271,14 +271,20 @@ build items that depend on it, listed in the later projects.
       Done in 0.47.1: music-metadata 12.8.0 (its fast-xml-parser advisory gone), commander 15.1.0, electron 45.4.1 and
       x11 4.4.0, floors raised in both package.json files. Left: mocha 12.0.3, the latest, pulls glob and minimatch with
       two moderate advisories that npm would fix only by going back to mocha 11; dev-only, globbing our own test paths.
-- [ ] **No CI.** (p3) [chore] `just check` runs only by hand before a commit; backdrop has `.github/workflows/test.yml`.
+- [x] **No CI.** (p3) [chore] `just check` runs only by hand before a commit; backdrop has `.github/workflows/test.yml`.
       A workflow on push: Node 24, `npm ci`, `npm run test:brief`, `npm run typecheck` (the shell's typecheck skips itself
       without `shell/node_modules`). The tests are offline already.
-- [ ] **The page itself is never loaded by a test.** (p3) [test] `src/renderer/main.ts` and `flow.ts` (DOM and WebGL)
+      Done in 0.48.1: `.github/workflows/test.yml`, Node 24 and latest, `npm ci`, `npm run test:brief`, `npm run typecheck`;
+      the browser test uses the runner's Chrome. The suite passes with an empty HOME and no display (432 tests).
+- [x] **The page itself is never loaded by a test.** (p3) [test] `src/renderer/main.ts` and `flow.ts` (DOM and WebGL)
       are checked by hand: in 0.44.0 to 0.47.0 the swirl, the scrim, `style`, long words and the shader warning were all
       looked at in Chrome. A headless-Chrome smoke test like backdrop's `test/web/pages.browser.test.js` (playwright-core,
       skipped without Chrome): sleeved on a fake session, `/` with and without `?style=`, failing on a script error, a
       CSP violation or a failed request.
+      Done in 0.48.1: `test/renderer/page.browser.test.ts` (playwright-core, headless Chrome with SwiftShader, so the
+      shaders compile): sleeved on a fake player with synced lyrics and a real PNG; the lyrics, the whole cover's place, the
+      flow and swirl shaders and the CSS swirl, failing on a page error, a console error (CSP), a `sleeve:` warning or a
+      failed request. Checked against a deliberate GLSL error: it fails naming it.
 - [x] **The whole cover, not a crop of it.** (p3) [feature] A sharp cover fills the window as a square `--art-scale`
       vmax wide, so a 16:9 window cuts about 44% of its height, often where its title is (backdrop's `lyrics-stage` and
       `lyrics-cover`). An `--art-fit: contain` would place it whole, beside the lyrics, over a blurred copy filling the
@@ -286,7 +292,11 @@ build items that depend on it, listed in the later projects.
 
       Done in 0.48.0: `--art-fit: contain` with `--art-fit-position` (auto, left, center, right), `--art-fit-margin`,
       `--art-fit-radius` and `--art-fit-shadow`; placed by `wholeCoverRect` (`view.ts`), over the background as set.
-      backdrop's `lyrics-cover` uses it (its 3.2.0).
+      backdrop's `lyrics-cover` uses it (its 3.2.0).- [ ] **The shell test runs Electron in the real profile.** (p3) [test] `test/shell/exactSize.test.ts` starts the real
+      shell under Xvfb, and `shell/main.ts` puts Electron's data in `appData/sleeve-shell`, so a test run writes into
+      `~/.config/sleeve-shell`, the profile the overlay itself uses (seen 2026-11-22 running the suite with an empty HOME).
+      Electron's `appData` follows `XDG_CONFIG_HOME` on Linux: start the test's Electron with it set to a temporary folder.
+
 ## Completed
 
 ### 1. Planning (completed 2026-11-04)
