@@ -30,9 +30,12 @@ build items that depend on it, listed in the later projects.
       64 px cover at quarter resolution and 30 fps 4.9%, the same at full resolution and frame rate 12.4%. The blur that
       prompted this item is Sunamu's; sleeve's default already costs next to nothing.
       Done in 0.30.0: `sleeve-art-flow`, the quarter-resolution warp, opt-in; the still cover stays the default.
-- [ ] **Weak lyrics sources and first-hit selection.** (p2) [chore] Musixmatch's token is unofficial, NetEase
+- [x] **Weak lyrics sources and first-hit selection.** (p2) [chore] Musixmatch's token is unofficial, NetEase
       mismatches, LRCLIB is missing, and Sunamu takes the first synced hit.
       Settle the scoring rules and provider order before porting providers.
+      Settled by other items: LRCLIB provider and Candidate matching (0.1.0: every candidate scored, threshold 0.6,
+      alternatives kept), Port the NetEase provider (scored the same, credits stripped, Latin only), and the order
+      sidecar, embedded, LRCLIB, NetEase (`DEFAULT_PROVIDERS`). Musixmatch is its own item (Look into Musixmatch again).
 - [x] **MPD protocol versus MPRIS.** (p2) [chore] MPD gives idle events, exact elapsed time and the file path
       (needed for sidecar LRC, embedded lyrics, tag IDs and cover art). Confirm MPD direct as the primary
       player and MPRIS for Spotify and the rest.
