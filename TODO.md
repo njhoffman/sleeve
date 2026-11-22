@@ -3,7 +3,7 @@
 Roadmap and open issues for sleeve, a synced-lyrics fetcher and viewer that starts over from Sunamu
 (`~/git/Sunamu`, the working fork) and lyricist. Items that depend on the stack wait until it is decided.
 
-Reviewed: 2026-11-02
+Reviewed: 2026-11-22
 
 ## 1. Planning
 
@@ -447,5 +447,18 @@ build items that depend on it, listed in the later projects.
       that cannot leave a declaration; contract in backdrop's `docs/specs/sleeve.md` (Style), used by its 3.1.0 presets.
 - [ ] **NetEase lyrics cannot wrap.** (p1) [bug] Found 2026-11-22: NetEase's lines join their words with U+00A0 (59 of 61 lines
       of Muse's Resistance), so a line wider than the lyrics area runs past its edge and is clipped instead of wrapping, which
-      shows most in a narrow area such as backdrop's `lyrics-stage` (the left third). Normalize Unicode spaces to plain ones
-      where lyrics are parsed (`src/core/`), and in the renderer too, since cached answers already hold them.
+      shows most in a narrow area such as backdrop's `lyrics-stage` (the left third). `parseWords` in `src/core/lrc.ts`
+      collapses `\s` (U+00A0 included) only for lines with word times; a line without them returns `text.trim()`, and plain
+      lines are taken as they are. Collapse there for every line, and in the renderer too, since cached answers hold them.
+- [ ] **AGENTS.md describes an older sleeve.** (p2) [docs] Its Project paragraph lists the daemon, the web renderer, the
+      Electron shell and writing lyrics into tags as planned, all built, and names 5 of the 12 commands (not `daemon`,
+      `ctl`, `shell`, `line`, `reports`, `review`, `tag`). Every agent starts from it. Rewrite it from `src/cli/index.ts`.
+- [ ] **A word wider than the lyrics area is clipped.** (p3) [bug] `.line` wraps only at spaces, so a long URL or compound
+      in a narrow area (backdrop's left-third presets) runs past `#lyrics-area`'s `overflow: hidden`. `overflow-wrap: anywhere`
+      on `.line` breaks it instead; check the word-by-word fill (`.word .fill`, `white-space: nowrap`) still lines up.
+- [ ] **The shader fails silently.** (p3) [chore] `CoverFlow.setUp` (`src/renderer/flow.ts`) checks only the link status and
+      logs nothing, so a GLSL mistake in a new look (as `sleeve-art-swirl` added) shows as the still cover with no clue why.
+      Log the compile and link info once to the console when either fails.
+- [ ] **`--art-size` and `--art-blur` edits wait for the next track.** (p3) [feature] The stylesheet's other settings apply
+      within a second, and the same two sent by `style` draw the cover again at once, but an edit to `~/.config/sleeve/style.css`
+      shows only when the cover changes. Read them with the flow's settings (`readFlow`) and draw the cover again on a change.
