@@ -62,6 +62,53 @@ export function parseBackground(text: string): PageBackground | null {
   return color ? { kind: 'color', color: color[1], alpha: color[2] ? Number.parseInt(color[2], 16) / 255 : 1 } : null;
 }
 
+// Stylesheet variables a page takes from its URL or a display change, over its stylesheet: the cover and its animation
+// (--art-*, --flow-*, --swirl-*) and the scrim behind the lyrics (--lyrics-scrim*), all but the two the page works out
+// itself. Values keep to a set of characters that cannot leave a declaration or load anything (no quotes, semicolons,
+// braces, slashes or url()), so a page can write them into a stylesheet as they are. An empty value removes the name.
+export type StyleVariables = Record<string, string>;
+const STYLE_NAME = /^--(?:art|flow|swirl)-[a-z][a-z0-9-]*$|^--lyrics-scrim(?:-[a-z][a-z0-9-]*)?$/;
+const STYLE_COMPUTED = ['--art-layer-opacity', '--lyrics-scrim-alpha'];
+const STYLE_VALUE = /^[a-z0-9 .,%()#+-]{0,100}$/i;
+export const STYLE_HELP = '--art-*, --flow-*, --swirl-* or --lyrics-scrim* names, with values of letters, digits, spaces and . , % ( ) # + -';
+
+export function styleNameError(name: string): string | null {
+  if (!STYLE_NAME.test(name) || STYLE_COMPUTED.includes(name)) return `${name} is not a stylesheet variable a page takes (${STYLE_HELP})`;
+  return null;
+}
+
+export function styleValueError(name: string, value: string): string | null {
+  if (!STYLE_VALUE.test(value) || /url\s*\(/i.test(value)) return `${name}: ${value} has characters a page does not take (${STYLE_HELP})`;
+  return null;
+}
+
+// A style map from untrusted JSON: the map, or the reason it is not one
+export function parseStyle(value: unknown): { style: StyleVariables } | { error: string } {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return { error: 'it needs to be an object of stylesheet variables' };
+  const style: StyleVariables = {};
+  for (const [name, entry] of Object.entries(value as Record<string, unknown>)) {
+    if (typeof entry !== 'string') return { error: `${name} needs to be a string` };
+    const error = styleNameError(name) ?? styleValueError(name, entry.trim());
+    if (error) return { error };
+    style[name] = entry.trim();
+  }
+  return { style };
+}
+
+// NAME=VALUE pairs (flags), or NAME:VALUE;NAME:VALUE (a URL's ?style=), as a style map; the reason when one is wrong
+export function parseStylePairs(pairs: readonly string[], separator: '=' | ':'): { style: StyleVariables } | { error: string } {
+  const entries: Record<string, string> = {};
+  for (const pair of pairs) {
+    if (!pair.trim()) continue;
+    const at = pair.indexOf(separator);
+    if (at < 1) return { error: `${pair} is not NAME${separator}VALUE` };
+    entries[pair.slice(0, at).trim()] = pair.slice(at + 1);
+  }
+  return parseStyle(entries);
+}
+
+export const styleParam = (style: StyleVariables) => Object.entries(style).map(([name, value]) => `${name}:${value}`).join(';');
+
 // Changes to how pages look, over what their URL and stylesheet say, until sleeved restarts
 export interface DisplayChange {
   preset?: NowPreset;
@@ -72,6 +119,8 @@ export interface DisplayChange {
   nowArea?: string;
   // What fills the window behind the content (see parseBackground)
   background?: string;
+  // Stylesheet variables over the page's stylesheet (see StyleVariables); a change merges with the last, name by name
+  style?: StyleVariables;
   // false hides the lyrics and the panel without closing the page; the background stays
   visible?: boolean;
 }
@@ -237,9 +286,13 @@ export function parseCommand(text: string): { command: ClientCommand } | { error
       if (record[name] !== undefined && (typeof record[name] !== 'string' || !parseArea(record[name] as string))) return failed(`display needs ${name} to be WxH+X+Y, in pixels or percent, not ${String(record[name])}`);
     }
     if (record.background !== undefined && (typeof record.background !== 'string' || !parseBackground(record.background))) return failed(`display needs background to be transparent, #rrggbb, #rrggbbaa, cover or cover@0.6, not ${String(record.background)}`);
+    if (record.style !== undefined) {
+      const style = parseStyle(record.style);
+      if ('error' in style) return failed(`display has a style it cannot take: ${style.error}`);
+    }
     if (record.visible !== undefined && typeof record.visible !== 'boolean') return failed('display needs visible to be true or false');
     if (record.reset !== undefined && typeof record.reset !== 'boolean') return failed('display needs reset to be true or false');
-    if (['preset', 'position', 'align', 'lyricsArea', 'nowArea', 'background', 'visible', 'reset'].every(key => record[key] === undefined)) return failed('display needs something to change');
+    if (['preset', 'position', 'align', 'lyricsArea', 'nowArea', 'background', 'style', 'visible', 'reset'].every(key => record[key] === undefined)) return failed('display needs something to change');
   }
   if (type === 'subscribe' && typeof record.lines !== 'boolean') return failed('subscribe needs lines, true or false');
   return { command: record as unknown as ClientCommand };

@@ -2,7 +2,7 @@ import { formatRef, parseRef } from '../core/prefs.ts';
 import type { LyricsResult, ScoredCandidate, TrackMark } from '../core/types.ts';
 import { DaemonClient } from '../daemon/client.ts';
 import { defaultSocketPath } from '../daemon/paths.ts';
-import { describeReport, type ClientCommand, type DisplayCommand, type LyricsAlign, type NowPosition, type NowPreset, type ReportReply } from '../protocol/messages.ts';
+import { describeReport, parseStylePairs, type ClientCommand, type DisplayCommand, type LyricsAlign, type NowPosition, type NowPreset, type ReportReply } from '../protocol/messages.ts';
 import { candidateRows, describeCandidate, done, formatOffset, outStyle, problem, type Io } from './lyrics.ts';
 import { parseOffset } from './prefs.ts';
 
@@ -21,6 +21,8 @@ export interface CtlOptions {
   lyricsArea?: string;
   nowArea?: string;
   background?: string;
+  // NAME=VALUE stylesheet variables, the flag given once for each
+  style?: string[];
   hide?: boolean;
   show?: boolean;
   reset?: boolean;
@@ -99,6 +101,8 @@ export async function ctlCommand(action: string, args: string[], options: CtlOpt
         return 0;
       }
       case 'display': {
+        const style = parseStylePairs(options.style ?? [], '=');
+        if ('error' in style) throw new Error(`Invalid --style: ${style.error}`);
         const command: Omit<DisplayCommand, 'id'> = {
           type: 'display',
           ...(options.instance ? { instance: options.instance } : {}),
@@ -108,6 +112,7 @@ export async function ctlCommand(action: string, args: string[], options: CtlOpt
           ...(options.lyricsArea ? { lyricsArea: options.lyricsArea } : {}),
           ...(options.nowArea ? { nowArea: options.nowArea } : {}),
           ...(options.background ? { background: options.background } : {}),
+          ...(Object.keys(style.style).length ? { style: style.style } : {}),
           ...(options.hide ? { visible: false } : options.show ? { visible: true } : {}),
           ...(options.reset ? { reset: true } : {})
         };

@@ -288,13 +288,19 @@ export class SleeveDaemon {
       case 'seek':
         return { data: { positionMs: await this.session.seek(command.ms) } };
       case 'display': {
-        const { instance = ALL_INSTANCES, preset, position, align, lyricsArea, nowArea, background, visible, reset } = command;
+        const { instance = ALL_INSTANCES, preset, position, align, lyricsArea, nowArea, background, style, visible, reset } = command;
         const change: DisplayChange = { ...(preset ? { preset } : {}), ...(position ? { position } : {}), ...(align ? { align } : {}), ...(lyricsArea ? { lyricsArea } : {}), ...(nowArea ? { nowArea } : {}), ...(background ? { background } : {}), ...(visible === undefined ? {} : { visible }) };
         const displays = { ...this.displays };
         // Without an instance, a reset forgets every page's changes
         if (reset && instance === ALL_INSTANCES) for (const name of Object.keys(displays)) delete displays[name];
         if (reset) delete displays[instance];
         if (Object.keys(change).length) displays[instance] = { ...displays[instance], ...change };
+        // Style merges name by name over the last change's, an empty value removing a name
+        if (style && Object.keys(style).length) {
+          const merged = { ...displays[instance]?.style, ...style };
+          for (const [name, value] of Object.entries(merged)) if (!value) delete merged[name];
+          displays[instance] = { ...displays[instance], style: merged };
+        }
         this.displays = displays;
         this.broadcast({ type: 'display', displays });
         return { data: { displays } };

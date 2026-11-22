@@ -187,7 +187,8 @@ part of the window, with text wrapped and sized to its area. `--background` fill
 `cover` or `cover@0.6`, where the alpha is the background's alone and text stays solid.
 
 `?now=full&now-position=bottom-left&lyrics-align=center&lyrics-area=...&background=...` in the URL does the same for one page and wins over the
-stylesheet. On the overlay the seek bar only shows, since the overlay takes no mouse.
+stylesheet, and `?style=--art-animation:sleeve-art-swirl;--art-size:512` sets the cover's, the animation's and the scrim's variables
+(`--art-*`, `--flow-*`, `--swirl-*`, `--lyrics-scrim*`) over it. On the overlay the seek bar only shows, since the overlay takes no mouse.
 
 `src/renderer/style.css` lists every variable with its default; `?background=none` in the URL turns the cover off
 for one page. The overlay never shows a cover.
@@ -233,9 +234,10 @@ home, so it survives moving the checkout and reinstalling Electron (it asks for 
 --no-sandbox` runs without the sandbox instead.
 
 `sleeve shell` opens the same window from anywhere once `sleeve` is on your `PATH`, with the same options, plus `--now`,
-`--now-position` and `--lyrics-align` for its look. `sleeve shell --managed` is for a program that places the window itself:
+`--now-position` and `--lyrics-align` for its look, and `--style NAME=VALUE` (once for each) for those variables. `sleeve shell --managed` is for a program that places the window itself:
 backdrop's planned sleeve engine, as promised in its `docs/specs/sleeve.md`. `sleeve ctl display` changes a page's look
-live (`--preset`, `--position`, `--align`, `--lyrics-area`, `--now-area`, `--background`, `--hide`, `--show`, `--reset`), for one `--instance` or for every page.
+live (`--preset`, `--position`, `--align`, `--lyrics-area`, `--now-area`, `--background`, `--style NAME=VALUE`, `--hide`, `--show`, `--reset`), for one `--instance` or for every page.
+`--style` merges name by name with the last change, and an empty value (`--style --art-size=`) drops one.
 
 The overlay takes no keys, since clicks and keys go to the windows under it. `sleeve ctl` sends sleeved one
 command and prints the outcome, for i3 bindings:

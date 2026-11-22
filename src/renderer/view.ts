@@ -1,6 +1,6 @@
 import type { LyricsResult, ScoredCandidate } from '../core/types.ts';
 import type { NowState } from '../now/state.ts';
-import { LYRICS_ALIGNS, NOW_POSITIONS, NOW_PRESETS, parseArea, parseBackground, type AreaLength, type DisplayChange, type LyricsAlign, type NowPosition, type NowPreset } from '../protocol/messages.ts';
+import { LYRICS_ALIGNS, NOW_POSITIONS, NOW_PRESETS, parseArea, parseBackground, parseStyle, parseStylePairs, type AreaLength, type StyleVariables, type DisplayChange, type LyricsAlign, type NowPosition, type NowPreset } from '../protocol/messages.ts';
 import type { OverlayColors } from './contrast.ts';
 
 // What the renderer shows, worked out without the DOM, so it is tested in Node.
@@ -94,7 +94,26 @@ export interface DisplaySettings {
   nowArea: string | null;
   // As given; null: the default for the mode (nothing on the overlay, the cover in a window)
   background: string | null;
+  // Stylesheet variables over the page's stylesheet: the URL's ?style=, then a live change's, name by name
+  style: StyleVariables;
   visible: boolean;
+}
+
+// The rule a page adds after its stylesheets for the style given: :root twice, so it wins over /user.css's :root
+// whatever their order, while the variables main.ts sets on the element itself still win over it
+export function styleRule(style: StyleVariables): string {
+  const entries = Object.entries(style).filter(([, value]) => value !== '').sort(([a], [b]) => a.localeCompare(b));
+  return entries.length ? `:root:root { ${entries.map(([name, value]) => `${name}: ${value};`).join(' ')} }` : '';
+}
+
+// ?style= (NAME:VALUE;NAME:VALUE) under a live change's style; a URL style with anything wrong in it is left out
+// whole, and a live change was checked by sleeved
+function pageStyle(text: string | null, given: StyleVariables | undefined): StyleVariables {
+  const fromUrl = text ? parseStylePairs(text.split(';'), ':') : null;
+  const fromChange = given ? parseStyle(given) : null;
+  const merged = { ...(fromUrl && 'style' in fromUrl ? fromUrl.style : {}), ...(fromChange && 'style' in fromChange ? fromChange.style : {}) };
+  for (const [name, value] of Object.entries(merged)) if (!value) delete merged[name];
+  return merged;
 }
 
 // Each setting from the first place that names a known value: given (a live change), the URL, then the variable
@@ -112,6 +131,7 @@ export function displaySettings(read: (name: string) => string, params: { get(na
     preset: choose(NOW_PRESETS, overlay ? 'lyrics' : 'minimal', given.preset, params.get('now'), read('--now-preset')),
     position: choose(NOW_POSITIONS, 'top-left', given.position, params.get('now-position'), read('--now-position')),
     align: choose(LYRICS_ALIGNS, 'left', given.align, params.get('lyrics-align'), read('--lyrics-align')),
+    style: pageStyle(params.get('style'), given.style),
     visible: given.visible ?? true
   };
 }

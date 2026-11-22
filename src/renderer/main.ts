@@ -5,7 +5,7 @@ import { Connection } from './connection.ts';
 import { pageTheme, parseHex, textTheme, themeVariables, validColors, type OverlayColors } from './contrast.ts';
 import { CoverFlow, type FlowMode } from './flow.ts';
 import { describeReport, parseBackground, type PageBackground, type ReportReply } from '../protocol/messages.ts';
-import { candidateEntries, coverColors, displaySettings, flowSettings, flowStep, follow, formatOffset, formatTime, lineStart, lyricsInsets, NO_SCROLL_BACK, coverDetail, DETAIL_SAMPLE_SIZE, scrimAlpha, nowText, resolveArea, progress, scrollBackOffset, status, timingFunction, wheel, type CandidateEntry, type DisplaySettings, type FlowSettings, type FlowView, type ScrollBack } from './view.ts';
+import { candidateEntries, coverColors, displaySettings, flowSettings, flowStep, follow, formatOffset, formatTime, lineStart, lyricsInsets, NO_SCROLL_BACK, coverDetail, DETAIL_SAMPLE_SIZE, scrimAlpha, nowText, resolveArea, progress, scrollBackOffset, status, styleRule, timingFunction, wheel, type CandidateEntry, type DisplaySettings, type FlowSettings, type FlowView, type ScrollBack } from './view.ts';
 
 // The renderer: sleeved's session as scrolling lyrics. The current line is worked out every frame from the
 // mirrored playback clock, so line changes land on the frame they are due whatever the socket does; the scroll
@@ -260,9 +260,23 @@ let displaysSeen = 0;
 let thumbnailKey: string | null | undefined = undefined;
 let shownTimes = '';
 
+// The display's stylesheet variables, in a rule of their own after the stylesheets
+const styleElement = document.createElement('style');
+document.head.append(styleElement);
+// Read when the cover is drawn, so a change to them draws it again
+const DRAWN_ART = ['--art-size', '--art-blur'];
+
+function applyStyle(rule: string, before: DisplaySettings['style'] | undefined, after: DisplaySettings['style']): void {
+  if (styleElement.textContent === rule) return;
+  styleElement.textContent = rule;
+  if (DRAWN_ART.some(name => before?.[name] !== after[name])) artKey = undefined;
+}
+
 function readDisplay(): void {
   const next = displaySettings(setting, pageParams, overlay, connection.mirror.displayFor(instance));
-  if (display && next.preset === display.preset && next.position === display.position && next.align === display.align && next.lyricsArea === display.lyricsArea && next.nowArea === display.nowArea && next.background === display.background && next.visible === display.visible) return;
+  const rule = styleRule(next.style);
+  if (display && next.preset === display.preset && next.position === display.position && next.align === display.align && next.lyricsArea === display.lyricsArea && next.nowArea === display.nowArea && next.background === display.background && next.visible === display.visible && rule === styleElement.textContent) return;
+  applyStyle(rule, display?.style, next.style);
   if (display && !display.visible && next.visible) snap = true;
   display = next;
   document.documentElement.classList.toggle('page-hidden', !next.visible);

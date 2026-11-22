@@ -136,6 +136,15 @@ describe('sleeve daemon', () => {
       expect(err.at(-1)).to.match(/^No candidate nope:1 for /);
     });
 
+    it('changes a page\'s stylesheet variables, and refuses ones a page does not take', async () => {
+      await startDaemon();
+      expect(await ctlCommand('display', [], { socket, instance: 'one', style: ['--art-size=512', '--art-animation=sleeve-art-swirl'] }, io)).to.equal(0);
+      expect(out.at(-1)).to.equal('Display of one changed');
+      const failure = async (style: string[]) => (await ctlCommand('display', [], { socket, style }, io).catch(error => error)).message;
+      expect(await failure(['--now-preset=full'])).to.match(/^Invalid --style: --now-preset is not a stylesheet variable/);
+      expect(await failure(['--art-blur'])).to.equal('Invalid --style: --art-blur is not NAME=VALUE');
+    });
+
     it('reports the lyrics shown, says what shows now, and forgets it', async () => {
       await startDaemon();
       expect(await ctlCommand('mistimed', [], { socket }, io)).to.equal(0);

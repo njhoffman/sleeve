@@ -13,7 +13,7 @@ import { NowPlaying } from '../../src/now/session.ts';
 import type { NowState } from '../../src/now/state.ts';
 import { PlayerHub } from '../../src/players/hub.ts';
 import { Connection } from '../../src/renderer/connection.ts';
-import { candidateEntries, coverColors, displaySettings, flowSettings, flowStep, follow, formatOffset, formatTime, lineStart, lyricsInsets, nowText, resolveArea, NO_SCROLL_BACK, progress, reconnectDelay, SCROLL_BACK_MS, scrollBackOffset, scrimAlpha, coverDetail, SCRIM_MAX, status, swirlLayers, timingFunction, wheel } from '../../src/renderer/view.ts';
+import { candidateEntries, coverColors, displaySettings, flowSettings, flowStep, follow, formatOffset, formatTime, lineStart, lyricsInsets, nowText, resolveArea, NO_SCROLL_BACK, progress, reconnectDelay, SCROLL_BACK_MS, scrollBackOffset, styleRule, scrimAlpha, coverDetail, SCRIM_MAX, status, swirlLayers, timingFunction, wheel } from '../../src/renderer/view.ts';
 import { until } from '../helpers/fakeMpd.ts';
 import { fakePlayer } from '../helpers/players.ts';
 
@@ -85,6 +85,19 @@ describe('renderer view', () => {
       expect(displaySettings(css, params('lyrics-area=33%25x100%25%2B0%2B0'), true).lyricsArea).to.equal('33%x100%+0+0');
       expect(displaySettings(css, params('lyrics-area=rubbish'), true).lyricsArea).to.equal('50%x100%+0+0');
       expect(displaySettings(css, params(), true, { nowArea: '100x100+0+0' }).nowArea).to.equal('100x100+0+0');
+    });
+
+    it('takes stylesheet variables from ?style= under a live change\'s, name by name, leaving out a URL style with anything wrong', () => {
+      expect(displaySettings(reading(), params(), false).style).to.deep.equal({});
+      const url = params(`style=${encodeURIComponent('--art-size:512;--art-blur:0')}`);
+      expect(displaySettings(reading(), url, false).style).to.deep.equal({ '--art-size': '512', '--art-blur': '0' });
+      expect(displaySettings(reading(), url, false, { style: { '--art-blur': '2', '--art-size': '' } }).style).to.deep.equal({ '--art-blur': '2' });
+      expect(displaySettings(reading(), params(`style=${encodeURIComponent('--art-size:512;--now-preset:full')}`), false).style).to.deep.equal({});
+    });
+
+    it('writes the style as one rule that wins over /user.css, in a steady order', () => {
+      expect(styleRule({})).to.equal('');
+      expect(styleRule({ '--art-size': '512', '--art-animation': 'sleeve-art-swirl', '--art-blur': '' })).to.equal(':root:root { --art-animation: sleeve-art-swirl; --art-size: 512; }');
     });
 
     it('takes a background like the rest, with the old ?background=none meaning none', () => {

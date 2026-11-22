@@ -30,8 +30,14 @@ echo '{"type":"subscribe","lines":true}' | socat -t 86400 - UNIX-CONNECT:$XDG_RU
 For a status bar, `sleeve line` prints the current line's text each time it changes, and survives sleeved restarting.
 
 After a `display` command, every client gets `{ "type": "display", "displays": { "*": { ... }, "<instance>": { ... } } }`, each
-entry holding `preset`, `position`, `align`, `lyricsArea`, `nowArea`, `background` and `visible` as changed; a client that connects later gets it too, before
+entry holding `preset`, `position`, `align`, `lyricsArea`, `nowArea`, `background`, `style` and `visible` as changed; a client that connects later gets it too, before
 `players`, when there are any. An instance's entry wins over `*`. They last until sleeved restarts.
+
+`style` is stylesheet variables over the page's stylesheet, as `{ "--art-animation": "sleeve-art-swirl", "--art-size": "512" }`:
+names starting `--art-`, `--flow-`, `--swirl-` or `--lyrics-scrim` (but not `--art-layer-opacity` or `--lyrics-scrim-alpha`, which the
+page works out itself), values of letters, digits, spaces and `. , % ( ) # + -` only, with no `url(`, up to 100 characters. A
+`display` with `style` merges it into the entry's name by name, and an empty value removes a name; an instance's style merges
+over `*`'s the same way. A page takes the same from its URL as `?style=NAME:VALUE;NAME:VALUE`, under any change.
 
 ## Timing
 
@@ -94,7 +100,7 @@ back. Replies may come after the broadcasts the command caused.
 | `report`     | `kind` (`wrong`, `mistimed`) | the lyrics shown are not this song's, or are timed wrong: kept for the track, and the next best shown (the words without times if only those are left). Files are untouched | `{ kind, ref, next, untimed }` |
 | `unreport`   |                     | forgets what was reported about the track and reloads                                        | `{ removed }`          |
 | `seek`       | `ms`                | plays from `ms` into the track, kept within it, in the player playing it                     | `{ positionMs }`       |
-| `display`    | any of `instance`, `preset`, `position`, `align`, `lyricsArea`, `nowArea`, `background`, `visible`, `reset` | changes how a page looks without a reload: the one that named this instance (`?instance=`), or all without one; `reset` forgets the changes | `{ displays }` |
+| `display`    | any of `instance`, `preset`, `position`, `align`, `lyricsArea`, `nowArea`, `background`, `style`, `visible`, `reset` | changes how a page looks without a reload: the one that named this instance (`?instance=`), or all without one; `reset` forgets the changes | `{ displays }` |
 | `unpick`     |                     | forgets the pick or mark and reloads                                                         | `{ removed }`          |
 | `refresh`    |                     | looks the track up again, asking online providers instead of their stored answers            |                        |
 | `state`      |                     | sends `playback`, `lyrics` and `players` again (and `line`, to a subscriber)                 |                        |

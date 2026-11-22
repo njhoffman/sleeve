@@ -441,6 +441,10 @@ build items that depend on it, listed in the later projects.
       Done in 0.45.0: `coverDetail` (neighboring pixels' brightness on a 128 px copy) drives a scrim behind the lyrics area
       (`--lyrics-scrim`, `--lyrics-scrim-blur`, `--lyrics-scrim-edge`) and counts as weak contrast in `textTheme`. Colors from
       the part under the lyrics left out: under flow and swirl that part keeps moving.
+- [x] **The cover's look per page, for backdrop's presets.** (p2) [feature] Asked for 2026-11-22: backdrop's presets
+      could not pick the swirl or a sharp cover, which lived in the user's `style.css` alone. Done in 0.46.0: `style`
+      (`--style NAME=VALUE`, `?style=`), limited to `--art-*`, `--flow-*`, `--swirl-*` and `--lyrics-scrim*` with values
+      that cannot leave a declaration; contract in backdrop's `docs/specs/sleeve.md` (Style), used by its 3.1.0 presets.
 - [ ] **NetEase lyrics cannot wrap.** (p1) [bug] Found 2026-11-22: NetEase's lines join their words with U+00A0 (59 of 61 lines
       of Muse's Resistance), so a line wider than the lyrics area runs past its edge and is clipped instead of wrapping, which
       shows most in a narrow area such as backdrop's `lyrics-stage` (the left third). Normalize Unicode spaces to plain ones

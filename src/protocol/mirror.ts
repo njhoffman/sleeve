@@ -38,7 +38,11 @@ export class SessionMirror {
 
   // The changes for a page naming this instance (null: none)
   displayFor(instance: string | null): DisplayChange {
-    return { ...this.displays[ALL_INSTANCES], ...(instance ? this.displays[instance] : {}) };
+    const all = this.displays[ALL_INSTANCES];
+    const own = instance ? this.displays[instance] : undefined;
+    // Style merges name by name, the instance's over every page's
+    const style = all?.style || own?.style ? { style: { ...all?.style, ...own?.style } } : {};
+    return { ...all, ...own, ...style };
   }
 
   // Applies a message; whether it changed the state

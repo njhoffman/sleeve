@@ -6,6 +6,16 @@ All notable changes to sleeve are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.46.0] - 2026-11-22
+
+### Added
+
+- Stylesheet variables per page: `sleeve shell --style NAME=VALUE` and `sleeve ctl display --style NAME=VALUE` (once for
+  each, an empty value dropping one), `?style=NAME:VALUE;NAME:VALUE` in the URL, and `style` in the `display` command.
+  They set the cover's, its animation's and the scrim's variables (`--art-*`, `--flow-*`, `--swirl-*`,
+  `--lyrics-scrim*`) for that page over `~/.config/sleeve/style.css`, so backdrop's presets can pick a sharp cover or
+  the swirl (its 3.1.0). Changing `--art-size` or `--art-blur` this way draws the cover again at once.
+
 ## [0.45.0] - 2026-11-22
 
 ### Added

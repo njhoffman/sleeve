@@ -1,6 +1,6 @@
 import { expect } from 'chai';
 import type { LyricsResult, ScoredCandidate } from '../../src/core/types.ts';
-import { describeReport, parseBackground, parseCommand } from '../../src/protocol/messages.ts';
+import { describeReport, parseBackground, parseCommand, parseStylePairs, styleParam } from '../../src/protocol/messages.ts';
 import { fromWire, SessionMirror } from '../../src/protocol/mirror.ts';
 
 const best: ScoredCandidate = {
@@ -47,6 +47,20 @@ describe('parseCommand', () => {
     expect(parseBackground('cover')).to.deep.equal({ kind: 'cover', alpha: null });
     expect(parseBackground('cover@.6')).to.deep.equal({ kind: 'cover', alpha: 0.6 });
     expect(parseCommand('{"type":"display"}')).to.deep.equal({ error: 'display needs something to change' });
+    expect(parseCommand(JSON.stringify({ type: 'display', style: { '--art-animation': 'sleeve-art-swirl', '--swirl-timing': 'cubic-bezier(0.4, 0, 0.6, 1)', '--lyrics-scrim': '', '--flow-zoom': '1.4' } }))).to.have.property('command');
+    for (const [style, wrong] of [
+      [{ '--now-preset': 'full' }, '--now-preset'],
+      [{ '--lyrics-scrim-alpha': '1' }, '--lyrics-scrim-alpha'],
+      [{ '--art-layer-opacity': '1' }, '--art-layer-opacity'],
+      [{ color: 'red' }, 'color'],
+      [{ '--art-size': 512 }, '--art-size'],
+      [{ '--art-blur': 'url(http:x)' }, 'url'],
+      [{ '--art-blur': '0; } body { display: none' }, 'characters'],
+      [{ '--art-blur': '"0"' }, 'characters'],
+      [['--art-size'], 'object']
+    ] as const) {
+      expect((parseCommand(JSON.stringify({ type: 'display', style })) as { error: string }).error, JSON.stringify(style)).to.include('style').and.include(wrong);
+    }
     for (const bad of ['{"preset":"huge"}', '{"position":"middle"}', '{"align":"up"}', '{"visible":"no"}', '{"reset":1}', '{"instance":"","preset":"full"}']) {
       expect(parseCommand(JSON.stringify({ type: 'display', ...JSON.parse(bad) })), bad).to.have.property('error');
     }
@@ -68,6 +82,23 @@ describe('parseCommand', () => {
 });
 
 describe('SessionMirror', () => {
+  it('reads style as NAME=VALUE flags or a URL\'s NAME:VALUE pairs, and writes the URL form back', () => {
+    expect(parseStylePairs(['--art-size=512', '--swirl-timing=cubic-bezier(0, 0, 1, 1)', ''], '=')).to.deep.equal({ style: { '--art-size': '512', '--swirl-timing': 'cubic-bezier(0, 0, 1, 1)' } });
+    expect(parseStylePairs('--art-size:512;--art-blur:0'.split(';'), ':')).to.deep.equal({ style: { '--art-size': '512', '--art-blur': '0' } });
+    expect(parseStylePairs(['--art-size'], '=')).to.deep.equal({ error: '--art-size is not NAME=VALUE' });
+    expect(parseStylePairs(['--now-preset=full'], '=')).to.have.property('error');
+    expect(styleParam({ '--art-size': '512', '--art-blur': '0' })).to.equal('--art-size:512;--art-blur:0');
+  });
+
+  it('merges style name by name, an instance\'s over every page\'s', () => {
+    const mirror = new SessionMirror();
+    mirror.apply({ type: 'display', displays: { '*': { style: { '--art-size': '512', '--art-blur': '0' } }, one: { style: { '--art-blur': '2' } } } });
+    expect(mirror.displayFor('one').style).to.deep.equal({ '--art-size': '512', '--art-blur': '2' });
+    expect(mirror.displayFor('two').style).to.deep.equal({ '--art-size': '512', '--art-blur': '0' });
+    mirror.apply({ type: 'display', displays: { '*': { preset: 'full' } } });
+    expect(mirror.displayFor('one')).to.deep.equal({ preset: 'full' });
+  });
+
   it('gives a page its instance\'s display changes over every page\'s, and forgets them when the daemon starts over', () => {
     const mirror = new SessionMirror();
     expect(mirror.displayFor('one')).to.deep.equal({});

@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { parseArgs } from 'node:util';
 import { DEFAULT_HOST, DEFAULT_PORT } from '../daemon/paths.ts';
-import { LYRICS_ALIGNS, NOW_POSITIONS, NOW_PRESETS, parseArea, parseBackground } from '../protocol/messages.ts';
+import { LYRICS_ALIGNS, NOW_POSITIONS, NOW_PRESETS, parseArea, parseBackground, parseStylePairs, styleParam, type StyleVariables } from '../protocol/messages.ts';
 import { validColors, type OverlayColors } from '../renderer/contrast.ts';
 
 // What the Electron shell (shell/main.ts) decides before it opens a window: its options, whether backdrop runs,
@@ -41,6 +41,8 @@ export interface ShellOptions {
   nowArea: string | null;
   // The page's ?background=: what fills the window behind the content
   background: string | null;
+  // The page's ?style=: stylesheet variables over its stylesheet (--style NAME=VALUE, once for each)
+  style: StyleVariables | null;
   url: string;
   // An explicit overlay geometry; otherwise the band above the visualizer
   geometry: Geometry | null;
@@ -125,7 +127,8 @@ export function parseShellArgs(argv: string[]): ShellOptions {
       'lyrics-align': { type: 'string' },
       'lyrics-area': { type: 'string' },
       'now-area': { type: 'string' },
-      background: { type: 'string' }
+      background: { type: 'string' },
+      style: { type: 'string', multiple: true }
     }
   });
   const text = (name: string): string | undefined => (typeof values[name] === 'string' ? values[name] as string : undefined);
@@ -164,7 +167,11 @@ export function parseShellArgs(argv: string[]): ShellOptions {
   };
   const fill = text('background') ?? null;
   if (fill !== null && !parseBackground(fill)) throw new Error(`Invalid --background: ${fill} (transparent, #rrggbb, #rrggbbaa, cover or cover@0.6)`);
-  const page = { background: fill, lyricsArea: area('lyrics-area'), nowArea: area('now-area'), title: text('title') ?? null, instance: text('instance') ?? null, now: known('now', NOW_PRESETS), nowPosition: known('now-position', NOW_POSITIONS), lyricsAlign: known('lyrics-align', LYRICS_ALIGNS) };
+  const styleFlags = Array.isArray(values.style) ? values.style as string[] : [];
+  const parsedStyle = parseStylePairs(styleFlags, '=');
+  if ('error' in parsedStyle) throw new Error(`Invalid --style: ${parsedStyle.error}`);
+  const style = Object.keys(parsedStyle.style).length ? parsedStyle.style : null;
+  const page = { background: fill, style, lyricsArea: area('lyrics-area'), nowArea: area('now-area'), title: text('title') ?? null, instance: text('instance') ?? null, now: known('now', NOW_PRESETS), nowPosition: known('now-position', NOW_POSITIONS), lyricsAlign: known('lyrics-align', LYRICS_ALIGNS) };
   return { managed, mapBelow, ...page, mode, url, geometry, monitor: text('monitor') ?? null, position, stack, waitBackdropS, estimateWords: values['estimate-words'] === true };
 }
 
@@ -254,7 +261,7 @@ export function overlayGeometry(monitor: BackdropMonitor, gap = 12): Geometry {
 }
 
 // The renderer's URL for a mode (the overlay draws on a transparent page) and the options the page takes
-export function rendererUrl(base: string, mode: ShellMode, estimateWords = false, page: Partial<Pick<ShellOptions, 'instance' | 'now' | 'nowPosition' | 'lyricsAlign' | 'lyricsArea' | 'nowArea' | 'background'>> = {}): string {
+export function rendererUrl(base: string, mode: ShellMode, estimateWords = false, page: Partial<Pick<ShellOptions, 'instance' | 'now' | 'nowPosition' | 'lyricsAlign' | 'lyricsArea' | 'nowArea' | 'background' | 'style'>> = {}): string {
   const url = new URL(base);
   if (mode === 'overlay') url.searchParams.set('mode', 'overlay');
   if (estimateWords) url.searchParams.set('words', 'estimate');
@@ -265,6 +272,7 @@ export function rendererUrl(base: string, mode: ShellMode, estimateWords = false
   if (page.lyricsArea) url.searchParams.set('lyrics-area', page.lyricsArea);
   if (page.nowArea) url.searchParams.set('now-area', page.nowArea);
   if (page.background) url.searchParams.set('background', page.background);
+  if (page.style) url.searchParams.set('style', styleParam(page.style));
   return url.toString();
 }
 

@@ -192,6 +192,12 @@ describe('sleeved', () => {
     const greeting = later.messages.map(message => message.type);
     expect(greeting.indexOf('display')).to.be.lessThan(greeting.indexOf('players')).and.greaterThan(-1);
 
+    client.send({ type: 'display', instance: 'one', style: { '--art-size': '512', '--art-blur': '0' }, id: 6 });
+    await until(() => displays()?.one?.style?.['--art-size'] === '512');
+    client.send({ type: 'display', instance: 'one', style: { '--art-blur': '', '--swirl-period': '30' }, id: 7 });
+    await until(() => displays()?.one?.style?.['--swirl-period'] === '30');
+    expect(displays()?.one?.style).to.deep.equal({ '--art-size': '512', '--swirl-period': '30' });
+
     client.send({ type: 'display', instance: 'one', reset: true, id: 4 });
     await until(() => displays()?.one === undefined);
     expect(displays()).to.deep.equal({ '*': { align: 'center' } });

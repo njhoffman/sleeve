@@ -38,11 +38,17 @@ describe('the shell\'s managed mode', () => {
     expect(() => parseShellArgs(['--now', 'huge'])).to.throw('Invalid --now: huge');
     expect(() => parseShellArgs(['--now-position', 'middle'])).to.throw('Invalid --now-position: middle');
     expect(() => parseShellArgs(['--lyrics-align', 'up'])).to.throw('Invalid --lyrics-align: up');
+    expect(() => parseShellArgs(['--style', '--now-preset=full'])).to.throw('Invalid --style: --now-preset');
+    expect(() => parseShellArgs(['--style', '--art-size'])).to.throw('Invalid --style: --art-size is not NAME=VALUE');
+    expect(parseShellArgs([]).style).to.equal(null);
+    expect(parseShellArgs(['--style', '--art-size=512', '--style', '--art-animation=sleeve-art-swirl']).style).to.deep.equal({ '--art-size': '512', '--art-animation': 'sleeve-art-swirl' });
   });
 
   it('hands the page its instance and look in the URL', () => {
     const url = new URL(rendererUrl('http://127.0.0.1:6620/', 'overlay', false, { instance: 'DP-3 lyrics', now: 'full', nowPosition: 'top-right', lyricsAlign: 'right', lyricsArea: '33%x100%+0+0' }));
     expect(Object.fromEntries(url.searchParams)).to.deep.equal({ mode: 'overlay', instance: 'DP-3 lyrics', now: 'full', 'now-position': 'top-right', 'lyrics-align': 'right', 'lyrics-area': '33%x100%+0+0' });
+    const styled = new URL(rendererUrl('http://127.0.0.1:6620/', 'window', false, { style: { '--art-size': '512', '--art-blur': '0' } }));
+    expect(styled.searchParams.get('style')).to.equal('--art-size:512;--art-blur:0');
   });
 });
 
