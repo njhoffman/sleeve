@@ -248,6 +248,34 @@ build items that depend on it, listed in the later projects.
       or adding a `--until-done` that loops over deferred files.
       Watched, and no change needed: 1611 deferred or waiting, then 271, then none on 2026-11-05 with `--retry-now`. The backoff does its job, and `--retry-now` is the loop.
 
+## 7. Daemon, display and upkeep
+
+- [ ] **The cover is served as whatever type it claims.** (p2) [bug] `CoverArt.serve` (`src/daemon/art.ts`) answers
+      `/art/current` with the type the cover came with: any `image/*` from the URL the player names (a CDN, or for
+      another MPRIS player any https URL, browsers passing on a page's Media Session artwork) or from a tag's picture,
+      `image/svg+xml` included, with no `X-Content-Type-Options` or CSP. An `<img>` runs no script, but the URL opened
+      directly would run an SVG's script on sleeved's own origin, which may open the control WebSocket. Serve only
+      JPEG, PNG, WebP and GIF (checked by their first bytes), with `nosniff` and `Content-Security-Policy: sandbox`.
+- [ ] **A cover download is read whole before its size is checked.** (p3) [perf] `download` in `src/daemon/art.ts` calls
+      `arrayBuffer()` and only then compares with `MAX_BYTES` (8 MB), so a huge or endless response is buffered first.
+      Refuse on `Content-Length` over the cap, and read the body in chunks, stopping past it.
+- [ ] **Dependencies behind.** (p3) [chore] Found 2026-11-22 (`npm outdated`, `npm audit`): music-metadata 12.3.4 (12.8.0
+      out), whose fast-xml-parser has a low advisory (quadratic CPU on unterminated stop-node tags; `npm audit fix` has
+      it); commander 15.0.0 (15.1.0); in `shell/`, electron 45.2.1 (45.4.1) and x11 4.3.3 (4.4.0). Update, `just check`,
+      and run the shell once (`just shell-install`).
+- [ ] **No CI.** (p3) [chore] `just check` runs only by hand before a commit; backdrop has `.github/workflows/test.yml`.
+      A workflow on push: Node 24, `npm ci`, `npm run test:brief`, `npm run typecheck` (the shell's typecheck skips itself
+      without `shell/node_modules`). The tests are offline already.
+- [ ] **The page itself is never loaded by a test.** (p3) [test] `src/renderer/main.ts` and `flow.ts` (DOM and WebGL)
+      are checked by hand: in 0.44.0 to 0.47.0 the swirl, the scrim, `style`, long words and the shader warning were all
+      looked at in Chrome. A headless-Chrome smoke test like backdrop's `test/web/pages.browser.test.js` (playwright-core,
+      skipped without Chrome): sleeved on a fake session, `/` with and without `?style=`, failing on a script error, a
+      CSP violation or a failed request.
+- [ ] **The whole cover, not a crop of it.** (p3) [feature] A sharp cover fills the window as a square `--art-scale`
+      vmax wide, so a 16:9 window cuts about 44% of its height, often where its title is (backdrop's `lyrics-stage` and
+      `lyrics-cover`). An `--art-fit: contain` would place it whole, beside the lyrics, over a blurred copy filling the
+      rest, as players' now-playing screens do; backdrop's presets could then pick it through `style`.
+
 ## Completed
 
 ### 1. Planning (completed 2026-11-04)
