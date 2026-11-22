@@ -445,14 +445,18 @@ build items that depend on it, listed in the later projects.
       could not pick the swirl or a sharp cover, which lived in the user's `style.css` alone. Done in 0.46.0: `style`
       (`--style NAME=VALUE`, `?style=`), limited to `--art-*`, `--flow-*`, `--swirl-*` and `--lyrics-scrim*` with values
       that cannot leave a declaration; contract in backdrop's `docs/specs/sleeve.md` (Style), used by its 3.1.0 presets.
-- [ ] **NetEase lyrics cannot wrap.** (p1) [bug] Found 2026-11-22: NetEase's lines join their words with U+00A0 (59 of 61 lines
+- [x] **NetEase lyrics cannot wrap.** (p1) [bug] Found 2026-11-22: NetEase's lines join their words with U+00A0 (59 of 61 lines
       of Muse's Resistance), so a line wider than the lyrics area runs past its edge and is clipped instead of wrapping, which
       shows most in a narrow area such as backdrop's `lyrics-stage` (the left third). `parseWords` in `src/core/lrc.ts`
       collapses `\s` (U+00A0 included) only for lines with word times; a line without them returns `text.trim()`, and plain
       lines are taken as they are. Collapse there for every line, and in the renderer too, since cached answers hold them.
-- [ ] **AGENTS.md describes an older sleeve.** (p2) [docs] Its Project paragraph lists the daemon, the web renderer, the
+      Done in 0.46.1: `normalizeLatin` (`src/core/script.ts`), which every candidate goes through before it is scored, stored
+      answers and picks included, turns every Unicode space into a plain one. Muse's Resistance: 59 lines down to none, and
+      every line wraps in a 305 px area.
+- [x] **AGENTS.md describes an older sleeve.** (p2) [docs] Its Project paragraph lists the daemon, the web renderer, the
       Electron shell and writing lyrics into tags as planned, all built, and names 5 of the 12 commands (not `daemon`,
       `ctl`, `shell`, `line`, `reports`, `review`, `tag`). Every agent starts from it. Rewrite it from `src/cli/index.ts`.
+      Done in 0.46.1: what is where, by directory, every command named, and what is left pointed at TODO.md.
 - [ ] **A word wider than the lyrics area is clipped.** (p3) [bug] `.line` wraps only at spaces, so a long URL or compound
       in a narrow area (backdrop's left-third presets) runs past `#lyrics-area`'s `overflow: hidden`. `overflow-wrap: anywhere`
       on `.line` breaks it instead; check the word-by-word fill (`.word .fill`, `white-space: nowrap`) still lines up.

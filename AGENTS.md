@@ -5,12 +5,20 @@ Guidance for coding agents working in this repository.
 ## Project
 
 sleeve: synced lyrics for what MPD or Spotify plays, from several sources, shown in a window or as a desktop
-overlay. A restart of Sunamu (`~/git/Sunamu` holds the old fork, for reference only). Built so far: the
-lyrics core (`src/core/`), the players (`src/players/`: MPD, MPRIS, the hub that picks the active one), the
-session that follows them with lyrics (`src/now/`), and the `sleeve now`, `lyrics`, `pick`, `offset` and
-`cache` commands (`src/cli/`). Planned: a headless daemon with a WebSocket protocol, a web renderer, a thin
-Electron shell, and writing lyrics into ID3 tags. The roadmap and open design questions are in `TODO.md`;
-`OUTLINE.md` is the original brief.
+overlay. A restart of Sunamu (`~/git/Sunamu` holds the old fork, for reference only). What is where:
+
+- `src/core/`: the lyrics core: providers (`providers/`: sidecar LRC, embedded tags, LRCLIB, NetEase), matching and
+  ranking (`match.ts`), Latin script only (`script.ts`), the stored answers (`cache.ts`), picks and offsets (`prefs.ts`)
+  and reports (`reports.ts`), all in `sleeve.db` (`db.ts`), and reading and writing tags (`tags/`, `tagger.ts`).
+- `src/players/`: MPD, MPRIS and the hub that picks the active one; `src/now/`: the session that follows them with lyrics.
+- `src/daemon/`: sleeved, serving the session over a WebSocket and a Unix socket (`src/protocol/`, `docs/protocol.md`),
+  and the renderer's files and the cover over HTTP.
+- `src/renderer/`: the page that shows the lyrics, in a browser or in the Electron shell (`shell/`, a package of its
+  own; its decisions in `src/shell/`).
+- `src/cli/`: the commands: `lyrics`, `now`, `daemon`, `ctl`, `shell`, `line`, `pick`, `offset`, `reports`, `review`,
+  `tag` and `cache`.
+
+What is still to do, and the open design questions, are in `TODO.md`; `OUTLINE.md` is the original brief.
 
 Related projects (keep them in mind before designing player, tagging or window features):
 

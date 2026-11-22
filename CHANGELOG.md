@@ -6,6 +6,14 @@ All notable changes to sleeve are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.46.1] - 2026-11-22
+
+### Fixed
+
+- Lyrics from NetEase wrap again in a narrow area, such as backdrop's left-third presets: their words came joined by
+  no-break spaces, so a long line ran past the edge and was cut off. Every kind of space becomes a plain one, in answers
+  stored before too.
+
 ## [0.46.0] - 2026-11-22
 
 ### Added

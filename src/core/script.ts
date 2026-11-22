@@ -5,7 +5,9 @@ import type { Candidate, LyricLine, Lyrics } from './types.ts';
 // provider, so a display, a pick and a tag all see the same:
 //
 // - Look-alikes are put right: a Cyrillic or Greek letter that looks like a Latin one, inside a word that has
-//   Latin letters too ("hеre" with a Cyrillic е), becomes the Latin letter. Full-width punctuation becomes ASCII.
+//   Latin letters too ("hеre" with a Cyrillic е), becomes the Latin letter. Full-width punctuation becomes ASCII,
+//   and every other kind of space a plain one: NetEase joins words with no-break spaces, and a line of them never
+//   wraps, so it runs past a narrow lyrics area.
 // - A line with any other non-Latin letter is dropped: on NetEase these are uploaders' credits ("钢琴 : ..."),
 //   album notes and translated titles, and what would be left of the line is no lyric.
 // - Lyrics with more than MAX_FOREIGN_SHARE of their lines dropped are in another language (or a translation
@@ -25,10 +27,13 @@ const LATIN = /\p{Script=Latin}/u;
 const FOREIGN = /(?=\p{L})\P{Script=Latin}/u;
 
 // Look-alikes inside Latin words put right, full-width punctuation and spaces made ASCII
+// No-break (U+00A0, U+202F), typographic (U+2000 to U+200A), mathematical (U+205F) and ideographic (U+3000) spaces
+const SPACES = /[\u00a0\u2000-\u200a\u202f\u205f\u3000]/g;
+
 export function normalizeLatin(text: string): string {
   const narrowed = text
     .replace(/[！-～]/gu, char => /\p{L}/u.test(char) ? char : String.fromCharCode(char.charCodeAt(0) - 0xFEE0))
-    .replace(/　/g, ' ');
+    .replace(SPACES, ' ');
   return narrowed.replace(/\p{L}+/gu, word => {
     if (!LATIN.test(word) || !FOREIGN.test(word)) return word;
     const fixed = [...word].map(char => LOOKALIKES[char] ?? char).join('');

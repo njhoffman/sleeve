@@ -16,6 +16,10 @@ describe('Latin script only', () => {
     // A word of look-alikes with a letter that has none stays as it was
     expect(normalizeLatin('hеж')).to.equal('hеж');
     expect(normalizeLatin('（Intro）：　go')).to.equal('(Intro): go');
+    // NetEase joins words with no-break spaces, so its lines never wrapped; every kind of space becomes a plain one
+    expect(normalizeLatin('or\u00a0will\u00a0our\u2009world\u202fcome\u205ftumbling\u3000down')).to.equal('or will our world come tumbling down');
+    // A zero-width space is a break already, and stays
+    expect(normalizeLatin('one\u200btwo')).to.equal('one\u200btwo');
     expect(isLatin('hеre')).to.equal(true);
     expect(isLatin('Привет')).to.equal(false);
     expect(isLatin('1999 ... !')).to.equal(true);
@@ -40,6 +44,13 @@ describe('Latin script only', () => {
   it('fixes words and drops translations in another alphabet', () => {
     const line = { time: 0, text: 'hеllo', words: [{ time: 0, text: 'hеllo' }], translation: '你好' };
     expect(latinLyrics({ synced: true, instrumental: false, lines: [line] })!.lines).to.deep.equal([{ time: 0, text: 'hello', words: [{ time: 0, text: 'hello' }] }]);
+  });
+
+  it('gives a candidate plain spaces in its lines, words and name, as a stored answer from before gets them too', () => {
+    const line = { time: 1000, text: 'or\u00a0will\u00a0our\u00a0world', words: [{ time: 1000, text: 'or\u00a0' }, { time: 1200, text: 'will\u00a0our\u00a0world' }] };
+    const read = latinCandidate(candidate({ synced: true, instrumental: false, lines: [line] }, { title: 'The\u00a0Resistance' }))!;
+    expect(read.lyrics.lines).to.deep.equal([{ time: 1000, text: 'or will our world', words: [{ time: 1000, text: 'or ' }, { time: 1200, text: 'will our world' }] }]);
+    expect(read.track.title).to.equal('The Resistance');
   });
 
   it('leaves out a track named in another alphabet, and only drops such an album', () => {
