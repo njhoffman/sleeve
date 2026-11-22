@@ -14,13 +14,35 @@ import type { Playback, PlayingTrack } from '../players/types.ts';
 // - the picture embedded in the file playing;
 // - an image beside the file: cover, folder or front (.jpg, .jpeg, .png, .webp), any case.
 //
-// The last few covers are kept, so a page reloaded or a second page costs nothing.
+// The last few covers are kept, so a page reloaded or a second page costs nothing. Whatever the source, a cover is
+// served only as the JPEG, PNG, GIF or WebP its first bytes show (rasterFormat), never as the type it claims: an SVG
+// could run script on sleeved's own origin, which may open the control socket, were its URL opened directly.
 
 export const ART_PATH = '/art/current';
 const MAX_BYTES = 8 * 1024 * 1024;
 const FETCH_TIMEOUT_MS = 5000;
 const KEEP = 8;
 const IMAGE_TYPES: Record<string, string> = { '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.webp': 'image/webp' };
+// What a cover is sent with: it is an image and nothing else, and a page it is opened as gets no script and no origin
+const SERVED_HEADERS = { 'X-Content-Type-Options': 'nosniff', 'Content-Security-Policy': "default-src 'none'; sandbox" };
+
+const startsWith = (data: Uint8Array, bytes: number[], at = 0) => bytes.every((byte, index) => data[at + index] === byte);
+const ascii = (text: string) => [...text].map(char => char.charCodeAt(0));
+
+// The raster format data is, by its signature; null for anything else (SVG, HTML, a truncated file)
+export function rasterFormat(data: Uint8Array): string | null {
+  if (startsWith(data, [0xff, 0xd8, 0xff])) return 'image/jpeg';
+  if (startsWith(data, [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])) return 'image/png';
+  if (startsWith(data, ascii('GIF87a')) || startsWith(data, ascii('GIF89a'))) return 'image/gif';
+  if (startsWith(data, ascii('RIFF')) && startsWith(data, ascii('WEBP'), 8)) return 'image/webp';
+  return null;
+}
+
+// A picture as what its bytes are, or null when they are no raster image
+function raster(picture: Picture | null | undefined): Picture | null {
+  const format = picture?.data.length ? rasterFormat(picture.data) : null;
+  return format ? { format, data: picture!.data } : null;
+}
 const BESIDE = /^(cover|folder|front)\.(jpe?g|png|webp)$/i;
 
 export interface CoverArtOptions {
@@ -56,7 +78,7 @@ export class CoverArt {
       response.writeHead(404, { 'Content-Type': 'text/plain' }).end('no cover\n');
       return true;
     }
-    response.writeHead(200, { 'Content-Type': picture.format, 'Content-Length': picture.data.length, 'Cache-Control': 'private, max-age=3600' });
+    response.writeHead(200, { 'Content-Type': picture.format, 'Content-Length': picture.data.length, 'Cache-Control': 'private, max-age=3600', ...SERVED_HEADERS });
     response.end(request.method === 'HEAD' ? undefined : picture.data);
     return true;
   }
@@ -77,24 +99,44 @@ export class CoverArt {
 
   private async find(track: PlayingTrack): Promise<Picture | null> {
     if (track.artUrl?.startsWith('https://')) {
-      const fetched = await this.download(track.artUrl);
+      const fetched = raster(await this.download(track.artUrl));
       if (fetched) return fetched;
     } else if (track.artUrl?.startsWith('file://')) {
-      const named = await imageFile(fileURLToPath(track.artUrl));
+      const named = raster(await imageFile(fileURLToPath(track.artUrl)));
       if (named) return named;
     }
     if (!track.file) return null;
-    const embedded = await this.tags.picture?.(track.file).catch(() => null);
-    if (embedded?.data.length && embedded.format.startsWith('image/')) return embedded;
+    const embedded = raster(await this.tags.picture?.(track.file).catch(() => null));
+    if (embedded) return embedded;
     return beside(track.file);
   }
 
+  // The body, read up to MAX_BYTES: refused by its Content-Length when that says more, and cut off once it passes it
   private async download(url: string): Promise<Picture | null> {
     const response = await this.fetch(url, { headers: { 'User-Agent': this.userAgent }, signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) });
-    const format = response.headers.get('content-type')?.split(';')[0].trim() ?? '';
-    if (!response.ok || !format.startsWith('image/')) return null;
-    const data = new Uint8Array(await response.arrayBuffer());
-    return data.length && data.length <= MAX_BYTES ? { format, data } : null;
+    const length = Number(response.headers.get('content-length') ?? 0);
+    if (!response.ok || !response.body || length > MAX_BYTES) {
+      await response.body?.cancel().catch(() => {});
+      return null;
+    }
+    const chunks: Uint8Array[] = [];
+    let total = 0;
+    const reader = response.body.getReader();
+    for (let read = await reader.read(); !read.done; read = await reader.read()) {
+      total += read.value.length;
+      if (total > MAX_BYTES) {
+        await reader.cancel().catch(() => {});
+        return null;
+      }
+      chunks.push(read.value);
+    }
+    const data = new Uint8Array(total);
+    let at = 0;
+    for (const chunk of chunks) {
+      data.set(chunk, at);
+      at += chunk.length;
+    }
+    return { format: 'application/octet-stream', data };
   }
 }
 
@@ -121,7 +163,7 @@ async function beside(file: string): Promise<Picture | null> {
   }
   const rank = (name: string) => ['cover', 'folder', 'front'].indexOf(name.split('.')[0].toLowerCase());
   for (const name of names.filter(entry => BESIDE.test(entry)).sort((a, b) => rank(a) - rank(b))) {
-    const found = await imageFile(path.join(folder, name));
+    const found = raster(await imageFile(path.join(folder, name)));
     if (found) return found;
   }
   return null;

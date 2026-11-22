@@ -6,6 +6,21 @@ All notable changes to sleeve are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.47.1] - 2026-11-22
+
+### Fixed
+
+- sleeved serves a cover only as the JPEG, PNG, GIF or WebP its bytes show, whatever the player, the tag or the file
+  claims, and tells the browser to treat it as nothing but an image. An SVG cover could otherwise run script on
+  sleeved's own address when its URL was opened.
+- A cover download over 8 MB is refused by its stated length, or cut off as soon as it passes that, instead of being
+  read whole first.
+
+### Changed
+
+- Dependencies updated: music-metadata 12.8.0 (clearing a low-severity advisory in the XML parser it uses),
+  commander 15.1.0, and in the shell Electron 45.4.1 and x11 4.4.0. Run `just shell-install` to fetch the new Electron.
+
 ## [0.47.0] - 2026-11-22
 
 ### Changed

@@ -1,6 +1,6 @@
 {
   "name": "sleeve",
-  "version": "0.47.0",
+  "version": "0.47.1",
   "description": "Synced lyrics from several sources for what MPD or Spotify plays, shown in a window or as a desktop overlay",
   "type": "module",
   "license": "MPL-2.0",
@@ -24,8 +24,8 @@
   },
   "dependencies": {
     "@jellybrick/dbus-next": "^0.11.4",
-    "commander": "^15.0.0",
-    "music-metadata": "^12.3.4"
+    "commander": "^15.1.0",
+    "music-metadata": "^12.8.0"
   },
   "devDependencies": {
     "@types/chai": "^5.2.3",

@@ -7,7 +7,7 @@
   "type": "module",
   "main": "main.ts",
   "dependencies": {
-    "electron": "^45.2.1",
-    "x11": "^4.3.3"
+    "electron": "^45.4.1",
+    "x11": "^4.4.0"
   }
 }

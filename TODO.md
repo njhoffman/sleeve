@@ -250,19 +250,27 @@ build items that depend on it, listed in the later projects.
 
 ## 7. Daemon, display and upkeep
 
-- [ ] **The cover is served as whatever type it claims.** (p2) [bug] `CoverArt.serve` (`src/daemon/art.ts`) answers
+- [x] **The cover is served as whatever type it claims.** (p2) [bug] `CoverArt.serve` (`src/daemon/art.ts`) answers
       `/art/current` with the type the cover came with: any `image/*` from the URL the player names (a CDN, or for
       another MPRIS player any https URL, browsers passing on a page's Media Session artwork) or from a tag's picture,
       `image/svg+xml` included, with no `X-Content-Type-Options` or CSP. An `<img>` runs no script, but the URL opened
       directly would run an SVG's script on sleeved's own origin, which may open the control WebSocket. Serve only
       JPEG, PNG, WebP and GIF (checked by their first bytes), with `nosniff` and `Content-Security-Policy: sandbox`.
-- [ ] **A cover download is read whole before its size is checked.** (p3) [perf] `download` in `src/daemon/art.ts` calls
+      Done in 0.47.1: `rasterFormat` takes the format from the first bytes (JPEG, PNG, GIF, WebP) for every source, and
+      the cover goes out with `nosniff` and `Content-Security-Policy: default-src 'none'; sandbox`. SVG refused from a URL, a
+      tag and a file beside the track (tests); the live Spotify cover still served.
+- [x] **A cover download is read whole before its size is checked.** (p3) [perf] `download` in `src/daemon/art.ts` calls
       `arrayBuffer()` and only then compares with `MAX_BYTES` (8 MB), so a huge or endless response is buffered first.
       Refuse on `Content-Length` over the cap, and read the body in chunks, stopping past it.
-- [ ] **Dependencies behind.** (p3) [chore] Found 2026-11-22 (`npm outdated`, `npm audit`): music-metadata 12.3.4 (12.8.0
+      Done in 0.47.1: refused by a `Content-Length` over 8 MB without reading the body, otherwise read in chunks and
+      cancelled once past it (tested with an endless stream: stopped between 8 and 10 MB).
+- [x] **Dependencies behind.** (p3) [chore] Found 2026-11-22 (`npm outdated`, `npm audit`): music-metadata 12.3.4 (12.8.0
       out), whose fast-xml-parser has a low advisory (quadratic CPU on unterminated stop-node tags; `npm audit fix` has
       it); commander 15.0.0 (15.1.0); in `shell/`, electron 45.2.1 (45.4.1) and x11 4.3.3 (4.4.0). Update, `just check`,
       and run the shell once (`just shell-install`).
+      Done in 0.47.1: music-metadata 12.8.0 (its fast-xml-parser advisory gone), commander 15.1.0, electron 45.4.1 and
+      x11 4.4.0, floors raised in both package.json files. Left: mocha 12.0.3, the latest, pulls glob and minimatch with
+      two moderate advisories that npm would fix only by going back to mocha 11; dev-only, globbing our own test paths.
 - [ ] **No CI.** (p3) [chore] `just check` runs only by hand before a commit; backdrop has `.github/workflows/test.yml`.
       A workflow on push: Node 24, `npm ci`, `npm run test:brief`, `npm run typecheck` (the shell's typecheck skips itself
       without `shell/node_modules`). The tests are offline already.
