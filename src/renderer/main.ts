@@ -5,7 +5,7 @@ import { Connection } from './connection.ts';
 import { pageTheme, parseHex, textTheme, themeVariables, validColors, type OverlayColors } from './contrast.ts';
 import { CoverFlow, type FlowMode } from './flow.ts';
 import { describeReport, parseBackground, type PageBackground, type ReportReply } from '../protocol/messages.ts';
-import { candidateEntries, coverColors, darkVibrant, displaySettings, fullTint, flowSettings, flowStep, follow, formatOffset, formatTime, lineStart, lyricsInsets, NO_SCROLL_BACK, coverDetail, DETAIL_SAMPLE_SIZE, scrimAlpha, nowText, resolveArea, progress, scrollBackOffset, status, styleRule, timingFunction, wheel, wholeCoverPosition, wholeCoverRect, type CandidateEntry, type DisplaySettings, type FlowSettings, type FlowView, type ScrollBack } from './view.ts';
+import { candidateEntries, coverColors, darkVibrant, displaySettings, fullTint, tintPixels, flowSettings, flowStep, follow, formatOffset, formatTime, lineStart, lyricsInsets, NO_SCROLL_BACK, coverDetail, DETAIL_SAMPLE_SIZE, scrimAlpha, nowText, resolveArea, progress, scrollBackOffset, status, styleRule, timingFunction, wheel, wholeCoverPosition, wholeCoverRect, type CandidateEntry, type DisplaySettings, type FlowSettings, type FlowView, type ScrollBack } from './view.ts';
 
 // The renderer: sleeved's session as scrolling lyrics. The current line is worked out every frame from the
 // mirrored playback clock, so line changes land on the frame they are due whatever the socket does; the scroll
@@ -160,6 +160,8 @@ function clearArt(): void {
   coverColorsShown = null;
   coverDetailShown = 0;
   coverTint = null;
+  coverSample = null;
+  tintShown = undefined;
   applyTint();
   applyTheme();
 }
@@ -216,8 +218,9 @@ function showArt(image: HTMLImageElement): void {
   detailContext?.drawImage(canvas, 0, 0, DETAIL_SAMPLE_SIZE, DETAIL_SAMPLE_SIZE);
   coverDetailShown = coverDetail(detailContext?.getImageData(0, 0, DETAIL_SAMPLE_SIZE, DETAIL_SAMPLE_SIZE).data ?? [], DETAIL_SAMPLE_SIZE);
   const samplePixels = sampleContext?.getImageData(0, 0, COLOR_SAMPLE_SIZE, COLOR_SAMPLE_SIZE).data ?? [];
-  coverColorsShown = coverColors(samplePixels, { opacity: number('--art-opacity', 0.6), dim: number('--art-dim', 0.45), base });
+  coverSample = { pixels: samplePixels, base };
   coverTint = darkVibrant(samplePixels);
+  tintShown = undefined;
   applyTint();
   applyTheme();
 }
@@ -251,6 +254,10 @@ const SHADER_LOOKS: Record<string, FlowMode> = { 'sleeve-art-flow': 'flow', 'sle
 let swirlBox: HTMLDivElement | null = null;
 // The cover's dark vibrant color (darkVibrant), worked out when it is drawn
 let coverTint: string | null = null;
+// The cover's color sample and the page's base color, kept so the colors behind the text can follow the tint
+let coverSample: { pixels: ArrayLike<number>; base: [number, number, number] } | null = null;
+// The tint the text colors were last worked out for (undefined: not yet), so they are worked out again only on a change
+let tintShown: string | null | undefined = undefined;
 
 // --swirl-tint as the color both swirls multiply their copies with: cover for the hue of the cover's dark vibrant at full
 // strength (fullTint, since 0.52.0), a #rrggbb color as given; none (or anything else) for no tint. The CSS swirl reads
@@ -261,6 +268,13 @@ function applyTint(): void {
   if (color) art.style.setProperty('--swirl-tint-color', color);
   else art.style.removeProperty('--swirl-tint-color');
   flow?.setTint(color ? parseHex(color) : null);
+  // The text's colors from the cover as it shows, tinted: a strong tint can turn a light cover dark or a dark one bright
+  const tinting = color && /^sleeve-art-swirl/.test(setting('--art-animation').split(',')[0].trim()) ? color : null;
+  if (!coverSample || tinting === tintShown) return;
+  tintShown = tinting;
+  const pixels = tinting ? tintPixels(coverSample.pixels, tinting) : coverSample.pixels;
+  coverColorsShown = coverColors(pixels, { opacity: number('--art-opacity', 0.6), dim: number('--art-dim', 0.45), base: coverSample.base });
+  applyTheme();
 }
 
 function readFlow(now: number): void {

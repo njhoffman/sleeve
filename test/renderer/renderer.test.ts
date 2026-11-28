@@ -13,7 +13,7 @@ import { NowPlaying } from '../../src/now/session.ts';
 import type { NowState } from '../../src/now/state.ts';
 import { PlayerHub } from '../../src/players/hub.ts';
 import { Connection } from '../../src/renderer/connection.ts';
-import { candidateEntries, coverColors, darkVibrant, displaySettings, fullTint, flowSettings, flowStep, follow, formatOffset, formatTime, lineStart, lyricsInsets, nowText, resolveArea, NO_SCROLL_BACK, progress, reconnectDelay, SCROLL_BACK_MS, scrollBackOffset, styleRule, scrimAlpha, wholeCoverPosition, wholeCoverRect, coverDetail, SCRIM_MAX, status, swirlLayers, timingFunction, wheel } from '../../src/renderer/view.ts';
+import { candidateEntries, coverColors, darkVibrant, displaySettings, fullTint, tintPixels, flowSettings, flowStep, follow, formatOffset, formatTime, lineStart, lyricsInsets, nowText, resolveArea, NO_SCROLL_BACK, progress, reconnectDelay, SCROLL_BACK_MS, scrollBackOffset, styleRule, scrimAlpha, wholeCoverPosition, wholeCoverRect, coverDetail, SCRIM_MAX, status, swirlLayers, timingFunction, wheel } from '../../src/renderer/view.ts';
 import { until } from '../helpers/fakeMpd.ts';
 import { fakePlayer } from '../helpers/players.ts';
 
@@ -380,6 +380,14 @@ describe('renderer view', () => {
     expect(fullTint('#404040')).to.equal('#ffffff');
     expect(fullTint('#000000')).to.equal('#ffffff');
     expect(fullTint('cover')).to.equal('cover');
+  });
+
+  // The colors behind the text follow the tint, so white text is not set on a light cover the tint has made dark blue
+  it('tints the cover\'s color sample as the swirl tints its copies', () => {
+    expect(tintPixels([255, 255, 255, 255, 200, 100, 50, 128], '#0086ff')).to.deep.equal([0, 134, 255, 255, 0, 53, 50, 128]);
+    expect(tintPixels([10, 20, 30, 255], 'none')).to.deep.equal([10, 20, 30, 255]);
+    const white = Array.from({ length: 16 }, () => [255, 255, 255, 255]).flat();
+    expect(coverColors(tintPixels(white, '#0086ff'), { opacity: 1, dim: 0, base: [0, 0, 0] }).background).to.equal('#0086ff');
   });
 
   it('lists candidates as sleeve lyrics --all numbers them, leaving out those without an id', () => {

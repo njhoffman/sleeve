@@ -6,6 +6,13 @@ All notable changes to sleeve are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.52.1] - 2026-11-28
+
+### Fixed
+
+- Under a tinted swirl the text's colors are worked out from the cover as it shows, tinted, not from the cover as it is:
+  a strong tint can turn a white cover deep blue, and dark text chosen for white became hard to read on it.
+
 ## [0.52.0] - 2026-11-28
 
 ### Changed

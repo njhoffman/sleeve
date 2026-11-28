@@ -526,6 +526,17 @@ export function fullTint(hex: string): string {
   return `#${rgb.map(value => Math.round(value * 255 / top).toString(16).padStart(2, '0')).join('')}`;
 }
 
+// Pixels (RGBA) multiplied by a tint (#rrggbb), as the swirl's copies are, so the colors the text is set against are the
+// ones on screen; alpha kept. Not a #rrggbb tint: the pixels as they are.
+export function tintPixels(pixels: ArrayLike<number>, tint: string): number[] {
+  const match = /^#([0-9a-f]{6})$/i.exec(tint);
+  const out = Array.from(pixels);
+  if (!match) return out;
+  const rgb = [0, 2, 4].map(at => Number.parseInt(match[1].slice(at, at + 2), 16) / 255);
+  for (let at = 0; at + 3 < out.length; at += 4) for (let channel = 0; channel < 3; channel++) out[at + channel] = Math.round(out[at + channel] * rgb[channel]);
+  return out;
+}
+
 // How long to wait before reconnecting, after `attempt` failures in a row
 export function reconnectDelay(attempt: number): number {
   return Math.min(5000, 250 * 2 ** Math.max(0, attempt));
