@@ -71,6 +71,8 @@
   --swirl-brightness: 0.5;       /* each layer's brightness before the two are blended (0 to 2) */
   --swirl-timing: ease-in-out;   /* how each turn eases: linear, ease, ease-in, ease-out, ease-in-out or cubic-bezier() */
   --swirl-blur: 180px;           /* sleeve-art-swirl-css only: the blur of each full-size layer */
+  --swirl-tint: none;            /* sleeve-art-swirl-css only: a color each layer is multiplied with, as Sunamu does with its
+                                    --color-bg: none, cover (the cover's dark vibrant, as Sunamu picks it) or #rrggbb */
 }
 
 * { box-sizing: border-box; }
@@ -246,6 +248,9 @@ html.swirl-css #art canvas { display: none; }
   width: calc(var(--swirl-size) * 100vmax);
   height: calc(var(--swirl-size) * 100vmax);
   background: var(--cover-art-url) center / cover no-repeat;
+  /* --swirl-tint-color is worked out from --swirl-tint; transparent multiplies to nothing */
+  background-color: var(--swirl-tint-color, transparent);
+  background-blend-mode: multiply;
   filter: blur(var(--swirl-blur)) brightness(var(--swirl-brightness)) saturate(var(--art-saturation));
   mix-blend-mode: exclusion;
   animation: sleeve-art-swirl calc(var(--swirl-period) * 1s) var(--swirl-timing) infinite;

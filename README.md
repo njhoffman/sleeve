@@ -148,7 +148,7 @@ loads after its own. Edits apply to an open page within a few seconds, with no r
   --art-animation: sleeve-art-flow;   /* none (default), sleeve-art-flow (the cover warping, WebGL), sleeve-art-swirl (two covers turning, WebGL),
                                          sleeve-art-swirl-css (the same in CSS), sleeve-art-drift (slow turn), sleeve-art-breathe (slow zoom) */
   --flow-speed: 1;                    /* also --flow-amount, --flow-detail, --flow-zoom, --flow-resolution, --flow-fps */
-  --swirl-period: 60;                 /* also --swirl-delay, --swirl-size, --swirl-brightness, --swirl-timing, --swirl-blur */
+  --swirl-period: 60;                 /* also --swirl-delay, --swirl-size, --swirl-brightness, --swirl-timing, --swirl-blur, --swirl-tint */
   --art-size: 64;                     /* the cover's side in pixels: higher is sharper */
   --art-fit: contain;                 /* also the whole cover, sharp, beside the lyrics; also --art-fit-position, -margin, -radius, -shadow */
   --lyrics-scrim: auto;               /* a soft layer behind the lyrics, auto by how busy the cover is; also --lyrics-scrim-blur, --lyrics-scrim-edge */
@@ -164,7 +164,9 @@ for `sleeve-art-drift`; `--flow-resolution` is what matters most. Without WebGL 
 `sleeve-art-swirl` is Sunamu's background: two copies of the cover turning opposite ways, the second trailing by
 `--swirl-delay`, blended by exclusion, so their colors keep mixing into new shapes. Its defaults are Sunamu's. The
 shader draws it from the small blurred cover at about the flow's cost; `sleeve-art-swirl-css` draws it as Sunamu did,
-with CSS filters on two full-size images, which costs far more and is there to compare the two.
+with CSS filters on two full-size images, which costs far more and is there to compare the two. Sunamu also multiplies
+each copy with its `--color-bg`, the cover's dark vibrant color; `--swirl-tint: cover` does the same in
+`sleeve-art-swirl-css` (sleeve works the color out as node-vibrant does), and `--swirl-tint: #rrggbb` uses a color of your own.
 `--art-fit: contain` adds the whole cover, sharp and uncropped, over whatever background is set (the still cover, the
 flow or the swirl): in the larger free side beside the lyrics area, or the middle of the window when neither side is a
 fifth of it, as large as the space takes less `--art-fit-margin`. `--art-fit-position` (`left`, `center`, `right`)

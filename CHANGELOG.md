@@ -6,6 +6,14 @@ All notable changes to sleeve are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.50.0] - 2026-11-28
+
+### Added
+
+- `--swirl-tint` for `sleeve-art-swirl-css`: each turning copy of the cover multiplied with a color, as Sunamu's
+  background does with its `--color-bg`. `cover` uses the cover's dark vibrant color, worked out as node-vibrant (and so
+  Sunamu) picks it; `#rrggbb` a color of your own; `none` (the default) no tint.
+
 ## [0.49.0] - 2026-11-28
 
 ### Added

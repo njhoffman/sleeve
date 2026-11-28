@@ -5,7 +5,7 @@ import { Connection } from './connection.ts';
 import { pageTheme, parseHex, textTheme, themeVariables, validColors, type OverlayColors } from './contrast.ts';
 import { CoverFlow, type FlowMode } from './flow.ts';
 import { describeReport, parseBackground, type PageBackground, type ReportReply } from '../protocol/messages.ts';
-import { candidateEntries, coverColors, displaySettings, flowSettings, flowStep, follow, formatOffset, formatTime, lineStart, lyricsInsets, NO_SCROLL_BACK, coverDetail, DETAIL_SAMPLE_SIZE, scrimAlpha, nowText, resolveArea, progress, scrollBackOffset, status, styleRule, timingFunction, wheel, wholeCoverPosition, wholeCoverRect, type CandidateEntry, type DisplaySettings, type FlowSettings, type FlowView, type ScrollBack } from './view.ts';
+import { candidateEntries, coverColors, darkVibrant, displaySettings, flowSettings, flowStep, follow, formatOffset, formatTime, lineStart, lyricsInsets, NO_SCROLL_BACK, coverDetail, DETAIL_SAMPLE_SIZE, scrimAlpha, nowText, resolveArea, progress, scrollBackOffset, status, styleRule, timingFunction, wheel, wholeCoverPosition, wholeCoverRect, type CandidateEntry, type DisplaySettings, type FlowSettings, type FlowView, type ScrollBack } from './view.ts';
 
 // The renderer: sleeved's session as scrolling lyrics. The current line is worked out every frame from the
 // mirrored playback clock, so line changes land on the frame they are due whatever the socket does; the scroll
@@ -159,6 +159,8 @@ function clearArt(): void {
   document.documentElement.classList.remove('art');
   coverColorsShown = null;
   coverDetailShown = 0;
+  coverTint = null;
+  applyTint();
   applyTheme();
 }
 
@@ -213,7 +215,10 @@ function showArt(image: HTMLImageElement): void {
   const detailContext = detail.getContext('2d', { willReadFrequently: true });
   detailContext?.drawImage(canvas, 0, 0, DETAIL_SAMPLE_SIZE, DETAIL_SAMPLE_SIZE);
   coverDetailShown = coverDetail(detailContext?.getImageData(0, 0, DETAIL_SAMPLE_SIZE, DETAIL_SAMPLE_SIZE).data ?? [], DETAIL_SAMPLE_SIZE);
-  coverColorsShown = coverColors(sampleContext?.getImageData(0, 0, COLOR_SAMPLE_SIZE, COLOR_SAMPLE_SIZE).data ?? [], { opacity: number('--art-opacity', 0.6), dim: number('--art-dim', 0.45), base });
+  const samplePixels = sampleContext?.getImageData(0, 0, COLOR_SAMPLE_SIZE, COLOR_SAMPLE_SIZE).data ?? [];
+  coverColorsShown = coverColors(samplePixels, { opacity: number('--art-opacity', 0.6), dim: number('--art-dim', 0.45), base });
+  coverTint = darkVibrant(samplePixels);
+  applyTint();
   applyTheme();
 }
 
@@ -244,6 +249,17 @@ let settingsReadAt = -Infinity;
 
 const SHADER_LOOKS: Record<string, FlowMode> = { 'sleeve-art-flow': 'flow', 'sleeve-art-swirl': 'swirl' };
 let swirlBox: HTMLDivElement | null = null;
+// The cover's dark vibrant color (darkVibrant), worked out when it is drawn
+let coverTint: string | null = null;
+
+// --swirl-tint as the color sleeve-art-swirl-css multiplies its copies with, as Sunamu does with its --color-bg: cover
+// for the cover's dark vibrant, a #rrggbb color as given; none (or anything else) for no tint
+function applyTint(): void {
+  const value = setting('--swirl-tint');
+  const color = value === 'cover' ? coverTint : /^#[0-9a-f]{6}$/i.test(value) ? value : null;
+  if (color) art.style.setProperty('--swirl-tint-color', color);
+  else art.style.removeProperty('--swirl-tint-color');
+}
 
 function readFlow(now: number): void {
   const look = setting('--art-animation').split(',')[0].trim();
@@ -265,6 +281,7 @@ function readFlow(now: number): void {
     art.prepend(swirlBox);
   }
   document.documentElement.classList.toggle('swirl-css', swirlCss);
+  applyTint();
 }
 
 function updateFlow(now: number, dt: number): void {

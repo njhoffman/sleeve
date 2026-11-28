@@ -292,7 +292,8 @@ build items that depend on it, listed in the later projects.
 
       Done in 0.48.0: `--art-fit: contain` with `--art-fit-position` (auto, left, center, right), `--art-fit-margin`,
       `--art-fit-radius` and `--art-fit-shadow`; placed by `wholeCoverRect` (`view.ts`), over the background as set.
-      backdrop's `lyrics-cover` uses it (its 3.2.0).- [ ] **The shell test runs Electron in the real profile.** (p3) [test] `test/shell/exactSize.test.ts` starts the real
+      backdrop's `lyrics-cover` uses it (its 3.2.0).
+- [ ] **The shell test runs Electron in the real profile.** (p3) [test] `test/shell/exactSize.test.ts` starts the real
       shell under Xvfb, and `shell/main.ts` puts Electron's data in `appData/sleeve-shell`, so a test run writes into
       `~/.config/sleeve-shell`, the profile the overlay itself uses (seen 2026-11-22 running the suite with an empty HOME).
       Electron's `appData` follows `XDG_CONFIG_HOME` on Linux: start the test's Electron with it set to a temporary folder.
@@ -303,6 +304,12 @@ build items that depend on it, listed in the later projects.
       lyrics fill the rest). Add them as `--now` values beside `minimal` and `full`, scaling with `--now-scale` as these do,
       and tell backdrop's `SLEEVE_NOW` (backdrop asked on 2026-11-28 while laying out its presets with 0.49.0's
       `--now-scale`).
+- [ ] **The seek bar does not grow with --now-scale.** (p3) [bug] `#seek` draws its track and fill 3px high at a fixed
+      offset (`style.css`), so at backdrop's scale 2 to 3 on 1440p the card's text and cover grow and the bar stays a hairline.
+      Size both with `calc(3px * var(--now-scale))`, and the hit area with them in a window.
+- [ ] **--swirl-tint in the shader swirl.** (p3) [feature] 0.50.0 tints only `sleeve-art-swirl-css`; the shader's
+      `sleeve-art-swirl` (backdrop's swirl look) has no multiply. Pass the tint color as a uniform and multiply each layer's
+      sample before brightness, as the CSS does with background-blend-mode, so both looks can match Sunamu.
 
 ## Completed
 

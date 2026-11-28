@@ -68,7 +68,7 @@ export function parseBackground(text: string): PageBackground | null {
 // braces, slashes or url()), so a page can write them into a stylesheet as they are. An empty value removes the name.
 export type StyleVariables = Record<string, string>;
 const STYLE_NAME = /^--(?:art|flow|swirl)-[a-z][a-z0-9-]*$|^--lyrics-scrim(?:-[a-z][a-z0-9-]*)?$|^--now-(?:scale|margin)$/;
-const STYLE_COMPUTED = ['--art-layer-opacity', '--lyrics-scrim-alpha'];
+const STYLE_COMPUTED = ['--art-layer-opacity', '--lyrics-scrim-alpha', '--swirl-tint-color'];
 const STYLE_VALUE = /^[a-z0-9 .,%()#+-]{0,100}$/i;
 export const STYLE_HELP = '--art-*, --flow-*, --swirl-*, --lyrics-scrim*, --now-scale or --now-margin names, with values of letters, digits, spaces and . , % ( ) # + -';
 

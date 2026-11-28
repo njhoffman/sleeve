@@ -454,6 +454,66 @@ export function coverColors(pixels: ArrayLike<number>, { opacity, dim, base }: {
   return { background: hex(total.map(value => value / count)), main };
 }
 
+// The cover's dark vibrant color, as Sunamu's --color-bg is (node-vibrant's DarkVibrant swatch): pixels grouped into
+// coarse colors (5 bits a channel, nearly transparent ones left out), each group scored as node-vibrant scores a swatch
+// against its target (lightness 0.26 within 0 to 0.45, saturation 1 from 0.35, weights 6.5, 3 and 0.5 for lightness,
+// saturation and how common it is), the best taken. With none in range, the commonest color at that lightness, as
+// node-vibrant makes a missing swatch from another. null for no pixels. sleeve-art-swirl-css multiplies its copies with
+// it when --swirl-tint is cover.
+export function darkVibrant(pixels: ArrayLike<number>): string | null {
+  const groups = new Map<number, { count: number; sum: [number, number, number] }>();
+  for (let at = 0; at + 3 < pixels.length; at += 4) {
+    if (pixels[at + 3] < 125) continue;
+    const key = ((pixels[at] >> 3) << 10) | ((pixels[at + 1] >> 3) << 5) | (pixels[at + 2] >> 3);
+    const entry = groups.get(key) ?? { count: 0, sum: [0, 0, 0] };
+    entry.count++;
+    for (let channel = 0; channel < 3; channel++) entry.sum[channel] += pixels[at + channel];
+    groups.set(key, entry);
+  }
+  if (!groups.size) return null;
+  const swatches = [...groups.values()].map(({ count, sum }) => {
+    const rgb = sum.map(value => value / count) as [number, number, number];
+    return { count, rgb, ...hsl(rgb) };
+  });
+  const most = Math.max(...swatches.map(swatch => swatch.count));
+  let best: (typeof swatches)[number] | null = null;
+  let bestScore = -Infinity;
+  for (const swatch of swatches) {
+    if (swatch.lightness > 0.45 || swatch.saturation < 0.35) continue;
+    const score = ((1 - Math.abs(swatch.saturation - 1)) * 3 + (1 - Math.abs(swatch.lightness - 0.26)) * 6.5 + (swatch.count / most) * 0.5) / 10;
+    if (score > bestScore) [best, bestScore] = [swatch, score];
+  }
+  const chosen = best ?? swatches.reduce((a, b) => (b.count > a.count ? b : a));
+  const rgb = best ? chosen.rgb : fromHsl(chosen.hue, chosen.saturation, 0.26);
+  return `#${rgb.map(value => Math.round(value).toString(16).padStart(2, '0')).join('')}`;
+}
+
+function hsl([red, green, blue]: [number, number, number]): { hue: number; saturation: number; lightness: number } {
+  const [r, g, b] = [red / 255, green / 255, blue / 255];
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  const lightness = (max + min) / 2;
+  if (max === min) return { hue: 0, saturation: 0, lightness };
+  const delta = max - min;
+  const saturation = lightness > 0.5 ? delta / (2 - max - min) : delta / (max + min);
+  const hue = max === r ? ((g - b) / delta + (g < b ? 6 : 0)) / 6 : max === g ? ((b - r) / delta + 2) / 6 : ((r - g) / delta + 4) / 6;
+  return { hue, saturation, lightness };
+}
+
+function fromHsl(hue: number, saturation: number, lightness: number): [number, number, number] {
+  if (saturation === 0) return [lightness * 255, lightness * 255, lightness * 255];
+  const q = lightness < 0.5 ? lightness * (1 + saturation) : lightness + saturation - lightness * saturation;
+  const p = 2 * lightness - q;
+  const channel = (t: number) => {
+    const u = t < 0 ? t + 1 : t > 1 ? t - 1 : t;
+    if (u < 1 / 6) return p + (q - p) * 6 * u;
+    if (u < 1 / 2) return q;
+    if (u < 2 / 3) return p + (q - p) * (2 / 3 - u) * 6;
+    return p;
+  };
+  return [channel(hue + 1 / 3), channel(hue), channel(hue - 1 / 3)].map(value => value * 255) as [number, number, number];
+}
+
 // How long to wait before reconnecting, after `attempt` failures in a row
 export function reconnectDelay(attempt: number): number {
   return Math.min(5000, 250 * 2 ** Math.max(0, attempt));

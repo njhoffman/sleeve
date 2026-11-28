@@ -13,7 +13,7 @@ import { NowPlaying } from '../../src/now/session.ts';
 import type { NowState } from '../../src/now/state.ts';
 import { PlayerHub } from '../../src/players/hub.ts';
 import { Connection } from '../../src/renderer/connection.ts';
-import { candidateEntries, coverColors, displaySettings, flowSettings, flowStep, follow, formatOffset, formatTime, lineStart, lyricsInsets, nowText, resolveArea, NO_SCROLL_BACK, progress, reconnectDelay, SCROLL_BACK_MS, scrollBackOffset, styleRule, scrimAlpha, wholeCoverPosition, wholeCoverRect, coverDetail, SCRIM_MAX, status, swirlLayers, timingFunction, wheel } from '../../src/renderer/view.ts';
+import { candidateEntries, coverColors, darkVibrant, displaySettings, flowSettings, flowStep, follow, formatOffset, formatTime, lineStart, lyricsInsets, nowText, resolveArea, NO_SCROLL_BACK, progress, reconnectDelay, SCROLL_BACK_MS, scrollBackOffset, styleRule, scrimAlpha, wholeCoverPosition, wholeCoverRect, coverDetail, SCRIM_MAX, status, swirlLayers, timingFunction, wheel } from '../../src/renderer/view.ts';
 import { until } from '../helpers/fakeMpd.ts';
 import { fakePlayer } from '../helpers/players.ts';
 
@@ -355,6 +355,20 @@ describe('renderer view', () => {
     const shown = coverColors(pixels, { opacity: 0.5, dim: 0.5, base: [0, 0, 0] });
     expect(shown.main[0].color).to.equal('#404040');
     expect(coverColors([], { opacity: 1, dim: 0.5, base: [16, 18, 24] })).to.deep.equal({ background: '#08090c', main: [] });
+  });
+
+  // Sunamu's --color-bg, which its background multiplies each turning copy with
+  it('picks the cover\'s dark vibrant color as node-vibrant does, else the commonest color made dark', () => {
+    const repeat = (rgb: number[], times: number) => Array.from({ length: times }, () => [...rgb, 255]).flat();
+    // Pale cream mostly, some dark saturated red, a little bright blue: the dark red is the dark vibrant
+    expect(darkVibrant([...repeat([235, 225, 205], 80), ...repeat([140, 20, 30], 15), ...repeat([60, 140, 255], 5)])).to.equal('#8c141e');
+    // Of two dark saturated reds, the one nearer lightness 0.26 wins over a commoner one near black
+    expect(darkVibrant([...repeat([25, 2, 8], 50), ...repeat([90, 10, 20], 10)])).to.equal('#5a0a14');
+    // None saturated and dark enough: the commonest color at lightness 0.26, here a grey
+    expect(darkVibrant(repeat([200, 200, 200], 10))).to.equal('#424242');
+    // Transparent pixels count for nothing, and no pixels give nothing
+    expect(darkVibrant([...repeat([140, 20, 30], 3), 255, 255, 255, 0])).to.equal('#8c141e');
+    expect(darkVibrant([])).to.equal(null);
   });
 
   it('lists candidates as sleeve lyrics --all numbers them, leaving out those without an id', () => {

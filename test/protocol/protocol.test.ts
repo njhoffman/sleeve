@@ -55,6 +55,7 @@ describe('parseCommand', () => {
       [{ '--now-scale-x': '2' }, '--now-scale-x'],
       [{ '--now-area': '33%x100%+0+0' }, '--now-area'],
       [{ '--lyrics-scrim-alpha': '1' }, '--lyrics-scrim-alpha'],
+      [{ '--swirl-tint-color': '#102030' }, '--swirl-tint-color'],
       [{ '--art-layer-opacity': '1' }, '--art-layer-opacity'],
       [{ color: 'red' }, 'color'],
       [{ '--art-size': 512 }, '--art-size'],
