@@ -166,7 +166,7 @@ for `sleeve-art-drift`; `--flow-resolution` is what matters most. Without WebGL 
 shader draws it from the small blurred cover at about the flow's cost; `sleeve-art-swirl-css` draws it as Sunamu did,
 with CSS filters on two full-size images, which costs far more and is there to compare the two. Sunamu also multiplies
 each copy with its `--color-bg`, the cover's dark vibrant color; `--swirl-tint: cover` does the same in
-`sleeve-art-swirl-css` (sleeve works the color out as node-vibrant does), and `--swirl-tint: #rrggbb` uses a color of your own.
+both swirls (sleeve works the color out as node-vibrant does), and `--swirl-tint: #rrggbb` uses a color of your own.
 `--art-fit: contain` adds the whole cover, sharp and uncropped, over whatever background is set (the still cover, the
 flow or the swirl): in the larger free side beside the lyrics area, or the middle of the window when neither side is a
 fifth of it, as large as the space takes less `--art-fit-margin`. `--art-fit-position` (`left`, `center`, `right`)

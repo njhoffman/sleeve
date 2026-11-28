@@ -6,6 +6,13 @@ All notable changes to sleeve are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.51.0] - 2026-11-28
+
+### Added
+
+- `--swirl-tint` tints the shader's `sleeve-art-swirl` too, multiplying each turning copy with the color before its
+  brightness and saturation, as the CSS swirl does.
+
 ## [0.50.0] - 2026-11-28
 
 ### Added

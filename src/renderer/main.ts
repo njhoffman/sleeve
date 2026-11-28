@@ -252,13 +252,15 @@ let swirlBox: HTMLDivElement | null = null;
 // The cover's dark vibrant color (darkVibrant), worked out when it is drawn
 let coverTint: string | null = null;
 
-// --swirl-tint as the color sleeve-art-swirl-css multiplies its copies with, as Sunamu does with its --color-bg: cover
-// for the cover's dark vibrant, a #rrggbb color as given; none (or anything else) for no tint
+// --swirl-tint as the color both swirls multiply their copies with, as Sunamu does with its --color-bg: cover for the
+// cover's dark vibrant, a #rrggbb color as given; none (or anything else) for no tint. The CSS swirl reads it from
+// --swirl-tint-color, the shader's from the flow (since 0.51.0)
 function applyTint(): void {
   const value = setting('--swirl-tint');
   const color = value === 'cover' ? coverTint : /^#[0-9a-f]{6}$/i.test(value) ? value : null;
   if (color) art.style.setProperty('--swirl-tint-color', color);
   else art.style.removeProperty('--swirl-tint-color');
+  flow?.setTint(color ? parseHex(color) : null);
 }
 
 function readFlow(now: number): void {

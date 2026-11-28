@@ -307,9 +307,11 @@ build items that depend on it, listed in the later projects.
 - [ ] **The seek bar does not grow with --now-scale.** (p3) [bug] `#seek` draws its track and fill 3px high at a fixed
       offset (`style.css`), so at backdrop's scale 2 to 3 on 1440p the card's text and cover grow and the bar stays a hairline.
       Size both with `calc(3px * var(--now-scale))`, and the hit area with them in a window.
-- [ ] **--swirl-tint in the shader swirl.** (p3) [feature] 0.50.0 tints only `sleeve-art-swirl-css`; the shader's
+- [x] **--swirl-tint in the shader swirl.** (p3) [feature] 0.50.0 tints only `sleeve-art-swirl-css`; the shader's
       `sleeve-art-swirl` (backdrop's swirl look) has no multiply. Pass the tint color as a uniform and multiply each layer's
       sample before brightness, as the CSS does with background-blend-mode, so both looks can match Sunamu.
+      Done in 0.51.0: a `tint` uniform (white for none) multiplies each layer's sample before brightness and saturation;
+      `applyTint` hands the color to the flow as well as `--swirl-tint-color`.
 
 ## Completed
 

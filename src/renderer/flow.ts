@@ -36,20 +36,22 @@ uniform vec4 centers;
 uniform vec2 angles;
 uniform float size;
 uniform float brightness;
+uniform vec3 tint;
 vec3 sampled(vec2 p) {
   return mix(texture(previous, p).rgb, texture(cover, p).rgb, fade);
 }
 vec3 saturated(vec3 c) {
   return mix(vec3(dot(c, vec3(0.299, 0.587, 0.114))), c, saturation);
 }
-// One swirl layer at a point of the window (vmax, y down): the cover turned by angle around center, then CSS's
-// brightness() and saturate(), clamped as filters are
+// One swirl layer at a point of the window (vmax, y down): the cover turned by angle around center, multiplied with
+// the tint (white for none) as the CSS swirl's background-blend-mode does, then CSS's brightness() and saturate(),
+// clamped as filters are
 vec3 layer(vec2 at, vec2 center, float angle) {
   vec2 d = at - center;
   float c = cos(angle);
   float s = sin(angle);
   vec2 q = vec2(c * d.x + s * d.y, -s * d.x + c * d.y) / size + 0.5;
-  return clamp(saturated(sampled(vec2(q.x, 1.0 - q.y)) * brightness), 0.0, 1.0);
+  return clamp(saturated(sampled(vec2(q.x, 1.0 - q.y)) * tint * brightness), 0.0, 1.0);
 }
 void main() {
   if (mode == 1) {
@@ -65,7 +67,7 @@ void main() {
   color = vec4(saturated(sampled(p)), 1.0);
 }`;
 
-const UNIFORMS = ['previous', 'cover', 'fade', 'phase', 'amount', 'detail', 'zoom', 'saturation', 'aspect', 'mode', 'frame', 'centers', 'angles', 'size', 'brightness'] as const;
+const UNIFORMS = ['previous', 'cover', 'fade', 'phase', 'amount', 'detail', 'zoom', 'saturation', 'aspect', 'mode', 'frame', 'centers', 'angles', 'size', 'brightness', 'tint'] as const;
 type Uniform = typeof UNIFORMS[number];
 
 export class CoverFlow {
@@ -78,6 +80,8 @@ export class CoverFlow {
   private fadeFrom = 0;
   private fadeMs = 0;
   private lastDraw = -Infinity;
+  // The swirl's tint as 0 to 1 a channel, white for none (setTint)
+  private tint: [number, number, number] = [1, 1, 1];
 
   constructor(parent: HTMLElement) {
     this.canvas = document.createElement('canvas');
@@ -155,6 +159,11 @@ export class CoverFlow {
   }
 
   // No cover any more: the next one comes in by itself, with no fade from this one
+  // The color each swirl layer is multiplied with, as #rrggbb channels (0 to 255), or null for none
+  setTint(rgb: [number, number, number] | null): void {
+    this.tint = rgb ? [rgb[0] / 255, rgb[1] / 255, rgb[2] / 255] : [1, 1, 1];
+  }
+
   forgetCover(): void {
     this.cover = null;
   }
@@ -188,6 +197,7 @@ export class CoverFlow {
       gl.uniform2f(uniform('angles'), first.angle, second.angle);
       gl.uniform1f(uniform('size'), view.size);
       gl.uniform1f(uniform('brightness'), view.brightness);
+      gl.uniform3f(uniform('tint'), ...this.tint);
     }
     gl.drawArrays(gl.TRIANGLES, 0, 3);
   }
