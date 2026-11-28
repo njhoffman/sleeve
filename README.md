@@ -176,14 +176,17 @@ places it by hand.
 Over a sharp cover the lyrics get a scrim: a soft layer in the shadow's color behind the lyrics area, as strong as the
 cover is busy (none over the blurred default), and the shadow and the other lines grow stronger with it, as they do
 over low contrast. `--lyrics-scrim` sets its strength by hand, and `--lyrics-scrim-blur` frosts the cover behind it.
-What shows besides the lyrics is a preset, set the same way, with the panel at any of eight places; the lyrics keep clear
-of it. `lyrics` shows nothing else, `minimal` a line with artist and title, and `full` the cover, title, artist, album, a
-seek bar you can click, and the times. The overlay shows `lyrics` and a window `minimal` unless you say otherwise:
+What shows besides the lyrics is a preset, set the same way, with the panel at any of nine places; the lyrics keep clear
+of it, except in the `center`, where `--now-area` and `--lyrics-area` keep the two apart. `lyrics` shows nothing else,
+`minimal` a line with artist and title, `full` the cover, title, artist, album, a seek bar you can click, and the times,
+`card` the same with a large cover and the text beneath it, and `strip` title, artist, seek bar and times on one line
+across its area, along the top edge for a `top-*` position and the bottom one otherwise. All of them grow with
+`--now-scale`. The overlay shows `lyrics` and a window `minimal` unless you say otherwise:
 
 ```css
 :root {
-  --now-preset: full;            /* lyrics, minimal or full */
-  --now-position: bottom-left;   /* top-left (default), top-center, top-right, center-left, center-right, bottom-left, bottom-center, bottom-right */
+  --now-preset: full;            /* lyrics, minimal, full, card or strip */
+  --now-position: bottom-left;   /* top-left (default), top-center, top-right, center-left, center, center-right, bottom-left, bottom-center, bottom-right */
   --lyrics-align: center;        /* left (default), center or right */
   --now-scale: 1;                /* the panel's size; also --now-margin */
   --lyrics-fade-top: 20%;        /* how far the lyrics take to fade out toward the top, in percent of their height; lower is quicker */

@@ -11,8 +11,8 @@ import type { PlaybackState, PlayingTrack } from '../players/types.ts';
 export const PROTOCOL_VERSION = 1;
 
 // What a page shows besides the lyrics, and where
-export const NOW_PRESETS = ['lyrics', 'minimal', 'full'] as const;
-export const NOW_POSITIONS = ['top-left', 'top-center', 'top-right', 'center-left', 'center-right', 'bottom-left', 'bottom-center', 'bottom-right'] as const;
+export const NOW_PRESETS = ['lyrics', 'minimal', 'full', 'card', 'strip'] as const;
+export const NOW_POSITIONS = ['top-left', 'top-center', 'top-right', 'center-left', 'center', 'center-right', 'bottom-left', 'bottom-center', 'bottom-right'] as const;
 export const LYRICS_ALIGNS = ['left', 'center', 'right'] as const;
 export type NowPreset = typeof NOW_PRESETS[number];
 export type NowPosition = typeof NOW_POSITIONS[number];

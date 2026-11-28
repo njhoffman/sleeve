@@ -33,6 +33,8 @@ describe('parseCommand', () => {
     expect(parseCommand('{"type":"mark","mark":"maybe"}')).to.deep.equal({ error: 'mark needs mark, none or instrumental' });
     expect(parseCommand('{"type":"display","instance":"DP-3-lyrics","preset":"full","position":"bottom-left","align":"center","visible":false}')).to.have.property('command');
     expect(parseCommand('{"type":"display","reset":true}')).to.have.property('command');
+    expect(parseCommand('{"type":"display","preset":"card","position":"center"}')).to.have.property('command');
+    expect(parseCommand('{"type":"display","preset":"strip"}')).to.have.property('command');
     expect(parseCommand('{"type":"display","lyricsArea":"33%x100%+0+0","nowArea":"67%x100%+33%+0"}')).to.have.property('command');
     for (const area of ['rubbish', '0x100+0+0', '100x0%+0+0', '100x100', '33%x100%', 5]) {
       const parsed = parseCommand(JSON.stringify({ type: 'display', lyricsArea: area })) as { error: string };

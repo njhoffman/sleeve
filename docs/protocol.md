@@ -33,6 +33,10 @@ After a `display` command, every client gets `{ "type": "display", "displays": {
 entry holding `preset`, `position`, `align`, `lyricsArea`, `nowArea`, `background`, `style` and `visible` as changed; a client that connects later gets it too, before
 `players`, when there are any. An instance's entry wins over `*`. They last until sleeved restarts.
 
+`preset` is `lyrics`, `minimal`, `full`, and since 0.53.0 `card` and `strip`; `position` is `top-left`, `top-center`,
+`top-right`, `center-left`, `center-right`, `bottom-left`, `bottom-center`, `bottom-right`, and since 0.53.0 `center`. A
+sleeved older than 0.53.0 refuses the new values, as it refuses any it does not know.
+
 `style` is stylesheet variables over the page's stylesheet, as `{ "--art-animation": "sleeve-art-swirl", "--art-size": "512" }`:
 names starting `--art-`, `--flow-`, `--swirl-` or `--lyrics-scrim` (but not `--art-layer-opacity`, `--lyrics-scrim-alpha` or `--swirl-tint-color`, which the
 page works out itself), and since 0.49.0 `--now-scale` and `--now-margin`, values of letters, digits, spaces and `. , % ( ) # + -` only, with no `url(`, up to 100 characters. A

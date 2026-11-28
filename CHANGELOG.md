@@ -6,6 +6,17 @@ All notable changes to sleeve are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.53.0] - 2026-11-28
+
+### Added
+
+- Two more now-playing layouts for `--now-preset`, `?now=`, `sleeve ctl display --preset` and the shell's `--now`:
+  `card`, a large cover with title, artist, album, the seek bar and the times beneath it, and `strip`, title, artist,
+  seek bar and times on one line across the panel's area, along its top edge for a `top-*` position and its bottom one
+  otherwise. Both grow with `--now-scale`.
+- A `center` position for the panel, in the middle of its area (`--now-area`). The lyrics do not move aside for it, so
+  give the two areas of their own.
+
 ## [0.52.1] - 2026-11-28
 
 ### Fixed

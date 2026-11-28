@@ -155,6 +155,41 @@ function png(width: number, height: number, [red, green, blue]: [number, number,
     expect(problems).to.deep.equal([]);
   });
 
+  it('shows the card: a large cover in the middle of its area, the text and the seek bar beneath it', async () => {
+    const { page, problems } = await open('?now=card&now-position=center');
+    await page.waitForSelector('#now-art:not([hidden])');
+    await page.waitForFunction(() => (globalThis as unknown as { document: { getElementById(id: string): { textContent: string } } }).document.getElementById('total').textContent === '1:00');
+    const [status, art, title, seek] = await Promise.all(['#status', '#now-art', '#title', '#seek'].map(selector => page.locator(selector).boundingBox()));
+    // 220 px wide at --now-scale 1, square, centered in a 1280 x 720 window
+    expect(art!.width).to.be.closeTo(220, 1);
+    expect(art!.height).to.be.closeTo(220, 1);
+    expect(status!.x + status!.width / 2).to.be.closeTo(640, 1);
+    expect(status!.y + status!.height / 2).to.be.closeTo(360, 1);
+    expect(title!.y).to.be.greaterThan(art!.y + art!.height);
+    expect(seek!.y).to.be.greaterThan(title!.y);
+    expect(await page.locator('#title').textContent()).to.equal('Title');
+    expect(problems).to.deep.equal([]);
+  });
+
+  it('shows the strip along the bottom edge on one line, the lyrics kept above it', async () => {
+    const { page, problems } = await open('?now=strip&now-position=center-left');
+    await page.waitForSelector('#lines .line.current');
+    await page.waitForFunction(() => (globalThis as unknown as { document: { getElementById(id: string): { textContent: string } } }).document.getElementById('total').textContent === '1:00');
+    const [status, title, seek, total, viewport] = await Promise.all(['#status', '#title', '#seek', '#total', '#viewport'].map(selector => page.locator(selector).boundingBox()));
+    // The window's width less 24 px each side, at its bottom
+    expect(status!.x).to.be.closeTo(24, 1);
+    expect(status!.width).to.be.closeTo(1280 - 48, 1);
+    expect(status!.y + status!.height).to.be.closeTo(720 - 18, 1);
+    // One line: the title, then the bar, then the length, all on the same row
+    expect(seek!.x).to.be.greaterThan(title!.x + title!.width);
+    expect(total!.x).to.be.greaterThan(seek!.x + seek!.width - 1);
+    expect(Math.abs((seek!.y + seek!.height / 2) - (title!.y + title!.height / 2))).to.be.lessThan(6);
+    expect(seek!.width).to.be.greaterThan(400);
+    expect(viewport!.y + viewport!.height).to.be.at.most(status!.y);
+    expect(await page.locator('#now-art').isVisible()).to.equal(false);
+    expect(problems).to.deep.equal([]);
+  });
+
   it('runs the flow and the swirl shaders without a warning', async () => {
     for (const look of ['sleeve-art-flow', 'sleeve-art-swirl']) {
       const { page, problems } = await open(`?style=${encodeURIComponent(`--art-animation:${look}`)}`);

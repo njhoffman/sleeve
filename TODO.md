@@ -297,13 +297,16 @@ build items that depend on it, listed in the later projects.
       shell under Xvfb, and `shell/main.ts` puts Electron's data in `appData/sleeve-shell`, so a test run writes into
       `~/.config/sleeve-shell`, the profile the overlay itself uses (seen 2026-11-22 running the suite with an empty HOME).
       Electron's `appData` follows `XDG_CONFIG_HOME` on Linux: start the test's Electron with it set to a temporary folder.
-- [ ] **More now-playing layouts.** (p3) [feature] The panel has two forms besides none: `minimal` (one line) and `full`
+- [x] **More now-playing layouts.** (p3) [feature] The panel has two forms besides none: `minimal` (one line) and `full`
       (a row: small cover beside title, artist and album, then the seek bar). backdrop's lyrics presets would use more:
       a card with a large cover and the text beneath it (the panel as the centrepiece, where backdrop's lyrics-now puts
       it), and a strip across the window's bottom edge (title, artist and seek bar on one line, for a preset whose
       lyrics fill the rest). Add them as `--now` values beside `minimal` and `full`, scaling with `--now-scale` as these do,
       and tell backdrop's `SLEEVE_NOW` (backdrop asked on 2026-11-28 while laying out its presets with 0.49.0's
       `--now-scale`).
+
+      Done in 0.53.0: `card` and `strip` (`panelPosition`, `nowShowsProgress`, `nowShowsCover` in `view.ts`), and a
+      `center` position, which reserves nothing from the lyrics. backdrop's `docs/specs/sleeve.md` lists them.
 - [ ] **The seek bar does not grow with --now-scale.** (p3) [bug] `#seek` draws its track and fill 3px high at a fixed
       offset (`style.css`), so at backdrop's scale 2 to 3 on 1440p the card's text and cover grow and the bar stays a hairline.
       Size both with `calc(3px * var(--now-scale))`, and the hit area with them in a window.

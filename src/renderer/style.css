@@ -34,10 +34,12 @@
   --art-fit-shadow: 0 12px 48px rgba(0, 0, 0, 0.55);
 
   /* What shows besides the lyrics. The URL wins over these (?now=, ?now-position=, ?lyrics-align=).
-  --now-preset:    lyrics (only the lyrics), minimal (a line with artist and title) or full (cover, title, artist, album,
-                   seek bar, times); unset: lyrics on the overlay, minimal in a window
-  --now-position:  top-left (default), top-center, top-right, center-left, center-right, bottom-left, bottom-center or
-                   bottom-right; the lyrics keep clear of it
+  --now-preset:    lyrics (only the lyrics), minimal (a line with artist and title), full (cover, title, artist, album,
+                   seek bar, times), card (a large cover with those beneath it) or strip (title, artist, seek bar and
+                   times on one line along an edge); unset: lyrics on the overlay, minimal in a window
+  --now-position:  top-left (default), top-center, top-right, center-left, center, center-right, bottom-left, bottom-center
+                   or bottom-right; the lyrics keep clear of it, but for center (keep them apart with the areas). A strip
+                   lies along the top edge for a top position, else along the bottom
   --lyrics-align:  left (default), center or right
   --lyrics-area:   where the lyrics go inside the window, WxH+X+Y in pixels or percent of the window, e.g. 33%x100%+0+0
                    (the left third); unset: the whole window. Text wraps and sizes to it.
@@ -134,13 +136,16 @@ html[data-now-position^="center"] #status { top: 50%; translate: 0 -50%; }
 html[data-now-position$="-left"] #status { left: var(--now-margin); }
 html[data-now-position$="-right"] #status { right: var(--now-margin); text-align: right; }
 html[data-now-position$="-center"] #status { left: 50%; translate: -50% 0; text-align: center; }
+html[data-now-position="center"] #status { left: 50%; translate: -50% -50%; text-align: center; }
 
 #title { font-weight: 600; }
 #source { color: var(--dim); font-size: calc(12px * var(--now-scale)); }
 #artist:empty, #album:empty, #source:empty { display: none; }
 #album { font-size: calc(12px * var(--now-scale)); opacity: 0.8; }
 
-html:not([data-now="full"]) #now-art, html:not([data-now="full"]) #now-progress { display: none; }
+/* The cover's thumbnail with full and card, the seek bar and times with full, card and strip */
+html:not([data-now="full"]):not([data-now="card"]) #now-art,
+html:not([data-now="full"]):not([data-now="card"]):not([data-now="strip"]) #now-progress { display: none; }
 #now-art[hidden] { display: none; }
 html[data-now="full"] #status {
   display: grid;
@@ -160,6 +165,45 @@ html[data-now="full"] #now-text > * { overflow: hidden; white-space: nowrap; tex
   border-radius: 6px;
   box-shadow: 0 4px 18px rgba(0, 0, 0, 0.4);
 }
+/* card: the cover large, the text centered beneath it, no wider than the cover and never taller than the area allows */
+html[data-now="card"] #status {
+  display: flex;
+  flex-direction: column;
+  gap: calc(12px * var(--now-scale));
+  width: min(calc(220px * var(--now-scale)), calc(100cqw - 2 * var(--now-margin)), calc(100cqh - 2 * var(--now-margin) - 7.5em));
+  text-align: center;
+}
+html[data-now="card"] #now-art {
+  width: 100%;
+  height: auto;
+  aspect-ratio: 1;
+  border-radius: 8px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.45);
+}
+html[data-now="card"] #title { font-size: calc(18px * var(--now-scale)); }
+html[data-now="card"] #now-text > * { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+
+/* strip: the width of its area along one edge, title and artist, then the seek bar between the times */
+html[data-now="strip"] #status {
+  display: flex;
+  align-items: center;
+  gap: calc(16px * var(--now-scale));
+  left: var(--now-margin);
+  right: var(--now-margin);
+  max-width: none;
+  translate: none;
+  text-align: left;
+}
+html[data-now="strip"] #now-text { display: flex; align-items: baseline; gap: 0.5em; flex: 0 1 auto; min-width: 0; max-width: 55%; }
+html[data-now="strip"] #now-text > * { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+html[data-now="strip"] #artist::before { content: '\00b7'; margin-right: 0.5em; opacity: 0.6; }
+html[data-now="strip"] #album, html[data-now="strip"] #source { display: none; }
+html[data-now="strip"] #now-progress { display: flex; align-items: center; gap: calc(10px * var(--now-scale)); flex: 1 1 0; min-width: calc(80px * var(--now-scale)); }
+html[data-now="strip"] #times { display: contents; }
+html[data-now="strip"] #seek { flex: 1; order: 1; }
+html[data-now="strip"] #total { order: 2; }
+html[data-now="strip"] #elapsed, html[data-now="strip"] #total { opacity: 0.8; }
+
 #now-progress { grid-column: 1 / -1; font-size: calc(11px * var(--now-scale)); font-variant-numeric: tabular-nums; }
 /* A taller target than it looks; the overlay takes no mouse */
 #seek { position: relative; padding: 5px 0; cursor: pointer; pointer-events: auto; }

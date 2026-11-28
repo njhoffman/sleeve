@@ -136,11 +136,26 @@ export function displaySettings(read: (name: string) => string, params: { get(na
   };
 }
 
-// The panel's lines. The full panel gives artist and title lines of their own; the others share one line.
+// The panel's lines. full and card give title, artist and album lines of their own, strip title and artist (shown on
+// one line); minimal shares one line.
 export function nowText(state: NowState, preset: NowPreset, combined: string): { title: string; artist: string; album: string } {
   const track = state.playback?.track;
-  if (preset !== 'full' || !track) return { title: combined, artist: '', album: '' };
-  return { title: track.title, artist: track.artist, album: track.album ?? '' };
+  if (!nowShowsProgress(preset) || !track) return { title: combined, artist: '', album: '' };
+  return { title: track.title, artist: track.artist, album: preset === 'strip' ? '' : track.album ?? '' };
+}
+
+// The presets with the seek bar and times, and those with the cover's thumbnail
+export function nowShowsProgress(preset: NowPreset): boolean {
+  return preset === 'full' || preset === 'card' || preset === 'strip';
+}
+export function nowShowsCover(preset: NowPreset): boolean {
+  return preset === 'full' || preset === 'card';
+}
+
+// Where the panel stands: a strip lies along an edge, the top one for a top position and the bottom one otherwise
+export function panelPosition(preset: NowPreset, position: NowPosition): NowPosition {
+  if (preset !== 'strip') return position;
+  return position.startsWith('top') ? 'top-center' : 'bottom-center';
 }
 
 // m:ss, or h:mm:ss from an hour up; an empty string for a length not known
@@ -195,7 +210,8 @@ export function lyricsInsets(position: NowPosition, panel: { top: number; right:
   if (position.startsWith('top')) insets.top = Math.max(0, panel.bottom - areaTop + PANEL_GAP - area.height * clearTop);
   else if (position.startsWith('bottom')) insets.bottom = Math.max(0, areaTop + area.height - panel.top + PANEL_GAP);
   else if (position === 'center-left') insets.left = Math.max(0, panel.right - areaLeft + PANEL_GAP);
-  else insets.right = Math.max(0, areaLeft + area.width - panel.left + PANEL_GAP);
+  // A panel in the middle has no side to clear: --now-area and --lyrics-area keep the two apart
+  else if (position === 'center-right') insets.right = Math.max(0, areaLeft + area.width - panel.left + PANEL_GAP);
   return insets;
 }
 

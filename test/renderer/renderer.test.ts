@@ -13,7 +13,7 @@ import { NowPlaying } from '../../src/now/session.ts';
 import type { NowState } from '../../src/now/state.ts';
 import { PlayerHub } from '../../src/players/hub.ts';
 import { Connection } from '../../src/renderer/connection.ts';
-import { candidateEntries, coverColors, darkVibrant, displaySettings, fullTint, tintPixels, flowSettings, flowStep, follow, formatOffset, formatTime, lineStart, lyricsInsets, nowText, resolveArea, NO_SCROLL_BACK, progress, reconnectDelay, SCROLL_BACK_MS, scrollBackOffset, styleRule, scrimAlpha, wholeCoverPosition, wholeCoverRect, coverDetail, SCRIM_MAX, status, swirlLayers, timingFunction, wheel } from '../../src/renderer/view.ts';
+import { candidateEntries, coverColors, darkVibrant, displaySettings, fullTint, tintPixels, flowSettings, flowStep, follow, formatOffset, formatTime, lineStart, lyricsInsets, nowShowsCover, nowShowsProgress, nowText, panelPosition, resolveArea, NO_SCROLL_BACK, progress, reconnectDelay, SCROLL_BACK_MS, scrollBackOffset, styleRule, scrimAlpha, wholeCoverPosition, wholeCoverRect, coverDetail, SCRIM_MAX, status, swirlLayers, timingFunction, wheel } from '../../src/renderer/view.ts';
 import { until } from '../helpers/fakeMpd.ts';
 import { fakePlayer } from '../helpers/players.ts';
 
@@ -70,6 +70,31 @@ describe('renderer view', () => {
       expect(nowText(playing, 'minimal', 'A - T')).to.deep.equal({ title: 'A - T', artist: '', album: '' });
       expect(nowText(playing, 'full', 'A - T')).to.deep.include({ title: 'T', artist: 'A' });
       expect(nowText(state({ playback: null }), 'full', '')).to.deep.equal({ title: '', artist: '', album: '' });
+    });
+
+    it('gives the card title, artist and album lines, and the strip title and artist only', () => {
+      const playing = state({ playback: { ...state().playback!, track: { ...state().playback!.track!, album: 'Al' } } });
+      expect(nowText(playing, 'card', 'A - T')).to.deep.equal({ title: 'T', artist: 'A', album: 'Al' });
+      expect(nowText(playing, 'strip', 'A - T')).to.deep.equal({ title: 'T', artist: 'A', album: '' });
+      expect(nowText(state({ playback: null }), 'strip', '')).to.deep.equal({ title: '', artist: '', album: '' });
+    });
+
+    it('shows the seek bar with full, card and strip, and the cover with full and card', () => {
+      expect(['lyrics', 'minimal', 'full', 'card', 'strip'].filter(preset => nowShowsProgress(preset as 'full'))).to.deep.equal(['full', 'card', 'strip']);
+      expect(['lyrics', 'minimal', 'full', 'card', 'strip'].filter(preset => nowShowsCover(preset as 'full'))).to.deep.equal(['full', 'card']);
+    });
+
+    it('lays a strip along the top edge for a top position and the bottom one otherwise', () => {
+      expect(panelPosition('strip', 'top-right')).to.equal('top-center');
+      expect(panelPosition('strip', 'center-left')).to.equal('bottom-center');
+      expect(panelPosition('strip', 'center')).to.equal('bottom-center');
+      expect(panelPosition('strip', 'bottom-left')).to.equal('bottom-center');
+      expect(panelPosition('card', 'center-left')).to.equal('center-left');
+    });
+
+    it('takes card, strip and the center position from the URL', () => {
+      expect(displaySettings(reading(), params('now=card&now-position=center'), true)).to.deep.include({ preset: 'card', position: 'center' });
+      expect(displaySettings(reading({ '--now-preset': 'strip' }), params(), false)).to.deep.include({ preset: 'strip' });
     });
 
     it('writes times as m:ss, and h:mm:ss from an hour', () => {
@@ -146,6 +171,8 @@ describe('renderer view', () => {
       expect(lyricsInsets('bottom-right', { top: 850, right: 980, bottom: 980, left: 600 }, view)).to.deep.equal({ ...none, bottom: 166 });
       expect(lyricsInsets('center-left', { top: 400, right: 364, bottom: 600, left: 24 }, view)).to.deep.equal({ ...none, left: 380 });
       expect(lyricsInsets('center-right', { top: 400, right: 976, bottom: 600, left: 636 }, view)).to.deep.equal({ ...none, right: 380 });
+      // In the middle there is no side to clear; the areas keep the two apart
+      expect(lyricsInsets('center', { top: 300, right: 650, bottom: 700, left: 350 }, view)).to.deep.equal(none);
     });
   });
 

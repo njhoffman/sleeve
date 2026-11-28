@@ -5,7 +5,7 @@ import { Connection } from './connection.ts';
 import { pageTheme, parseHex, textTheme, themeVariables, validColors, type OverlayColors } from './contrast.ts';
 import { CoverFlow, type FlowMode } from './flow.ts';
 import { describeReport, parseBackground, type PageBackground, type ReportReply } from '../protocol/messages.ts';
-import { candidateEntries, coverColors, darkVibrant, displaySettings, fullTint, tintPixels, flowSettings, flowStep, follow, formatOffset, formatTime, lineStart, lyricsInsets, NO_SCROLL_BACK, coverDetail, DETAIL_SAMPLE_SIZE, scrimAlpha, nowText, resolveArea, progress, scrollBackOffset, status, styleRule, timingFunction, wheel, wholeCoverPosition, wholeCoverRect, type CandidateEntry, type DisplaySettings, type FlowSettings, type FlowView, type ScrollBack } from './view.ts';
+import { candidateEntries, coverColors, darkVibrant, displaySettings, fullTint, tintPixels, flowSettings, flowStep, follow, formatOffset, formatTime, lineStart, lyricsInsets, NO_SCROLL_BACK, coverDetail, DETAIL_SAMPLE_SIZE, scrimAlpha, nowShowsCover, nowShowsProgress, nowText, panelPosition, resolveArea, progress, scrollBackOffset, status, styleRule, timingFunction, wheel, wholeCoverPosition, wholeCoverRect, type CandidateEntry, type DisplaySettings, type FlowSettings, type FlowView, type ScrollBack } from './view.ts';
 
 // The renderer: sleeved's session as scrolling lyrics. The current line is worked out every frame from the
 // mirrored playback clock, so line changes land on the frame they are due whatever the socket does; the scroll
@@ -338,7 +338,7 @@ function readDisplay(): void {
   }
   const { dataset } = document.documentElement;
   dataset.now = next.preset;
-  dataset.nowPosition = next.position;
+  dataset.nowPosition = panelPosition(next.preset, next.position);
   dataset.lyricsAlign = next.align;
   statusText = '';
   thumbnailKey = undefined;
@@ -380,7 +380,7 @@ function placeWholeCover(): void {
 function reservePanel(): void {
   if (!display) return;
   const rect = display.preset === 'lyrics' ? null : statusPanel.getBoundingClientRect();
-  const insets = lyricsInsets(display.position, rect, resolveArea(display.lyricsArea, { width: innerWidth, height: innerHeight }), number('--lyrics-clear-top', 8) / 100);
+  const insets = lyricsInsets(panelPosition(display.preset, display.position), rect, resolveArea(display.lyricsArea, { width: innerWidth, height: innerHeight }), number('--lyrics-clear-top', 8) / 100);
   const { style } = document.documentElement;
   style.setProperty('--reserve-top', `${insets.top}px`);
   style.setProperty('--reserve-right', `${insets.right}px`);
@@ -578,10 +578,8 @@ function render(now: number): void {
     albumLine.textContent = shown.album;
     source.textContent = view.source;
   }
-  if (display!.preset === 'full') {
-    updateThumbnail(state.playback?.track?.key ?? null);
-    updateProgress(state, now);
-  }
+  if (nowShowsCover(display!.preset)) updateThumbnail(state.playback?.track?.key ?? null);
+  if (nowShowsProgress(display!.preset)) updateProgress(state, now);
   const best = state.result?.best ?? null;
   if (best !== shownLyrics || view.message !== shownMessage) rebuild(best, view.message);
   const offsetMs = state.result?.offsetMs ?? 0;
