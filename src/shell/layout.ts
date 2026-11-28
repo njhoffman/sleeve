@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { parseArgs } from 'node:util';
 import { DEFAULT_HOST, DEFAULT_PORT } from '../daemon/paths.ts';
-import { LYRICS_ALIGNS, NOW_POSITIONS, NOW_PRESETS, parseArea, parseBackground, parseStylePairs, styleParam, type StyleVariables } from '../protocol/messages.ts';
+import { isLyricsArea, LYRICS_ALIGNS, NOW_POSITIONS, NOW_PRESETS, parseArea, parseBackground, parseStylePairs, styleParam, type StyleVariables } from '../protocol/messages.ts';
 import { validColors, type OverlayColors } from '../renderer/contrast.ts';
 
 // What the Electron shell (shell/main.ts) decides before it opens a window: its options, whether backdrop runs,
@@ -160,9 +160,9 @@ export function parseShellArgs(argv: string[]): ShellOptions {
     if (value !== null && !values.includes(value)) throw new Error(`Invalid --${name}: ${value} (${values.join(', ')})`);
     return value;
   };
-  const area = (name: string) => {
+  const area = (name: string, none = false) => {
     const value = text(name) ?? null;
-    if (value !== null && !parseArea(value)) throw new Error(`Invalid --${name}: ${value} (WxH+X+Y, in pixels or percent)`);
+    if (value !== null && !(none ? isLyricsArea(value) : parseArea(value))) throw new Error(`Invalid --${name}: ${value} (WxH+X+Y, in pixels or percent${none ? ', or none' : ''})`);
     return value;
   };
   const fill = text('background') ?? null;
@@ -171,7 +171,7 @@ export function parseShellArgs(argv: string[]): ShellOptions {
   const parsedStyle = parseStylePairs(styleFlags, '=');
   if ('error' in parsedStyle) throw new Error(`Invalid --style: ${parsedStyle.error}`);
   const style = Object.keys(parsedStyle.style).length ? parsedStyle.style : null;
-  const page = { background: fill, style, lyricsArea: area('lyrics-area'), nowArea: area('now-area'), title: text('title') ?? null, instance: text('instance') ?? null, now: known('now', NOW_PRESETS), nowPosition: known('now-position', NOW_POSITIONS), lyricsAlign: known('lyrics-align', LYRICS_ALIGNS) };
+  const page = { background: fill, style, lyricsArea: area('lyrics-area', true), nowArea: area('now-area'), title: text('title') ?? null, instance: text('instance') ?? null, now: known('now', NOW_PRESETS), nowPosition: known('now-position', NOW_POSITIONS), lyricsAlign: known('lyrics-align', LYRICS_ALIGNS) };
   return { managed, mapBelow, ...page, mode, url, geometry, monitor: text('monitor') ?? null, position, stack, waitBackdropS, estimateWords: values['estimate-words'] === true };
 }
 

@@ -5,7 +5,7 @@ import { Connection } from './connection.ts';
 import { pageTheme, parseHex, textTheme, themeVariables, validColors, type OverlayColors } from './contrast.ts';
 import { CoverFlow, type FlowMode } from './flow.ts';
 import { describeReport, parseBackground, type PageBackground, type ReportReply } from '../protocol/messages.ts';
-import { candidateEntries, coverColors, darkVibrant, displaySettings, fullTint, tintPixels, flowSettings, flowStep, follow, formatOffset, formatTime, lineStart, lyricsInsets, NO_SCROLL_BACK, coverDetail, DETAIL_SAMPLE_SIZE, scrimAlpha, nowShowsCover, nowShowsProgress, nowText, panelPosition, resolveArea, progress, scrollBackOffset, status, styleRule, timingFunction, wheel, wholeCoverPosition, wholeCoverRect, type CandidateEntry, type DisplaySettings, type FlowSettings, type FlowView, type ScrollBack } from './view.ts';
+import { candidateEntries, coverColors, darkVibrant, displaySettings, fullTint, tintPixels, flowSettings, flowStep, follow, formatOffset, formatTime, lineStart, lyricsInsets, NO_SCROLL_BACK, coverDetail, DETAIL_SAMPLE_SIZE, scrimAlpha, lyricsShown, nowShowsCover, nowShowsProgress, nowText, panelPosition, resolveArea, progress, scrollBackOffset, status, styleRule, timingFunction, wheel, wholeCoverPosition, wholeCoverRect, type CandidateEntry, type DisplaySettings, type FlowSettings, type FlowView, type ScrollBack } from './view.ts';
 
 // The renderer: sleeved's session as scrolling lyrics. The current line is worked out every frame from the
 // mirrored playback clock, so line changes land on the frame they are due whatever the socket does; the scroll
@@ -348,6 +348,7 @@ function readDisplay(): void {
 function placeAreas(): void {
   if (!display) return;
   const size = { width: innerWidth, height: innerHeight };
+  document.documentElement.classList.toggle('no-lyrics', !lyricsShown(display));
   for (const [box, area] of [[lyricsArea, display.lyricsArea], [nowArea, display.nowArea]] as const) {
     const rect = resolveArea(area, size);
     box.style.left = `${rect.left}px`;

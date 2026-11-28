@@ -195,7 +195,8 @@ across its area, along the top edge for a `top-*` position and the bottom one ot
 ```
 
 `--lyrics-area` and `--now-area` (`WxH+X+Y`, in pixels or percent of the window, so `33%x100%+0+0` is the left third) put them in
-part of the window, with text wrapped and sized to its area. `--background` fills the window: `transparent`, `#rrggbb`, `#rrggbbaa`,
+part of the window, with text wrapped and sized to its area. `--lyrics-area: none` leaves the lyrics out altogether, for a page that
+shows only the panel or the cover. `--background` fills the window: `transparent`, `#rrggbb`, `#rrggbbaa`,
 `cover` or `cover@0.6`, where the alpha is the background's alone and text stays solid.
 
 `?now=full&now-position=bottom-left&lyrics-align=center&lyrics-area=...&background=...` in the URL does the same for one page and wins over the

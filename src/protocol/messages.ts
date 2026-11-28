@@ -41,6 +41,12 @@ export function parseArea(text: string): Area | null {
   return width.value > 0 && height.value > 0 ? { width, height, x, y } : null;
 }
 
+// A lyrics area may also be none (since 0.54.0): no lyrics at all, for a page that shows only the panel or the cover
+export const NO_LYRICS = 'none';
+export function isLyricsArea(text: string): boolean {
+  return text.trim() === NO_LYRICS || !!parseArea(text);
+}
+
 // What fills the window behind the content. A color's alpha, or the cover's, is the background's alone: text stays solid.
 export type PageBackground =
   | { kind: 'transparent' }
@@ -282,9 +288,8 @@ export function parseCommand(text: string): { command: ClientCommand } | { error
     if (record.preset !== undefined && !(NOW_PRESETS as readonly unknown[]).includes(record.preset)) return failed(`display needs preset to be ${NOW_PRESETS.join(', ')}`);
     if (record.position !== undefined && !(NOW_POSITIONS as readonly unknown[]).includes(record.position)) return failed(`display needs position to be ${NOW_POSITIONS.join(', ')}`);
     if (record.align !== undefined && !(LYRICS_ALIGNS as readonly unknown[]).includes(record.align)) return failed(`display needs align to be ${LYRICS_ALIGNS.join(', ')}`);
-    for (const name of ['lyricsArea', 'nowArea']) {
-      if (record[name] !== undefined && (typeof record[name] !== 'string' || !parseArea(record[name] as string))) return failed(`display needs ${name} to be WxH+X+Y, in pixels or percent, not ${String(record[name])}`);
-    }
+    if (record.lyricsArea !== undefined && (typeof record.lyricsArea !== 'string' || !isLyricsArea(record.lyricsArea))) return failed(`display needs lyricsArea to be WxH+X+Y, in pixels or percent, or none, not ${String(record.lyricsArea)}`);
+    if (record.nowArea !== undefined && (typeof record.nowArea !== 'string' || !parseArea(record.nowArea))) return failed(`display needs nowArea to be WxH+X+Y, in pixels or percent, not ${String(record.nowArea)}`);
     if (record.background !== undefined && (typeof record.background !== 'string' || !parseBackground(record.background))) return failed(`display needs background to be transparent, #rrggbb, #rrggbbaa, cover or cover@0.6, not ${String(record.background)}`);
     if (record.style !== undefined) {
       const style = parseStyle(record.style);

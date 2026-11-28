@@ -190,6 +190,20 @@ function png(width: number, height: number, [red, green, blue]: [number, number,
     expect(problems).to.deep.equal([]);
   });
 
+  it('leaves the lyrics out for a lyrics area of none, the card and the whole cover in the middle', async () => {
+    const { page, problems } = await open(`?now=card&now-position=center&lyrics-area=none&style=${encodeURIComponent('--art-fit:contain')}`);
+    await page.waitForSelector('#art-whole img.shown');
+    await page.waitForSelector('#now-art:not([hidden])');
+    expect(await page.locator('#lyrics-area').isVisible()).to.equal(false);
+    expect(await page.locator('#lines .line').first().isVisible()).to.equal(false);
+    expect(await page.locator('#status').isVisible()).to.equal(true);
+    // Nothing to stand beside: the whole cover, 720 less 8% all round, in the middle of the 1280 x 720 window
+    const box = await page.locator('#art-whole').boundingBox();
+    expect(box!.x + box!.width / 2).to.be.closeTo(640, 1);
+    expect(box!.width).to.be.closeTo(604.8, 1);
+    expect(problems).to.deep.equal([]);
+  });
+
   it('runs the flow and the swirl shaders without a warning', async () => {
     for (const look of ['sleeve-art-flow', 'sleeve-art-swirl']) {
       const { page, problems } = await open(`?style=${encodeURIComponent(`--art-animation:${look}`)}`);

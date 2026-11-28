@@ -122,7 +122,7 @@ export function buildProgram(io: Io, setExit: (code: number) => void): Command {
     .option('--preset <name>', 'with display: lyrics, minimal, full, card or strip')
     .option('--position <place>', 'with display: where the panel goes, e.g. bottom-left or center')
     .option('--align <side>', 'with display: left, center or right, for the lyrics')
-    .option('--lyrics-area <area>', 'with display: where the lyrics go inside the window, WxH+X+Y in pixels or percent')
+    .option('--lyrics-area <area>', 'with display: where the lyrics go inside the window, WxH+X+Y in pixels or percent, or none')
     .option('--now-area <area>', 'with display: the area the now-playing panel stands in')
     .option('--background <fill>', 'with display: transparent, #rrggbb, #rrggbbaa, cover or cover@0.6, the alpha the background\'s alone')
     .option('--style <name=value>', 'with display: a stylesheet variable over the page\'s stylesheet, e.g. --art-animation=sleeve-art-swirl; give it once for each, an empty value to remove one', (value: string, previous: string[] = []) => [...previous, value])

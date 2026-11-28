@@ -6,6 +6,15 @@ All notable changes to sleeve are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.54.0] - 2026-11-28
+
+### Added
+
+- `--lyrics-area: none` leaves the lyrics out altogether, and their messages ("No lyrics found") with them, for a page
+  that shows only the now-playing panel or the cover. It works wherever a lyrics area does: the stylesheet,
+  `?lyrics-area=none`, the shell's `--lyrics-area none` and `sleeve ctl display --lyrics-area none`. A whole cover
+  (`--art-fit: contain`) then stands in the middle of the window.
+
 ## [0.53.0] - 2026-11-28
 
 ### Added

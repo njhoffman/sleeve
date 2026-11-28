@@ -35,6 +35,8 @@ describe('the shell\'s managed mode', () => {
     expect(parseShellArgs(['--background', 'cover@0.6']).background).to.equal('cover@0.6');
     expect(() => parseShellArgs(['--now-area', '0x10+0+0'])).to.throw('Invalid --now-area: 0x10+0+0');
     expect(parseShellArgs(['--lyrics-area', '33%x100%+0+0'])).to.deep.include({ lyricsArea: '33%x100%+0+0', nowArea: null });
+    expect(parseShellArgs(['--lyrics-area', 'none'])).to.deep.include({ lyricsArea: 'none' });
+    expect(() => parseShellArgs(['--now-area', 'none'])).to.throw('Invalid --now-area: none');
     expect(() => parseShellArgs(['--now', 'huge'])).to.throw('Invalid --now: huge');
     expect(() => parseShellArgs(['--now-position', 'middle'])).to.throw('Invalid --now-position: middle');
     expect(() => parseShellArgs(['--lyrics-align', 'up'])).to.throw('Invalid --lyrics-align: up');

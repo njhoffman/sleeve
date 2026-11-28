@@ -297,10 +297,13 @@ build items that depend on it, listed in the later projects.
       shell under Xvfb, and `shell/main.ts` puts Electron's data in `appData/sleeve-shell`, so a test run writes into
       `~/.config/sleeve-shell`, the profile the overlay itself uses (seen 2026-11-22 running the suite with an empty HOME).
       Electron's `appData` follows `XDG_CONFIG_HOME` on Linux: start the test's Electron with it set to a temporary folder.
-- [ ] **Leave the lyrics out.** (p2) [feature] Asked for by backdrop on 2026-11-28: its `cover-radials` preset is the
+- [x] **Leave the lyrics out.** (p2) [feature] Asked for by backdrop on 2026-11-28: its `cover-radials` preset is the
       cover with a `card` and two visualizer rings, for songs without lyrics, but a song with lyrics draws them across
       the rings. There is no way to drop them: `--lyrics-area` needs a size above zero, and every `--now` keeps them. A
       `--lyrics-area none` (and `display --lyrics-area none`) or `--no-lyrics` would let a preset show only the panel.
+
+      Done in 0.54.0: `--lyrics-area none` (`isLyricsArea` in `messages.ts`, `lyricsShown` in `view.ts`), live through
+      `display` too; `nowArea` never takes it.
 - [x] **More now-playing layouts.** (p3) [feature] The panel has two forms besides none: `minimal` (one line) and `full`
       (a row: small cover beside title, artist and album, then the seek bar). backdrop's lyrics presets would use more:
       a card with a large cover and the text beneath it (the panel as the centrepiece, where backdrop's lyrics-now puts

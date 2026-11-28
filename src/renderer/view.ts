@@ -1,6 +1,6 @@
 import type { LyricsResult, ScoredCandidate } from '../core/types.ts';
 import type { NowState } from '../now/state.ts';
-import { LYRICS_ALIGNS, NOW_POSITIONS, NOW_PRESETS, parseArea, parseBackground, parseStyle, parseStylePairs, type AreaLength, type StyleVariables, type DisplayChange, type LyricsAlign, type NowPosition, type NowPreset } from '../protocol/messages.ts';
+import { isLyricsArea, LYRICS_ALIGNS, NO_LYRICS, NOW_POSITIONS, NOW_PRESETS, parseArea, parseBackground, parseStyle, parseStylePairs, type AreaLength, type StyleVariables, type DisplayChange, type LyricsAlign, type NowPosition, type NowPreset } from '../protocol/messages.ts';
 import type { OverlayColors } from './contrast.ts';
 
 // What the renderer shows, worked out without the DOM, so it is tested in Node.
@@ -89,7 +89,7 @@ export interface DisplaySettings {
   preset: NowPreset;
   position: NowPosition;
   align: LyricsAlign;
-  // As given, whole window when null; see resolveArea
+  // As given, whole window when null; see resolveArea. none: no lyrics (lyricsShown)
   lyricsArea: string | null;
   nowArea: string | null;
   // As given; null: the default for the mode (nothing on the overlay, the cover in a window)
@@ -121,12 +121,13 @@ export function displaySettings(read: (name: string) => string, params: { get(na
   const choose = <T extends string>(known: readonly T[], fallback: T, ...values: Array<string | null | undefined>): T =>
     values.map(value => value?.trim()).find((value): value is T => (known as readonly string[]).includes(value ?? '')) ?? fallback;
   const area = (...values: Array<string | null | undefined>) => values.map(value => value?.trim()).find(value => !!value && parseArea(value)) ?? null;
+  const lyricsArea = (...values: Array<string | null | undefined>) => values.map(value => value?.trim()).find(value => !!value && isLyricsArea(value)) ?? null;
   const fill = (...values: Array<string | null | undefined>) => values.map(value => value?.trim()).find(value => !!value && parseBackground(value)) ?? null;
   // ?background=none predates the others, and meant no cover
   const urlBackground = params.get('background') === 'none' ? 'transparent' : params.get('background');
   return {
     background: fill(given.background, urlBackground, read('--background')),
-    lyricsArea: area(given.lyricsArea, params.get('lyrics-area'), read('--lyrics-area')),
+    lyricsArea: lyricsArea(given.lyricsArea, params.get('lyrics-area'), read('--lyrics-area')),
     nowArea: area(given.nowArea, params.get('now-area'), read('--now-area')),
     preset: choose(NOW_PRESETS, overlay ? 'lyrics' : 'minimal', given.preset, params.get('now'), read('--now-preset')),
     position: choose(NOW_POSITIONS, 'top-left', given.position, params.get('now-position'), read('--now-position')),
@@ -172,6 +173,11 @@ export interface Rect {
   top: number;
   width: number;
   height: number;
+}
+
+// Whether the page shows lyrics at all: not with a lyrics area of none
+export function lyricsShown(settings: Pick<DisplaySettings, 'lyricsArea'>): boolean {
+  return settings.lyricsArea !== NO_LYRICS;
 }
 
 // An area in pixels within a window of this size, clipped to it; the whole window without one

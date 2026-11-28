@@ -42,7 +42,7 @@
                    lies along the top edge for a top position, else along the bottom
   --lyrics-align:  left (default), center or right
   --lyrics-area:   where the lyrics go inside the window, WxH+X+Y in pixels or percent of the window, e.g. 33%x100%+0+0
-                   (the left third); unset: the whole window. Text wraps and sizes to it.
+                   (the left third), or none for no lyrics at all; unset: the whole window. Text wraps and sizes to it.
   --now-area:      the area the panel stands in, --now-position placing it inside; unset: the whole window
   --background:    what fills the window: transparent, #rrggbb, #rrggbbaa, cover or cover@0.6, the alpha the background's alone so
                    text stays solid; unset: nothing on the overlay, the cover in a window (--art-background: off for none) */
@@ -80,6 +80,8 @@
 * { box-sizing: border-box; }
 
 html.page-hidden #lyrics-area, html.page-hidden #now-area { visibility: hidden; }
+/* --lyrics-area: none, no lyrics and none of their messages */
+html.no-lyrics #lyrics-area { display: none; }
 
 html, body {
   margin: 0;

@@ -13,7 +13,7 @@ import { NowPlaying } from '../../src/now/session.ts';
 import type { NowState } from '../../src/now/state.ts';
 import { PlayerHub } from '../../src/players/hub.ts';
 import { Connection } from '../../src/renderer/connection.ts';
-import { candidateEntries, coverColors, darkVibrant, displaySettings, fullTint, tintPixels, flowSettings, flowStep, follow, formatOffset, formatTime, lineStart, lyricsInsets, nowShowsCover, nowShowsProgress, nowText, panelPosition, resolveArea, NO_SCROLL_BACK, progress, reconnectDelay, SCROLL_BACK_MS, scrollBackOffset, styleRule, scrimAlpha, wholeCoverPosition, wholeCoverRect, coverDetail, SCRIM_MAX, status, swirlLayers, timingFunction, wheel } from '../../src/renderer/view.ts';
+import { candidateEntries, coverColors, darkVibrant, displaySettings, fullTint, tintPixels, flowSettings, flowStep, follow, formatOffset, formatTime, lineStart, lyricsInsets, lyricsShown, nowShowsCover, nowShowsProgress, nowText, panelPosition, resolveArea, NO_SCROLL_BACK, progress, reconnectDelay, SCROLL_BACK_MS, scrollBackOffset, styleRule, scrimAlpha, wholeCoverPosition, wholeCoverRect, coverDetail, SCRIM_MAX, status, swirlLayers, timingFunction, wheel } from '../../src/renderer/view.ts';
 import { until } from '../helpers/fakeMpd.ts';
 import { fakePlayer } from '../helpers/players.ts';
 
@@ -109,6 +109,12 @@ describe('renderer view', () => {
       expect(displaySettings(css, params(), true)).to.deep.include({ lyricsArea: '50%x100%+0+0', nowArea: null });
       expect(displaySettings(css, params('lyrics-area=33%25x100%25%2B0%2B0'), true).lyricsArea).to.equal('33%x100%+0+0');
       expect(displaySettings(css, params('lyrics-area=rubbish'), true).lyricsArea).to.equal('50%x100%+0+0');
+      // none leaves the lyrics out; a panel's area never is none
+      const none = displaySettings(css, params('lyrics-area=none&now-area=none'), true);
+      expect(none).to.deep.include({ lyricsArea: 'none', nowArea: null });
+      expect(lyricsShown(none)).to.equal(false);
+      expect(lyricsShown(displaySettings(css, params(), true))).to.equal(true);
+      expect(displaySettings(reading(), params(), true, { lyricsArea: 'none' }).lyricsArea).to.equal('none');
       expect(displaySettings(css, params(), true, { nowArea: '100x100+0+0' }).nowArea).to.equal('100x100+0+0');
     });
 

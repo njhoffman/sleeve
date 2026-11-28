@@ -36,6 +36,9 @@ describe('parseCommand', () => {
     expect(parseCommand('{"type":"display","preset":"card","position":"center"}')).to.have.property('command');
     expect(parseCommand('{"type":"display","preset":"strip"}')).to.have.property('command');
     expect(parseCommand('{"type":"display","lyricsArea":"33%x100%+0+0","nowArea":"67%x100%+33%+0"}')).to.have.property('command');
+    // No lyrics at all since 0.54.0; a panel always has an area
+    expect(parseCommand('{"type":"display","lyricsArea":"none"}')).to.have.property('command');
+    expect(parseCommand('{"type":"display","nowArea":"none"}')).to.have.property('error');
     for (const area of ['rubbish', '0x100+0+0', '100x0%+0+0', '100x100', '33%x100%', 5]) {
       const parsed = parseCommand(JSON.stringify({ type: 'display', lyricsArea: area })) as { error: string };
       expect(parsed.error, String(area)).to.include('lyricsArea').and.include(String(area));
