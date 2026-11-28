@@ -63,14 +63,14 @@ export function parseBackground(text: string): PageBackground | null {
 }
 
 // Stylesheet variables a page takes from its URL or a display change, over its stylesheet: the cover and its animation
-// (--art-*, --flow-*, --swirl-*) and the scrim behind the lyrics (--lyrics-scrim*), all but the two the page works out
-// itself. Values keep to a set of characters that cannot leave a declaration or load anything (no quotes, semicolons,
+// (--art-*, --flow-*, --swirl-*), the scrim behind the lyrics (--lyrics-scrim*) and the now-playing panel's size and
+// distance from the edge (--now-scale, --now-margin, since 0.49.0), all but the two the page works out itself. Values keep to a set of characters that cannot leave a declaration or load anything (no quotes, semicolons,
 // braces, slashes or url()), so a page can write them into a stylesheet as they are. An empty value removes the name.
 export type StyleVariables = Record<string, string>;
-const STYLE_NAME = /^--(?:art|flow|swirl)-[a-z][a-z0-9-]*$|^--lyrics-scrim(?:-[a-z][a-z0-9-]*)?$/;
+const STYLE_NAME = /^--(?:art|flow|swirl)-[a-z][a-z0-9-]*$|^--lyrics-scrim(?:-[a-z][a-z0-9-]*)?$|^--now-(?:scale|margin)$/;
 const STYLE_COMPUTED = ['--art-layer-opacity', '--lyrics-scrim-alpha'];
 const STYLE_VALUE = /^[a-z0-9 .,%()#+-]{0,100}$/i;
-export const STYLE_HELP = '--art-*, --flow-*, --swirl-* or --lyrics-scrim* names, with values of letters, digits, spaces and . , % ( ) # + -';
+export const STYLE_HELP = '--art-*, --flow-*, --swirl-*, --lyrics-scrim*, --now-scale or --now-margin names, with values of letters, digits, spaces and . , % ( ) # + -';
 
 export function styleNameError(name: string): string | null {
   if (!STYLE_NAME.test(name) || STYLE_COMPUTED.includes(name)) return `${name} is not a stylesheet variable a page takes (${STYLE_HELP})`;

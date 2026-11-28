@@ -35,7 +35,7 @@ entry holding `preset`, `position`, `align`, `lyricsArea`, `nowArea`, `backgroun
 
 `style` is stylesheet variables over the page's stylesheet, as `{ "--art-animation": "sleeve-art-swirl", "--art-size": "512" }`:
 names starting `--art-`, `--flow-`, `--swirl-` or `--lyrics-scrim` (but not `--art-layer-opacity` or `--lyrics-scrim-alpha`, which the
-page works out itself), values of letters, digits, spaces and `. , % ( ) # + -` only, with no `url(`, up to 100 characters. A
+page works out itself), and since 0.49.0 `--now-scale` and `--now-margin`, values of letters, digits, spaces and `. , % ( ) # + -` only, with no `url(`, up to 100 characters. A
 `display` with `style` merges it into the entry's name by name, and an empty value removes a name; an instance's style merges
 over `*`'s the same way. A page takes the same from its URL as `?style=NAME:VALUE;NAME:VALUE`, under any change.
 

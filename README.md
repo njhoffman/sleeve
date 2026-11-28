@@ -193,7 +193,7 @@ part of the window, with text wrapped and sized to its area. `--background` fill
 
 `?now=full&now-position=bottom-left&lyrics-align=center&lyrics-area=...&background=...` in the URL does the same for one page and wins over the
 stylesheet, and `?style=--art-animation:sleeve-art-swirl;--art-size:512` sets the cover's, the animation's and the scrim's variables
-(`--art-*`, `--flow-*`, `--swirl-*`, `--lyrics-scrim*`) over it. On the overlay the seek bar only shows, since the overlay takes no mouse.
+(`--art-*`, `--flow-*`, `--swirl-*`, `--lyrics-scrim*`, `--now-scale`, `--now-margin`) over it. On the overlay the seek bar only shows, since the overlay takes no mouse.
 
 `src/renderer/style.css` lists every variable with its default; `?background=none` in the URL turns the cover off
 for one page. The overlay never shows a cover.

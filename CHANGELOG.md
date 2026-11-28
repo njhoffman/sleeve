@@ -6,6 +6,14 @@ All notable changes to sleeve are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.49.0] - 2026-11-28
+
+### Added
+
+- `--style` (and a display change's `style`) takes `--now-scale` and `--now-margin`, the now-playing panel's size and its
+  distance from the window's edge, so a large screen can show the panel at a size that suits it. Any other `--now-*`
+  name is still refused.
+
 ## [0.48.2] - 2026-11-27
 
 ### Changed

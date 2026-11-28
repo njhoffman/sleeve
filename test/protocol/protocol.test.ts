@@ -48,8 +48,12 @@ describe('parseCommand', () => {
     expect(parseBackground('cover@.6')).to.deep.equal({ kind: 'cover', alpha: 0.6 });
     expect(parseCommand('{"type":"display"}')).to.deep.equal({ error: 'display needs something to change' });
     expect(parseCommand(JSON.stringify({ type: 'display', style: { '--art-animation': 'sleeve-art-swirl', '--swirl-timing': 'cubic-bezier(0.4, 0, 0.6, 1)', '--lyrics-scrim': '', '--flow-zoom': '1.4' } }))).to.have.property('command');
+    // The now-playing panel's size and margin, since 0.49.0; its other variables stay the page's own
+    expect(parseCommand(JSON.stringify({ type: 'display', style: { '--now-scale': '2.5', '--now-margin': '48px' } }))).to.have.property('command');
     for (const [style, wrong] of [
       [{ '--now-preset': 'full' }, '--now-preset'],
+      [{ '--now-scale-x': '2' }, '--now-scale-x'],
+      [{ '--now-area': '33%x100%+0+0' }, '--now-area'],
       [{ '--lyrics-scrim-alpha': '1' }, '--lyrics-scrim-alpha'],
       [{ '--art-layer-opacity': '1' }, '--art-layer-opacity'],
       [{ color: 'red' }, 'color'],
