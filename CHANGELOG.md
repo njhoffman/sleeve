@@ -6,6 +6,15 @@ All notable changes to sleeve are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.48.2] - 2026-11-27
+
+### Changed
+
+- `just test` runs through `~/.shell/scripts/test-progress` when it is installed: results
+  stream with a live view, and each run is kept in `~/.local/state/test-progress`
+  (`TEST_PROGRESS_MODE=pane` or `events just test` picks the view). Without it the recipe
+  runs npm test as before.
+
 ## [0.48.1] - 2026-11-22
 
 ### Added

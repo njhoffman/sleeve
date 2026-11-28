@@ -6,9 +6,13 @@ set positional-arguments
 default:
     @just --list --unsorted
 
+# ~/.shell's test-progress runs npm test with mocha's TAP reporter, shows the run live and keeps
+# it (~/.local/state/test-progress); without it, plain npm test
+tpnpm := if path_exists(env_var("HOME") / ".shell/scripts/test-progress") == "true" { env_var("HOME") / ".shell/scripts/test-progress -C " + quote(justfile_directory()) } else { "npm test" }
+
 # Every test, spec reporter
 test:
-    npm test
+    {{ tpnpm }}
 
 # Every test, dot reporter (what agents run)
 test-brief:
