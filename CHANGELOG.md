@@ -6,6 +6,14 @@ All notable changes to sleeve are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.52.0] - 2026-11-28
+
+### Changed
+
+- `--swirl-tint: cover` tints with the hue of the cover's dark vibrant at full strength, its brightest channel full.
+  A dark cover's dark vibrant can be near black, and tinting by it left the swirl black (a grey cover went from 0.01
+  to 0.15 mean brightness, simulated). A colorless cover's tint becomes white, so it shows untinted.
+
 ## [0.51.0] - 2026-11-28
 
 ### Added

@@ -72,7 +72,7 @@
   --swirl-timing: ease-in-out;   /* how each turn eases: linear, ease, ease-in, ease-out, ease-in-out or cubic-bezier() */
   --swirl-blur: 180px;           /* sleeve-art-swirl-css only: the blur of each full-size layer */
   --swirl-tint: none;            /* both swirls (the shader since 0.51.0): a color each layer is multiplied with, as Sunamu does with its
-                                    --color-bg: none, cover (the cover's dark vibrant, as Sunamu picks it) or #rrggbb */
+                                    --color-bg: none, cover (the hue of the cover's dark vibrant at full strength) or #rrggbb */
 }
 
 * { box-sizing: border-box; }

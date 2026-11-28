@@ -514,6 +514,18 @@ function fromHsl(hue: number, saturation: number, lightness: number): [number, n
   return [channel(hue + 1 / 3), channel(hue), channel(hue - 1 / 3)].map(value => value * 255) as [number, number, number];
 }
 
+// The cover's tint at full strength: its color scaled so the brightest channel is full, keeping its hue. A dark cover's
+// dark vibrant can be near black (#110e07 on one), and multiplying the swirl's copies by it left nothing on screen; at
+// full strength the copies take its hue and keep their light (2026-11-28). A colorless one becomes white: no tint.
+export function fullTint(hex: string): string {
+  const match = /^#([0-9a-f]{6})$/i.exec(hex.trim());
+  if (!match) return hex;
+  const rgb = [0, 2, 4].map(at => Number.parseInt(match[1].slice(at, at + 2), 16));
+  const top = Math.max(...rgb);
+  if (top === 0) return '#ffffff';
+  return `#${rgb.map(value => Math.round(value * 255 / top).toString(16).padStart(2, '0')).join('')}`;
+}
+
 // How long to wait before reconnecting, after `attempt` failures in a row
 export function reconnectDelay(attempt: number): number {
   return Math.min(5000, 250 * 2 ** Math.max(0, attempt));

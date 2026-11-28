@@ -13,7 +13,7 @@ import { NowPlaying } from '../../src/now/session.ts';
 import type { NowState } from '../../src/now/state.ts';
 import { PlayerHub } from '../../src/players/hub.ts';
 import { Connection } from '../../src/renderer/connection.ts';
-import { candidateEntries, coverColors, darkVibrant, displaySettings, flowSettings, flowStep, follow, formatOffset, formatTime, lineStart, lyricsInsets, nowText, resolveArea, NO_SCROLL_BACK, progress, reconnectDelay, SCROLL_BACK_MS, scrollBackOffset, styleRule, scrimAlpha, wholeCoverPosition, wholeCoverRect, coverDetail, SCRIM_MAX, status, swirlLayers, timingFunction, wheel } from '../../src/renderer/view.ts';
+import { candidateEntries, coverColors, darkVibrant, displaySettings, fullTint, flowSettings, flowStep, follow, formatOffset, formatTime, lineStart, lyricsInsets, nowText, resolveArea, NO_SCROLL_BACK, progress, reconnectDelay, SCROLL_BACK_MS, scrollBackOffset, styleRule, scrimAlpha, wholeCoverPosition, wholeCoverRect, coverDetail, SCRIM_MAX, status, swirlLayers, timingFunction, wheel } from '../../src/renderer/view.ts';
 import { until } from '../helpers/fakeMpd.ts';
 import { fakePlayer } from '../helpers/players.ts';
 
@@ -369,6 +369,17 @@ describe('renderer view', () => {
     // Transparent pixels count for nothing, and no pixels give nothing
     expect(darkVibrant([...repeat([140, 20, 30], 3), 255, 255, 255, 0])).to.equal('#8c141e');
     expect(darkVibrant([])).to.equal(null);
+  });
+
+  // A dark cover's dark vibrant was near black, and the tinted swirl with it
+  it('brings the cover\'s tint to full strength, keeping its hue', () => {
+    expect(fullTint('#110e07')).to.equal('#ffd269');
+    expect(fullTint('#692c1c')).to.equal('#ff6b44');
+    expect(fullTint('#ff0000')).to.equal('#ff0000');
+    // Colorless: white, which tints nothing; black alike, rather than dividing by nothing
+    expect(fullTint('#404040')).to.equal('#ffffff');
+    expect(fullTint('#000000')).to.equal('#ffffff');
+    expect(fullTint('cover')).to.equal('cover');
   });
 
   it('lists candidates as sleeve lyrics --all numbers them, leaving out those without an id', () => {
